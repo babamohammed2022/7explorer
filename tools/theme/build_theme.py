@@ -140,7 +140,11 @@ def build_variant(records):
 
 
 def build_cmap(classes):
-    return "".join(c + "\0\0" for c in classes).encode("utf-16-le")
+    """Sequential UTF-16LE class names, each terminated by ONE NUL
+    wchar (single u16 NUL between entries — verified against the real
+    theme: a loader scan must find 'sizevariant.NormalSize' at its
+    reserved index; a double NUL inserts phantom empty classes)."""
+    return "".join(c + "\0" for c in classes).encode("utf-16-le")
 
 
 def make_records_probe():
