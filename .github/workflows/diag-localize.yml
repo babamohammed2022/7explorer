@@ -1,6 +1,9 @@
 name: diag-localize-repro
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/diag-localize.yml
 jobs:
   repro:
     runs-on: windows-latest
