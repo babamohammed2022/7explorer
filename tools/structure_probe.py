@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analyze_mui import ResourceWalker, parse_menu_full, parse_string_table  # noqa
+from analyze_mui import Resources, parse_menu_full, parse_string_table  # noqa
 from patch_imports import _PE  # noqa
 
 RT_MENU = 4
@@ -30,24 +30,25 @@ def main() -> int:
     ap.add_argument("--out", default="-")
     args = ap.parse_args()
 
-    pe = _PE(Path(args.pe))
-    entries = list(ResourceWalker(pe).walk())
+    blob = Path(args.pe).read_bytes()
+    pe = _PE(blob)
+    entries = list(Resources(pe).walk())
 
     out = {"menus": {}, "strings": {}}
 
     if args.menus:
-        for e in entries:
-            if e["type"] == RT_MENU:
-                desc = parse_menu_full(e["data"])
+        for t, rid, lang, data in entries:
+            if t == RT_MENU:
+                desc = parse_menu_full(data)
                 if desc:
-                    out["menus"][str(e["id"])] = desc
+                    out["menus"][f"{rid}/lang:{lang:04X}"] = desc
 
     if args.strings:
-        for e in entries:
-            if e["type"] == RT_STRING:
-                table = parse_string_table(e["data"], e["id"])
+        for t, rid, lang, data in entries:
+            if t == RT_STRING:
+                table = parse_string_table(data, rid)
                 # structure only: id -> length of the string (no chars)
-                out["strings"][str(e["id"])] = {
+                out["strings"][f"{rid}/lang:{lang:04X}"] = {
                     str(sid): len(txt) for sid, txt in table.items()
                 }
 
