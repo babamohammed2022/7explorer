@@ -31,9 +31,12 @@
     "language='*'")
 
 #include <windows.h>
+#include <commctrl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+#pragma comment(lib, "comctl32.lib")
 
 // ---------------------------------------------------------------- data ---
 
