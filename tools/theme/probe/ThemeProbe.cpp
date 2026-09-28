@@ -104,7 +104,7 @@ static void PeHeader(LPCWSTR path)
                            OPEN_EXISTING, 0, NULL);
     if (f == INVALID_HANDLE_VALUE) { wprintf(L"!! open err %lu\n",
         GetLastError()); return; }
-    uint8_t hdr[512]; DWORD rd = 0;
+    unsigned char hdr[512]; DWORD rd = 0;
     ReadFile(f, hdr, sizeof(hdr), &rd, NULL);
     CloseHandle(f);
     DWORD peOff = *(DWORD*)(hdr + 0x3C);
