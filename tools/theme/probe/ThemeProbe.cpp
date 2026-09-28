@@ -133,7 +133,7 @@ static BOOL NameInKeep(LPCWSTR v)
         if (!lstrcmpiW(g_keep[i], v)) return TRUE;
     return FALSE;
 }
-static HMODULE g_carveH;
+static HANDLE g_carveH;
 struct CarveTypeCtx { LPCWSTR type; HMODULE h; };
 static BOOL CALLBACK CarveLangW(HMODULE m, LPCWSTR t, LPCWSTR n, WORD lang,
                                 LONG_PTR)
