@@ -1,0 +1,127 @@
+name: selfcontained-ci
+
+# CI del bootstrap self-contained:
+#  - test Python (patcher/analyzer/verifier) sempre;
+#  - build MSVC di wrp64.dll (con MinHook clonato, come da README) e di
+#    ex7selfcontained.exe;
+#  - verifica SUL FILE REALE scaricato dai server Microsoft: hash, header,
+#    patch Python vs C++ byte-per-byte, import risultanti verso wrp64.dll;
+#  - su tag "v*-test*": pre-release con gli eseguibili compilati QUI.
+#  Nessun binario Microsoft viene caricato negli artifact o nella release.
+on:
+  push:
+    branches: [main, "arena/**"]
+    tags: ["v*-test*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # serve al job prerelease (GITHUB_TOKEN del fork)
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: amd64
+
+      - name: Python test suite (patcher / analyzer / catalog verifier)
+        run: python tests/run_tests.py
+
+      - name: Catalog verify + deterministic generation (twice, diff-exit)
+        shell: cmd
+        run: |
+          python tools\embed_catalog.py
+          python tools\embed_catalog.py
+          git diff --exit-code -- explorerwrapper/ex7_languages.rc installer/ex7selfcontained/lang_catalog.h
+
+      - name: Clone and build MinHook (libMinHook.x64.lib, non committata)
+        shell: cmd
+        run: |
+          git clone https://github.com/TsudaKageyu/minhook.git minhook
+          cd minhook\build\VC17
+          msbuild MinHookVC17.sln /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:LogFile=..\..\..\msbuild-minhook.log
+          copy /Y .\lib\Release\libMinHook.x64.lib ..\..\..\explorerwrapper\
+
+      - name: Build wrp64.dll (Release x64)
+        shell: cmd
+        run: msbuild explorerwrapper.sln /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-wrp64.log
+
+      - name: Build ex7selfcontained.exe (Release x64)
+        shell: cmd
+        run: msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-ex7selfcontained.log
+
+      - name: Download reference explorer.exe and re-verify pinned identity
+        shell: cmd
+        env:
+          EXPECTED_SHA: "5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b"
+        run: |
+          mkdir work
+          curl.exe -L -s -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"
+          powershell -NoProfile -Command "$h=(Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower(); $s=(Get-Item work\explorer-ref.exe).Length; Write-Host \"sha256: $h\"; Write-Host \"size: $s\"; if ($h -ne '%EXPECTED_SHA%') { Write-Error 'SHA256 MISMATCH'; exit 1 }; if ($s -ne 2872320) { Write-Error 'SIZE MISMATCH'; exit 1 }"
+          python tools\analyze_mui.py work\explorer-ref.exe --dump-headers
+
+      - name: Patch imports on the REAL file with the Python reference
+        run: python tools\patch_imports.py work\explorer-ref.exe work\explorer-py.exe
+
+      - name: Patch imports with the C++ build and compare byte-for-byte
+        shell: cmd
+        run: |
+          installer\ex7selfcontained\bin\ex7selfcontained.exe --selftest-importpatch work\explorer-ref.exe
+          fc /b work\explorer-ref.exe.ex7patched work\explorer-py.exe
+
+      - name: Verify the patched imports resolve to wrp64.dll
+        shell: cmd
+        run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers | findstr /i "wrp64.dll"
+
+      - name: Inspect the C++-patched imports once more (log evidence)
+        run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers
+
+      - name: Produce SHA256SUMS for the CI-built binaries
+        shell: pwsh
+        run: |
+          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe")
+          $lines = foreach ($i in $items) { $h=(Get-FileHash -Algorithm SHA256 $i).Hash.ToLower(); "$h  $(Split-Path $i -Leaf)" }
+          $lines | Set-Content -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
+      - name: Upload artifacts (NO Microsoft binaries)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ex7selfcontained-binaries
+          path: |
+            Release/wrp64.dll
+            installer/ex7selfcontained/bin/ex7selfcontained.exe
+            SHA256SUMS.txt
+            msbuild-wrp64.log
+            msbuild-ex7selfcontained.log
+            msbuild-minhook.log
+          retention-days: 30
+
+  prerelease:
+    needs: build
+    runs-on: windows-latest
+    # solo sui tag di test, mai sulle branch
+    if: startsWith(github.ref, 'refs/tags/') && contains(github.ref, '-test')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ex7selfcontained-binaries
+      - name: Publish pre-release with CI-built binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          gh release create "$env:TAG" --prerelease `
+            --title "ex7 self-contained bootstrap — test $env:TAG" `
+            --notes-file docs/RELEASE_NOTES_test.md `
+            wrp64.dll ex7selfcontained.exe SHA256SUMS.txt
+          gh release view "$env:TAG"

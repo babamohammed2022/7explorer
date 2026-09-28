@@ -23,6 +23,9 @@
 #include <string>
 #include <vector>
 
+// Defined at global scope in lang_catalog.h (generated).
+struct Ex7LangStringEntry;
+
 namespace ex7 {
 
 struct LocalizeOptions {
@@ -35,7 +38,7 @@ struct LocalizeOptions {
 // for block id `blockId` (covering ids blockId*16-16+1 .. blockId*16).
 std::vector<unsigned char> BuildStringBlockPayload(
     unsigned int blockId,
-    const struct Ex7LangStringEntry* entries, unsigned int count);
+    const Ex7LangStringEntry* entries, unsigned int count);
 
 // Injects every catalog language's STRINGTABLE entries into `exePath`.
 // Returns false with `error` set on failure (file left untouched when the

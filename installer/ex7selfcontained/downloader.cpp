@@ -60,12 +60,17 @@ static bool TryDownloadOnce(const std::wstring& tmpPath,
                           INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
     if (!hInet) { Log(L"InternetOpen failed: %lu", GetLastError()); goto out; }
 
-    InternetSetOptionW(hInet, INTERNET_OPTION_CONNECT_TIMEOUT,
-                       (LPVOID)&cfg::kConnectTimeoutMs, sizeof(DWORD));
-    InternetSetOptionW(hInet, INTERNET_OPTION_SEND_TIMEOUT,
-                       (LPVOID)&cfg::kSendTimeoutMs, sizeof(DWORD));
-    InternetSetOptionW(hInet, INTERNET_OPTION_RECEIVE_TIMEOUT,
-                       (LPVOID)&cfg::kReceiveTimeoutMs, sizeof(DWORD));
+    {
+        DWORD tConn = cfg::kConnectTimeoutMs;
+        DWORD tSend = cfg::kSendTimeoutMs;
+        DWORD tRecv = cfg::kReceiveTimeoutMs;
+        InternetSetOptionW(hInet, INTERNET_OPTION_CONNECT_TIMEOUT,
+                           &tConn, sizeof(tConn));
+        InternetSetOptionW(hInet, INTERNET_OPTION_SEND_TIMEOUT,
+                           &tSend, sizeof(tSend));
+        InternetSetOptionW(hInet, INTERNET_OPTION_RECEIVE_TIMEOUT,
+                           &tRecv, sizeof(tRecv));
+    }
 
     hConn = InternetConnectW(hInet, cfg::kSymbolHost,
                              INTERNET_DEFAULT_HTTPS_PORT, nullptr, nullptr,

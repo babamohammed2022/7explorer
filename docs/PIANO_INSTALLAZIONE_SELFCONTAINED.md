@@ -18,10 +18,11 @@ I valori forniti dall'utente:
 
 | Valore | Costante | Stato |
 | --- | --- | --- |
-| TimeDateStamp `0x4CE7A144` | `cfg::kTimeDateStamp` | ⚠️ non riverificabile qui |
-| SizeOfImage `0x2C0000` | `cfg::kSizeOfImage` | ⚠️ non riverificabile qui |
-| SHA-256 `5769…e21b` | `cfg::kExpectedSha256` | ⚠️ non riverificabile qui |
-| URL `…/explorer.exe/4CE7A1442C0000/explorer.exe` | template in `config.h` | schema 🌐 noto (come la mod Anixx), raggiungibilità ⚠️ da macchina utente |
+| TimeDateStamp `0x4CE7A144` | `cfg::kTimeDateStamp` | ✅ **CONFERMATO 2026-09-28** dall'utente su Windows 10 21H2 LTSC (19044), download reale + `certutil`; ri-verificato ad ogni run del CI |
+| SizeOfImage `0x2C0000` | `cfg::kSizeOfImage` | ✅ **CONFERMATO 2026-09-28** (utente + `--dump-headers` nel CI) |
+| SHA-256 `5769…e21b` | `cfg::kExpectedSha256` | ✅ **CONFERMATO 2026-09-28** (utente, `certutil`); nel CI confronto con `Get-FileHash` |
+| dimensione 2.872.320 byte | `cfg::kExpectedFileBytes` | ✅ **CONFERMATO 2026-09-28**; controllo esatto in `CheckPeIdentity` |
+| URL `…/explorer.exe/4CE7A1442C0000/explorer.exe` | template in `config.h` | ✅ raggiunto e scaricato da utente e CI (l'errore TLS era solo della rete sandbox) |
 
 **Comandi di verifica da eseguire sulla tua macchina (prima del rilascio),**
 e output atteso da incollare/verificare:
@@ -230,7 +231,11 @@ di RC) — dimmelo tu.
   fixture; verificatore catalogo (inclusi casi negativi); generazione
   header/RC deterministica (due run consecutivi byte-identici);
   non raggiungibili dal sandbox: msdl.microsoft.com, mediafire.
-- ⚠️ Non fatto qui e da fare sulla tua macchina: conferma hash/timestamp/
-  SizeOfImage; lista import reale; insieme ID explorer.exe.mui;
-  compilazione MSVC dell'installer e del wrapper `.rc` aggiunto;
-  test comportamentali Win10/11.
+- ✅ Confermato dall'utente (2026-09-28, Win10 21H2 LTSC 19044): URL,
+  dimensione 2.872.320 byte, SHA-256, TimeDateStamp, SizeOfImage.
+- 🔄 Nel CI (`selfcontained-ci.yml`): ricontrollo identity sul file reale,
+  patch Python↔C++ byte-per-byte, import risultanti verso wrp64.dll; build
+  MSVC di wrp64.dll e ex7selfcontained.exe; test Python.
+- ⚠️ Ancora aperti: elenco ID `explorer.exe.mui` (stringhe/menu/dialog/
+  acceleratori) — in arrivo dall'utente; test comportamentali Win10/11 su
+  macchina reale; integrazione shell (fuori scope per questa tappa).

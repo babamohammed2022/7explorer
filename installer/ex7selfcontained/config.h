@@ -1,20 +1,23 @@
 // config.h — pinned constants for the self-contained bootstrap.
 //
-// WARNING — VERIFICATION STATUS (2026-09): the three Microsoft binary
-// identity values below come from the user's own Win7 SP1 x64 explorer.exe
-// and COULD NOT be re-verified inside the development sandbox (no network
-// path to msdl.microsoft.com). They MUST be confirmed on a real machine
-// before the first release; see docs/PIANO_INSTALLAZIONE_SELFCONTAINED.md
-// for the exact commands (certutil + tools\analyze_mui.py --dump-headers).
+// VERIFICATION STATUS: the Microsoft binary identity values below were
+// CONFIRMED by the user on 2026-09-28 (Windows 10 21H2 LTSC 19044) with a
+// real download + certutil. The CI re-verifies them on every run on real
+// files (job "verify-reference"): URL, byte size, SHA-256, TimeDateStamp,
+// SizeOfImage. Do not change them without re-running that verification.
 #pragma once
 
 namespace cfg {
 
 // ----- identity of the ONE Microsoft binary we need -----------------------
-// explorer.exe 6.1.7601.17514 (win7sp1_rtm.101119-1850), x64.   [TO VERIFY]
-inline constexpr unsigned int  kTimeDateStamp = 0x4CE7A144;      // TO VERIFY
-inline constexpr unsigned int  kSizeOfImage = 0x2C0000;          // TO VERIFY
-// SHA-256 of the pristine, unpatched file.                        TO VERIFY
+// explorer.exe 6.1.7601.17514 (win7sp1_rtm.101119-1850), x64.
+// CONFIRMED 2026-09-28 by the user on Windows 10 21H2 LTSC (build 19044):
+// real download from the URL below -> 2.872.320 bytes; certutil SHA-256
+// matches kExpectedSha256; TimeDateStamp/SizeOfImage re-checked on the file.
+// Si tratta di valori binari-specifici: NON modificarli senza riverificare.
+inline constexpr unsigned int  kTimeDateStamp = 0x4CE7A144;
+inline constexpr unsigned int  kSizeOfImage = 0x2C0000;
+inline constexpr unsigned long long kExpectedFileBytes = 2872320ULL;
 inline constexpr wchar_t kExpectedSha256[] =
     L"5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b";
 

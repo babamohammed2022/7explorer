@@ -23,10 +23,12 @@ bool Sha256HexEqualsCI(const std::wstring& a, const std::wstring& b);
 
 // Structural PE validation of the bytes of `path` (already hashed):
 //  - MZ/PE magic, PE32+ optional header, machine AMD64, size >= minBytes;
+//  - when exactBytes != 0, EXACT file size must match;
 //  - TimeDateStamp / SizeOfImage equal to the pinned identity constants;
 //  - walks sections to make sure the image maps coherently.
 // Returns true and fills `diag` on success; false with a message otherwise.
 bool CheckPeIdentity(const std::wstring& path, unsigned long long minBytes,
+                     unsigned long long exactBytes,
                      unsigned int timeDateStamp, unsigned int sizeOfImage,
                      std::wstring& diag);
 

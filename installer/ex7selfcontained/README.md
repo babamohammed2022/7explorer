@@ -27,10 +27,11 @@ cl /std:c++17 /utf-8 /O2 /W4 /EHsc main.cpp downloader.cpp winhash.cpp importpat
 python tools\embed_catalog.py
 ```
 
-## Verifica delle costanti Microsoft PRIMA del primo rilascio
+## Verifica delle costanti Microsoft — FATTA (2026-09-28)
 
-I valori `kTimeDateStamp`, `kSizeOfImage`, `kExpectedSha256` in `config.h`
-vanno confermati sulla tua macchina (nel sandbox non sono verificabili):
+Valori confermati dall'utente su Windows 10 21H2 LTSC (19044) e riverificati
+ad ogni run del CI (`selfcontained-ci`, step "Download reference explorer.exe
+and re-verify pinned identity"). Per riverificarli a mano:
 
 ```bat
 curl.exe -L -o %TEMP%\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"

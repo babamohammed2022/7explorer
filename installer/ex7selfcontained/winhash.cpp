@@ -86,6 +86,7 @@ bool Sha256HexEqualsCI(const std::wstring& a, const std::wstring& b) {
 
 // --- PE identity ------------------------------------------------------------
 bool CheckPeIdentity(const std::wstring& path, unsigned long long minBytes,
+                     unsigned long long exactBytes,
                      unsigned int wantTimeDateStamp,
                      unsigned int wantSizeOfImage,
                      std::wstring& diag) {
@@ -98,6 +99,11 @@ bool CheckPeIdentity(const std::wstring& path, unsigned long long minBytes,
     GetFileSizeEx(h, &sz);
     if ((unsigned long long)sz.QuadPart < minBytes) {
         diag = L"file too small";
+        CloseHandle(h);
+        return false;
+    }
+    if (exactBytes && (unsigned long long)sz.QuadPart != exactBytes) {
+        diag = L"file size mismatch";
         CloseHandle(h);
         return false;
     }

@@ -82,6 +82,14 @@ bool WriteInstallRecord(const std::wstring& stateDir,
     HANDLE h = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr,
                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return false;
+    auto esc = [](const std::string& s) {
+        std::string o;
+        for (char c : s) {
+            if (c == '\\' || c == '"') o += '\\';
+            o += c;
+        }
+        return o;
+    };
     std::string json = "{\n  \"tool\": \"ex7selfcontained\",\n  \"version\": \"";
     json += std::string(cfg::kToolVersion, cfg::kToolVersion +
                         wcslen(cfg::kToolVersion));
@@ -91,7 +99,7 @@ bool WriteInstallRecord(const std::wstring& stateDir,
     json += std::string(patchedHash.begin(), patchedHash.end());
     json += "\",\n  \"actions\": [\n";
     for (size_t i = 0; i < actions.size(); ++i) {
-        json += "    \"" + actions[i] + "\"";
+        json += "    \"" + esc(actions[i]) + "\"";
         json += (i + 1 < actions.size()) ? ",\n" : "\n";
     }
     json += "  ]\n}\n";
@@ -140,8 +148,49 @@ bool WriteWholeFile(const std::wstring& path,
 
 int Usage() {
     wprintf(L"ex7selfcontained [--app-dir PATH] [--offline] "
-            L"[--skip-signature] [--allow-partial-localization]\n");
+            L"[--skip-signature] [--allow-partial-localization]\n"
+            L"ex7selfcontained --selftest-importpatch <original.exe>\n"
+            L"    writes <original.exe>.ex7patched and prints its SHA-256;\n"
+            L"    the CI compares it byte-for-byte with tools/patch_imports.py\n");
     return 2;
+}
+
+// Deterministic self-test used by CI: the C++ import patch must produce the
+// exact same bytes as the Python reference on the same input file.
+int SelfTestImportPatch(const std::wstring& input) {
+    std::vector<uint8_t> image;
+    if (!ReadWholeFile(input, image)) {
+        wprintf(L"selftest: cannot read %s\n", input.c_str());
+        return 1;
+    }
+    auto r = ex7::PatchImportsInPlace(image);
+    if (!r.ok) {
+        wprintf(L"selftest: patch failed\n");
+        return 1;
+    }
+    for (const auto& a : r.actions)
+        wprintf(L"selftest: %S\n", a.c_str());
+    // idempotency check
+    {
+        std::vector<uint8_t> again = image;
+        auto r2 = ex7::PatchImportsInPlace(again);
+        if (!r2.ok || again != image || r2.namesPatched != 0) {
+            wprintf(L"selftest: NOT idempotent\n");
+            return 1;
+        }
+        wprintf(L"selftest: idempotent: OK\n");
+    }
+    std::wstring out = input + L".ex7patched";
+    if (!WriteWholeFile(out, image)) {
+        wprintf(L"selftest: cannot write output\n");
+        return 1;
+    }
+    HANDLE h = ex7::OpenForReadShared(out);
+    std::wstring hash = ex7::Sha256HexOfHandle(h);
+    CloseHandle(h);
+    wprintf(L"selftest: wrote %s\nselftest: sha256 %s\n",
+            out.c_str(), hash.c_str());
+    return 0;
 }
 
 } // namespace
@@ -154,6 +203,8 @@ int wmain(int argc, wchar_t** argv) {
         else if (a == L"--skip-signature") skipSig = true;
         else if (a == L"--allow-partial-localization") allowPartial = true;
         else if (a == L"--app-dir" && i + 1 < argc) g_appDir = argv[++i];
+        else if (a == L"--selftest-importpatch" && i + 1 < argc)
+            return SelfTestImportPatch(argv[++i]);
         else return Usage();
     }
     if (g_appDir.empty()) {
@@ -198,10 +249,10 @@ int wmain(int argc, wchar_t** argv) {
         return 1;
     }
 
-    // ---- 2. PE identity ---------------------------------------------------
+    // ---- 2. PE identity (incl. exact byte size, confirmed 2026-09-28) ----
     std::wstring diag;
-    if (!ex7::CheckPeIdentity(pristine, 512 * 1024, cfg::kTimeDateStamp,
-                              cfg::kSizeOfImage, diag)) {
+    if (!ex7::CheckPeIdentity(pristine, 512 * 1024, cfg::kExpectedFileBytes,
+                              cfg::kTimeDateStamp, cfg::kSizeOfImage, diag)) {
         FileLog(L"FAILED: PE identity check: %s", diag.c_str());
         return 1;
     }
