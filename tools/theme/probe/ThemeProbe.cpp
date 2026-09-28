@@ -202,6 +202,160 @@ static void ProbeOne(LPCWSTR path)
     if (hNonSharable) CloseHandle(hNonSharable);
 }
 
+
+// ---- structural analysis of a system theme (--analyze) -------------------
+// Parses ONLY structural metadata (record headers, ids, sizes, counts,
+// hex dumps of structural blobs). Never prints string VALUES from string
+// properties: class names are interface identifiers (like API names).
+#include <stdint.h>
+
+#pragma pack(push, 1)
+struct PropHeader { int32_t nameID, typeID, classID, partID, stateID,
+                    shortFlag, reserved, sizeInBytes; };
+#pragma pack(pop)
+
+static const uint8_t* ResBytes(HMODULE m, LPCWSTR type, LPCWSTR name,
+                               DWORD* size)
+{
+    HRSRC h = FindResourceW(m, name, type);
+    if (!h) return NULL;
+    HGLOBAL g = LoadResource(m, h);
+    *size = SizeofResource(m, h);
+    return g ? (const uint8_t*)LockResource(g) : NULL;
+}
+
+static void HexDump(const uint8_t* p, int n)
+{
+    for (int i = 0; i < n; i++) {
+        if (i % 16 == 0) wprintf(L"\n        %04x: ", i);
+        wprintf(L"%02x ", p[i]);
+    }
+    wprintf(L"\n");
+}
+
+static void AnalyzeVariant(const uint8_t* v, DWORD size)
+{
+    wprintf(L"   VARIANT %lu bytes; first 96B:", (unsigned long)size);
+    HexDump(v, size < 96 ? (int)size : 96);
+    // structural histogram of record headers (port of the public
+    // PropertyStream walk: 32B header + data, padded to 8 bytes)
+    int nRec = 0, walkErr = 0;
+    int typeHist[256] = {0};
+    int minClass = 1 << 30, maxClass = -1;
+    DWORD off = 0;
+    wprintf(L"   first 20 records (no values):");
+    while (off + 32 <= size) {
+        const PropHeader* h = (const PropHeader*)(v + off);
+        if (h->nameID <= 0 || h->nameID > 5000 || h->typeID <= 0 ||
+            h->typeID > 400 || h->classID < 0 || h->classID > 2000)
+            { off++; continue; }   // leading junk, like PropertyStream does
+        DWORD advance = 32;
+        DWORD dataLen = 0;
+        switch ((int)h->typeID) {
+        case 201: dataLen = (DWORD)h->sizeInBytes; break;         // STRING
+        case 205: dataLen = 16; break;                            // MARGINS
+        case 206: case 210: case 213: dataLen = 0; break;         // in-header
+        case 211: dataLen = (DWORD)h->sizeInBytes; break;         // INTLIST
+        case 240: dataLen = (DWORD)h->sizeInBytes; break;         // COLORLIST
+        default:  dataLen = (DWORD)h->sizeInBytes; break;         // scalar 4/8
+        }
+        advance = (32 + dataLen + 7) & ~7u;
+        if (nRec < 20)
+            wprintf(L"\n     rec#%d off=%5lu name=%d type=%d cls=%d part=%d "
+                    L"st=%d shrt=%d size=%ld",
+                    nRec, (unsigned long)off, h->nameID, h->typeID,
+                    h->classID, h->partID, h->stateID, h->shortFlag,
+                    (long)h->sizeInBytes);
+        if (h->typeID < 256) typeHist[h->typeID]++;
+        if (h->classID < minClass) minClass = h->classID;
+        if (h->classID > maxClass) maxClass = h->classID;
+        nRec++;
+        off += advance;
+        if (off > size) { walkErr = 1; break; }
+    }
+    wprintf(L"\n   records seen: %d (resync bytes consumed, walkErr=%d); "
+            L"classID range %d..%d\n   typeID histogram:",
+            nRec, walkErr, minClass, maxClass);
+    for (int i = 0; i < 256; i++)
+        if (typeHist[i]) wprintf(L" %d=%d", i, typeHist[i]);
+    wprintf(L"\n   walked %lu / %lu bytes\n",
+            (unsigned long)off, (unsigned long)size);
+}
+
+static void AnalyzeCmap(const uint8_t* c, DWORD size)
+{
+    wprintf(L"   CMAP %lu bytes; class %d: '", (unsigned long)size, 0);
+    int cls = 0, start = 0;
+    for (DWORD i = 0; i + 1 < size && cls < 12; i += 2) {
+        if (c[i] == 0 && c[i + 1] == 0) {
+            if (i - (DWORD)start > 2) {
+                // identifiers only (class NAMES — functional interface ids)
+                wprintf(L"%.*S' %d:'", (int)((i - start) / 2),
+                        (const char*)(c + start), ++cls);
+                if (cls >= 12) break;
+                wprintf(L"'");
+            }
+            start = (int)i + 2;
+        }
+    }
+    wprintf(L"' ...\n");
+}
+
+static void AnalyzeOne(LPCWSTR path)
+{
+    wprintf(L"== analyze %s\n", path);
+    HMODULE m = LoadLibraryExW(path, NULL,
+        LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    if (!m) { wprintf(L"   LoadLibraryEx err %lu\n", GetLastError()); return; }
+    DWORD sz;
+    const uint8_t* cmap = ResBytes(m, L"CMAP", L"CMAP", &sz);
+    if (cmap) AnalyzeCmap(cmap, sz);
+    const uint8_t* var = ResBytes(m, L"VARIANT", L"NORMAL", &sz);
+    if (var) AnalyzeVariant(var, sz);
+    const uint8_t* rmap = ResBytes(m, L"RMAP", L"RMAP", &sz);
+    if (rmap) { wprintf(L"   RMAP %lu bytes, first 96B:", (unsigned long)sz);
+                HexDump(rmap, sz < 96 ? (int)sz : 96); }
+    const uint8_t* vmap = ResBytes(m, L"VMAP", L"VMAP", &sz);
+    if (vmap) { wprintf(L"   VMAP %lu bytes (structural metadata):",
+                        (unsigned long)sz);
+                HexDump(vmap, (int)sz); }
+    const uint8_t* bc = ResBytes(m, L"BCMAP", L"BCMAP", &sz);
+    if (bc) { wprintf(L"   BCMAP %lu bytes, first 64B:", (unsigned long)sz);
+              HexDump(bc, sz < 64 ? (int)sz : 64); }
+    FreeLibrary(m);
+}
+
+// --stripsig <in> <out>: truncate the documented signature trailer block
+// (magic 0x84692426 footer) so we can load-test a SIGNED system theme as
+// if it were unsigned. Works only inside CI on the runner's own copy.
+static void StripSig(LPCWSTR in, LPCWSTR out)
+{
+    HANDLE fi = CreateFileW(in, GENERIC_READ, FILE_SHARE_READ, NULL,
+                            OPEN_EXISTING, 0, NULL);
+    if (fi == INVALID_HANDLE_VALUE) { wprintf(L"open err %lu\n",
+        GetLastError()); return; }
+    DWORD sz = GetFileSize(fi, NULL);
+    uint8_t* buf = (uint8_t*)malloc(sz);
+    DWORD rd = 0; ReadFile(fi, buf, sz, &rd, NULL); CloseHandle(fi);
+    uint32_t magic = 0, sigSize = 0, fileSize = 0;
+    memcpy(&magic, buf + sz - 16, 4);
+    memcpy(&sigSize, buf + sz - 12, 4);
+    memcpy(&fileSize, buf + sz - 8, 4);
+    wprintf(L"== stripsig: magic=0x%08lx sigSize=%lu fileSize=%lu actual=%lu\n",
+            (unsigned long)magic, (unsigned long)sigSize,
+            (unsigned long)fileSize, (unsigned long)sz);
+    DWORD newLen = (magic == 0x84692426)
+        ? sz - 16 - sigSize : sz;
+    HANDLE fo = CreateFileW(out, GENERIC_WRITE, 0, NULL,
+                            CREATE_ALWAYS, 0, NULL);
+    DWORD wr = 0; WriteFile(fo, buf, newLen, &wr, NULL); CloseHandle(fo);
+    wprintf(L"   wrote %s (%lu bytes, %s)\n", out, (unsigned long)wr,
+            magic == 0x84692426 ? L"signature removed" : L"unchanged copy");
+    free(buf);
+}
+
+int wmain_below() { return 0; }
+
 int wmain(int argc, wchar_t** argv)
 {
     // unbuffered: a crash in the loader must not swallow output
@@ -212,6 +366,14 @@ int wmain(int argc, wchar_t** argv)
     }
     if (argc > 2 && !lstrcmpiW(argv[1], L"--enum")) {
         EnumResources(argv[2]);
+        return 0;
+    }
+    if (argc > 2 && !lstrcmpiW(argv[1], L"--analyze")) {
+        AnalyzeOne(argv[2]);
+        return 0;
+    }
+    if (argc > 3 && !lstrcmpiW(argv[1], L"--stripsig")) {
+        StripSig(argv[2], argv[3]);
         return 0;
     }
     HMODULE hUx = LoadLibraryW(L"uxtheme.dll");
