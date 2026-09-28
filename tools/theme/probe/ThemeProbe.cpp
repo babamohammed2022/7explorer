@@ -465,6 +465,13 @@ int wmain(int argc, wchar_t** argv)
 {
     // unbuffered: a crash in the loader must not swallow output
     setvbuf(stdout, NULL, _IONBF, 0);
+    HMODULE hUx = LoadLibraryW(L"uxtheme.dll");
+    if (!hUx) { wprintf(L"no uxtheme (err %lu)\n", GetLastError());
+        return 2; }
+    pGetThemeDefaults = (GetThemeDefaults_t)GetProcAddress(hUx, (LPCSTR)7);
+    pLoaderLoadTheme = GetProcAddress(hUx, (LPCSTR)92);
+    pOpenThemeDataFromFile =
+        (OpenThemeDataFromFile_t)GetProcAddress(hUx, (LPCSTR)16);
     if (argc > 1 && !lstrcmpiW(argv[1], L"--force-defaults")) {
         g_forceDefaults = TRUE;
         argc--; argv++;
@@ -498,10 +505,7 @@ int wmain(int argc, wchar_t** argv)
         StripSig(argv[2], argv[3]);
         return 0;
     }
-    HMODULE hUx = LoadLibraryW(L"uxtheme.dll");
-    if (!hUx) { wprintf(L"no uxtheme (err %lu)\n", GetLastError()); return 2; }
-    pGetThemeDefaults = (GetThemeDefaults_t)GetProcAddress(hUx, (LPCSTR)7);
-    pLoaderLoadTheme = GetProcAddress(hUx, (LPCSTR)92);
+
     pOpenThemeDataFromFile =
         (OpenThemeDataFromFile_t)GetProcAddress(hUx, (LPCSTR)16);
     wprintf(L"uxtheme ord7=%p ord92=%p ord16=%p\n",
