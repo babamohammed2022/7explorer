@@ -13,6 +13,7 @@ from tools.verify_catalog import verify  # noqa: E402
 
 CONSTRAINTS = {
     "source": "fixture",
+    "require_fallback_coverage": True,
     "strings": {
         "100": {"len": 20, "accel": "u", "placeholders": []},
         "101": {"len": 22, "accel": "u", "placeholders": ["%1!s!", "%d"]},
@@ -119,7 +120,9 @@ class VerifyTests(unittest.TestCase):
         repo = Path(__file__).resolve().parent.parent
         code = verify(repo / "localization" / "catalog",
                       [str(repo / "localization" / "constraints"
-                           / "shell32.dll.constraints.json")])
+                           / "shell32.dll.constraints.json"),
+                       str(repo / "localization" / "constraints"
+                           / "explorer.exe.constraints.json")])
         self.assertEqual(code, 0)
 
 
