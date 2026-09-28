@@ -4,7 +4,9 @@
 // uxtheme treats an unsigned, self-authored theme WITHOUT touching any
 // user machine.  Build: cl /MT /W4 ThemeProbe.cpp
 #include <windows.h>
+#include <uxtheme.h>
 #include <stdio.h>
+#pragma comment(lib, "uxtheme.lib")
 
 // same layout as explorerwrapper/ThemeManager.h (upstream code, same repo)
 struct UXTHEMEFILE
