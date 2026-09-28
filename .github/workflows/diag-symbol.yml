@@ -36,6 +36,8 @@ jobs:
           )
           echo === headers of first probe >> ci-logs\diag-probe.txt
           python tools\analyze_mui.py work\probe-curl_default.exe --dump-headers >> ci-logs\diag-probe.txt 2>&1
+          echo === signature status >> ci-logs\diag-probe.txt
+          powershell -NoProfile -Command "$sig = Get-AuthenticodeSignature work\probe-curl_default.exe; Add-Content ci-logs\diag-probe.txt "sig: $($sig.Status) | $($sig.SignerCertificate.Subject)"" >> ci-logs\diag-probe.txt 2>&1
           echo === byte-diff between UA variants >> ci-logs\diag-probe.txt
           fc /b work\probe-curl_default.exe work\probe-Microsoft-Symbol-Server_6.3.exe >> ci-logs\diag-probe.txt 2>&1 || echo files differ >> ci-logs\diag-probe.txt
       - name: Signature status of the probe
