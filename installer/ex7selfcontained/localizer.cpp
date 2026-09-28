@@ -89,7 +89,7 @@ BOOL CALLBACK EnumLangsCb(HMODULE, LPCWSTR type, LPCWSTR name, WORD lang,
     return SaveEntryBytes(type, name, lang, tn, nn) ? TRUE : FALSE;
 }
 
-BOOL CALLBACK EnumNamesCb(HMODULE mod, LPCWSTR type, LPCWSTR name, LONG_PTR) {
+BOOL CALLBACK EnumNamesCb(HMODULE mod, LPCWSTR type, LPWSTR name, LONG_PTR) {
     return EnumResourceLanguagesW(mod, type, name, EnumLangsCb, 0);
 }
 
