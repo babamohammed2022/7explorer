@@ -39,10 +39,18 @@ jobs:
           if errorlevel 1 (type ci-logs\compile.txt & exit /b 1)
           type ci-logs\compile.txt
 
+      - name: Try starting the Themes service (Server SKUs ship it stopped)
+        shell: cmd
+        run: |
+          sc query Themes 2>&1 | tee ci-logs\themes-service.txt
+          sc start Themes 2>&1 | tee -a ci-logs\themes-service.txt
+          sc query UxSms 2>&1 | tee -a ci-logs\themes-service.txt
+          sc start UxSms 2>&1 | tee -a ci-logs\themes-service.txt
+
       - name: Run probe (own unsigned themes + system aero as control)
         shell: cmd
         run: |
-          (echo == analyze system aero & work\ThemeProbe.exe --analyze "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == stripsig system aero & work\ThemeProbe.exe --stripsig "%SystemRoot%\Resources\Themes\aero\aero.msstyles" work\aero-nosig.msstyles & echo == load signed control & work\ThemeProbe.exe "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == load stripped control & work\ThemeProbe.exe work\aero-nosig.msstyles & echo == candidates forced & work\ThemeProbe.exe --force-defaults work\probe\a_packthem_only.msstyles work\probe\b_packthem_rmap.msstyles work\probe\c_packthem_rmap_vmap1.msstyles work\probe\d_packthem_rmap_vmap2.msstyles) 2>&1 | tee ci-logs\theme-probe.txt
+          (echo == analyze system aero & work\ThemeProbe.exe --analyze "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == stripsig system aero & work\ThemeProbe.exe --stripsig "%SystemRoot%\Resources\Themes\aero\aero.msstyles" work\aero-nosig.msstyles & echo == load signed control & work\ThemeProbe.exe "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == load stripped control & work\ThemeProbe.exe work\aero-nosig.msstyles & echo == candidates forced & work\ThemeProbe.exe --force-defaults work\probe\e_packthem_only.msstyles work\probe\f_packthem_rmap_vmap.msstyles work\probe\g_f_plus_bcmap.msstyles) 2>&1 | tee ci-logs\theme-probe.txt
 
       - name: Upload probe logs as artifact
         uses: actions/upload-artifact@v4

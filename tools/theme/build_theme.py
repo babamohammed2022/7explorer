@@ -150,7 +150,8 @@ def make_records_probe():
     return recs
 
 
-def build_theme(sig128: bytes | None, rmap=None, vmap=None):
+def build_theme(sig128: bytes | None, rmap=None, vmap=None,
+                bcmap=None):
     """Returns (pe_bytes, stats). sig128: None = no signature trailer,
     otherwise appended with the community-documented footer structure
     (magic 0x84692426, sigSize, fileSize, 0) — still NOT a valid
@@ -170,6 +171,8 @@ def build_theme(sig128: bytes | None, rmap=None, vmap=None):
         resources.append(("RMAP", "RMAP", 0x0409, rmap))
     if vmap is not None:
         resources.append(("VMAP", "VMAP", 0x0409, vmap))
+    if bcmap is not None:
+        resources.append(("BCMAP", "BCMAP", 0x0409, bcmap))
     pe, _ = pebuilder.build_resource_pe(resources)
     stats = {"cmap": len(cmap), "variant": len(variant), "classes":
              len(CLASSES), "signed": sig128 is not None}
@@ -187,20 +190,44 @@ def _globals_stream():
     return b"".join(r.bytes() for r in recs)
 
 
-def vmap_guess1():
-    """count + plain utf16 strings: variant, color, size"""
-    return (struct.pack("<i", 1) + "NORMAL\0".encode("utf-16-le") +
-            "NormalColor\0".encode("utf-16-le") +
-            "NormalSize\0".encode("utf-16-le"))
-
-
-def vmap_guess2():
-    """count + (len32 + utf16 string) x3 — totals 76 bytes like a real one"""
-    out = struct.pack("<i", 1)
-    for st in ("NORMAL", "NormalColor", "NormalSize"):
+def vmap_exact():
+    """Format proven byte-for-byte against a real system theme's VMAP
+    (structural metadata read by the CI probe): three length-prefixed
+    UTF-16 strings in this order: variant, size, color. 76 bytes, no
+    leading count. String VALUES here are the standard variant labels —
+    functional identifiers required by uxtheme."""
+    out = b""
+    for st in ("Normal", "NormalSize", "NormalColor"):
         u = (st + "\0").encode("utf-16-le")
-        out += struct.pack("<i", len(st) + 1) + u
+        rec = struct.pack("<i", len(st) + 1) + u
+        rec += b"\0" * ((-len(rec)) % 4)   # each record pad to 4 bytes
+        out += rec
+    assert len(out) == 76, len(out)
     return out
+
+
+def rmap_stream():
+    """Root/global properties: STRING records, class=0 part=0 state=0
+    (RMAP in a real theme begins with name 600 = style display name).
+    100% our own authored texts."""
+    recs = [
+        Rec(600, T_STRING, 0, 0, 0, "7explorer Aero"),
+        Rec(601, T_STRING, 0, 0, 0, "7explorer Aero"),
+        Rec(TMT_COMPANY, T_STRING, 0, 0, 0, "7explorer project"),
+        Rec(TMT_AUTHOR, T_STRING, 0, 0, 0, "7explorer project"),
+        Rec(TMT_COPYRIGHT, T_STRING, 0, 0, 0,
+            "Original work of the 7explorer project"),
+        Rec(TMT_VERSION, T_STRING, 0, 0, 0, "1.0"),
+    ]
+    return b"".join(r.bytes() for r in
+                    sorted(recs, key=lambda r: r.name))
+
+
+def bcmap_all_inherit(nclasses):
+    """Base-class map: first int32 = entry count, then one int32 per
+    class: -1 = inherits from DEFAULT/global class (format read from the
+    structural BCMAP dump: count then per-class parent ids)."""
+    return struct.pack("<i", nclasses) + b"\xff\xff\xff\xff" * nclasses
 
 
 def main():
@@ -218,15 +245,17 @@ def main():
     if args.batch:
         # candidate-matrix probes for the CI theme loader experiment
         os.makedirs(args.out, exist_ok=True)
-        rmap = _globals_stream()
-        cases = {
-            "a_packthem_only.msstyles": (None, None),
-            "b_packthem_rmap.msstyles": (rmap, None),
-            "c_packthem_rmap_vmap1.msstyles": (rmap, vmap_guess1()),
-            "d_packthem_rmap_vmap2.msstyles": (rmap, vmap_guess2()),
-        }
-        for name, (rm, vm) in cases.items():
-            blob, stats = build_theme(None, rmap=rm, vmap=vm)
+        rmap = rmap_stream()
+        cases = [
+            ("e_packthem_only.msstyles", dict()),
+            ("f_packthem_rmap_vmap.msstyles",
+             dict(rmap=rmap, vmap=vmap_exact())),
+            ("g_f_plus_bcmap.msstyles",
+             dict(rmap=rmap, vmap=vmap_exact(),
+                  bcmap=bcmap_all_inherit(len(CLASSES)))),
+        ]
+        for name, kw in cases:
+            blob, stats = build_theme(None, **kw)
             path = os.path.join(args.out, name)
             with open(path, "wb") as fh:
                 fh.write(blob)
