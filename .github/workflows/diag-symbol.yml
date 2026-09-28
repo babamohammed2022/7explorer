@@ -5,6 +5,9 @@ name: diag-symbol-server
 # che il contenuto scaricato sia il PE atteso. Risultati nel branch
 # ci-logs/diag-<run>. Nessun file Microsoft viene conservato.
 on:
+  push:
+    branches: ["arena/**", "ci-logs/**"]
+    paths: [".github/workflows/diag-symbol.yml"]
   workflow_dispatch:
 
 permissions:
