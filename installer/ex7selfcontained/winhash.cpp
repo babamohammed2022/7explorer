@@ -33,46 +33,42 @@ std::wstring Sha256HexOfHandle(HANDLE h) {
     if (h == INVALID_HANDLE_VALUE) return {};
 
     BCRYPT_ALG_HANDLE alg = nullptr;
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    std::wstring result;
-
     if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM,
                                     nullptr, 0) != 0)
         return {};
+
+    std::wstring result;
     DWORD objLen = 0, dummy = 0;
     if (BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (PUCHAR)&objLen,
-                          sizeof(objLen), &dummy, 0) != 0)
-        goto done_alg;
-    {
+                          sizeof(objLen), &dummy, 0) == 0) {
         std::vector<UCHAR> obj(objLen);
-        if (BCryptCreateHash(alg, &hash, obj.data(), objLen,
-                             nullptr, 0, 0) != 0)
-            goto done_alg;
-
-        LARGE_INTEGER pos{};
-        if (SetFilePointerEx(h, pos, &pos, FILE_BEGIN) == 0)
-            goto done_hash;
-
-        UCHAR buf[64 * 1024];
+        BCRYPT_HASH_HANDLE hash = nullptr;
+        bool valid = (BCryptCreateHash(alg, &hash, obj.data(), objLen,
+                                       nullptr, 0, 0) == 0);
         DWORD rd = 0;
-        while (ReadFile(h, buf, sizeof(buf), &rd, nullptr) && rd > 0) {
-            if (BCryptHashData(hash, buf, rd, 0) != 0)
-                goto done_hash;
+        if (valid) {
+            LARGE_INTEGER pos{};
+            valid = SetFilePointerEx(h, pos, &pos, FILE_BEGIN) != 0;
         }
-        {
-            UCHAR digest[32];
-            if (BCryptFinishHash(hash, digest, sizeof(digest), 0) != 0)
-                goto done_hash;
-            result.reserve(64);
-            for (UCHAR b : digest) {
-                result += kHex[b >> 4];
-                result += kHex[b & 15];
+        if (valid) {
+            UCHAR buf[64 * 1024];
+            while (valid &&
+                   ReadFile(h, buf, sizeof(buf), &rd, nullptr) && rd > 0) {
+                valid = (BCryptHashData(hash, buf, rd, 0) == 0);
             }
         }
-    done_hash:
-        BCryptDestroyHash(hash);
+        if (valid) {
+            UCHAR digest[32];
+            if (BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
+                result.reserve(64);
+                for (UCHAR b : digest) {
+                    result += kHex[b >> 4];
+                    result += kHex[b & 15];
+                }
+            }
+        }
+        if (hash) BCryptDestroyHash(hash);
     }
-done_alg:
     BCryptCloseAlgorithmProvider(alg, 0);
     return result;
 }
