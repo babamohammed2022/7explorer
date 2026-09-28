@@ -11,15 +11,31 @@ namespace cfg {
 
 // ----- identity of the ONE Microsoft binary we need -----------------------
 // explorer.exe 6.1.7601.17514 (win7sp1_rtm.101119-1850), x64.
-// CONFIRMED 2026-09-28 by the user on Windows 10 21H2 LTSC (build 19044):
-// real download from the URL below -> 2.872.320 bytes; certutil SHA-256
-// matches kExpectedSha256; TimeDateStamp/SizeOfImage re-checked on the file.
-// Si tratta di valori binari-specifici: NON modificarli senza riverificare.
+//
+// IDENTITY MODEL (multi-level). Microsoft serves AT LEAST TWO legitimate
+// variants of this very same build (re-signed/re-timestamped catalog
+// copies): measured structure is IDENTICAL (machine AMD64, TimeDateStamp,
+// SizeOfImage, byte size, import list) while SHA-256 differs. Observations:
+//   [A] 5769e5b2…e21b — user, 2026-09-28, Windows 10 21H2 LTSC 19044,
+//        download + certutil (first observation);
+//   [B] 6a671b92…7576a — GitHub Actions runner (Azure), 2026-09-28, two
+//        independent runs, three user-agents (second observation).
+// Policy: a file is accepted ONLY if (1) structural identity below matches
+// EXACTLY AND (2) its SHA-256 is in kAcceptedSha256[] AND (3) Authenticode
+// verifies (see main.cpp; --skip-signature exists for offline CI tests).
+// NEVER accept a file outside this list. Extend the list only after a
+// documented verification (who, where, how) like the ones above.
 inline constexpr unsigned int  kTimeDateStamp = 0x4CE7A144;
 inline constexpr unsigned int  kSizeOfImage = 0x2C0000;
 inline constexpr unsigned long long kExpectedFileBytes = 2872320ULL;
-inline constexpr wchar_t kExpectedSha256[] =
-    L"5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b";
+inline constexpr const wchar_t* kAcceptedSha256[] = {
+    // [A] user-observed, Win10 21H2 LTSC, certutil, 2026-09-28
+    L"5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b",
+    // [B] CI-observed, Azure runner, deterministic, 2026-09-28
+    L"6a671b92a69755de6fd063fcbe4ba926d83b49f78c42dbaeed8cdb6bbc57576a",
+};
+inline constexpr unsigned int kAcceptedSha256Count =
+    sizeof(kAcceptedSha256) / sizeof(kAcceptedSha256[0]);
 
 // Host/path are pinned: HTTPS only, fixed host, path derived ONLY from the
 // two identity constants above (no user influence, no URL parsing).

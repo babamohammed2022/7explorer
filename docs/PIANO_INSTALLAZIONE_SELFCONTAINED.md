@@ -18,11 +18,21 @@ I valori forniti dall'utente:
 
 | Valore | Costante | Stato |
 | --- | --- | --- |
-| TimeDateStamp `0x4CE7A144` | `cfg::kTimeDateStamp` | ✅ **CONFERMATO 2026-09-28** dall'utente su Windows 10 21H2 LTSC (19044), download reale + `certutil`; ri-verificato ad ogni run del CI |
-| SizeOfImage `0x2C0000` | `cfg::kSizeOfImage` | ✅ **CONFERMATO 2026-09-28** (utente + `--dump-headers` nel CI) |
-| SHA-256 `5769…e21b` | `cfg::kExpectedSha256` | ✅ **CONFERMATO 2026-09-28** (utente, `certutil`); nel CI confronto con `Get-FileHash` |
-| dimensione 2.872.320 byte | `cfg::kExpectedFileBytes` | ✅ **CONFERMATO 2026-09-28**; controllo esatto in `CheckPeIdentity` |
-| URL `…/explorer.exe/4CE7A1442C0000/explorer.exe` | template in `config.h` | ✅ raggiunto e scaricato da utente e CI (l'errore TLS era solo della rete sandbox) |
+| TimeDateStamp `0x4CE7A144` | `cfg::kTimeDateStamp` | ✅ **CONFERMATO** utente (Win10 19044) e CI (dump headers sul file reale) |
+| SizeOfImage `0x2C0000` | `cfg::kSizeOfImage` | ✅ **CONFERMATO** utente e CI |
+| dimensione 2.872.320 byte | `cfg::kExpectedFileBytes` | ✅ **CONFERMATO** utente e CI (controllo esatto) |
+| SHA-256 `5769…e21b` | `cfg::kAcceptedSha256[0]` | ✅ osservato dall'utente 2026-09-28 (certutil) |
+| SHA-256 `6a671b…7576a` | `cfg::kAcceptedSha256[1]` | ✅ osservato dal CI 2026-09-28 (Azure, 2 run, 3 UA) |
+| URL `…/explorer.exe/4CE7A1442C0000/explorer.exe` | template | ✅ da utente e CI |
+
+**Trovata variante dello stesso binario**: il symbol server serve (almeno)
+due copie **strutturalmente identiche** della stessa build (stessi
+machine/TimeDateStamp/SizeOfImage/size/lista import — verificati sul file
+reale nel CI) con **SHA-256 diverso**: quasi certamente ri-firma/ritimestamp
+del medesimo contenuto (la differenza non tocca codice né header). Modello di
+verifica aggiornato: **struttura esatta + SHA-256 in allow-list documentata
++ Authenticode obbligatorio di default**. Mai accettare nulla fuori lista;
+estenderla solo con osservazione documentata come le due sopra.
 
 **Comandi di verifica da eseguire sulla tua macchina (prima del rilascio),**
 e output atteso da incollare/verificare:

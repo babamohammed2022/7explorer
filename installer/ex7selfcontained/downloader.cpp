@@ -160,14 +160,23 @@ bool EnsurePristineExplorer(const DownloadOptions& opt, std::wstring& destPath) 
     }
     const std::wstring cachePath = Join(cacheDir, CacheFileName());
 
+    auto hashAccepted = [](const std::wstring& hash) -> int {
+        for (unsigned int i = 0; i < cfg::kAcceptedSha256Count; ++i)
+            if (Sha256HexEqualsCI(hash, cfg::kAcceptedSha256[i]))
+                return (int)i;
+        return -1;
+    };
+
     // --- offline reuse ------------------------------------------------------
     {
         HANDLE h = OpenForReadShared(cachePath);
         if (h != INVALID_HANDLE_VALUE) {
             std::wstring hash = Sha256HexOfHandle(h);
             CloseHandle(h);
-            if (Sha256HexEqualsCI(hash, cfg::kExpectedSha256)) {
-                Log(L"offline: reusing verified cache %s", cachePath.c_str());
+            int v = hashAccepted(hash);
+            if (v >= 0) {
+                Log(L"offline: reusing verified cache %s (variant %c)",
+                    cachePath.c_str(), L'A' + v);
                 destPath = cachePath;
                 return true;
             }
@@ -196,13 +205,17 @@ bool EnsurePristineExplorer(const DownloadOptions& opt, std::wstring& destPath) 
             if (h == INVALID_HANDLE_VALUE) { DeleteFileW(tmpName); return false; }
             std::wstring hash = Sha256HexOfHandle(h);
             CloseHandle(h);
-            if (!Sha256HexEqualsCI(hash, cfg::kExpectedSha256)) {
+            int v = hashAccepted(hash);
+            if (v < 0) {
                 // Loud refusal: never accept another file silently.
-                Log(L"HASH MISMATCH: got %s, expected %s — file deleted",
-                    hash.c_str(), cfg::kExpectedSha256);
+                Log(L"HASH MISMATCH: got %s, no match in the pinned "
+                    L"allow-list (%u entries) — file deleted",
+                    hash.c_str(), cfg::kAcceptedSha256Count);
                 DeleteFileW(tmpName);
                 return false;
             }
+            Log(L"hash verified against allow-list entry [%c] (%s)",
+                L'A' + v, hash.c_str());
             if (opt.allowSkipVerify) {
                 Log(L"WARNING: allowSkipVerify is a test-only hook");
             }

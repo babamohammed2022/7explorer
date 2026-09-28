@@ -59,16 +59,32 @@ jobs:
 
       - name: Download reference explorer.exe and re-verify pinned identity
         shell: cmd
-        env:
-          EXPECTED_SHA: "5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b"
         run: |
           mkdir work
           echo --- download --- > ci-logs\run-verify.txt
           curl.exe -L -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe" 2>> ci-logs\run-verify.txt
           if errorlevel 1 exit /b 1
-          echo --- hash+size --- >> ci-logs\run-verify.txt
-          powershell -NoProfile -Command "$h=(Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower(); $s=(Get-Item work\explorer-ref.exe).Length; Write-Host \"sha256: $h\"; Write-Host \"size: $s\"; if ($h -ne '%EXPECTED_SHA%') { Write-Error 'SHA256 MISMATCH'; exit 1 }; if ($s -ne 2872320) { Write-Error 'SIZE MISMATCH'; exit 1 }" >> ci-logs\run-verify.txt 2>&1
-          if errorlevel 1 exit /b 1
+
+      - name: Re-verify hash (allow-list), size and signature
+        shell: pwsh
+        run: |
+          $expected = @(
+            '5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b',
+            '6a671b92a69755de6fd063fcbe4ba926d83b49f78c42dbaeed8cdb6bbc57576a')
+          $h = (Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower()
+          $s = (Get-Item work\explorer-ref.exe).Length
+          "--- hash+size ---"     | Add-Content ci-logs\run-verify.txt
+          "sha256: $h"            | Add-Content ci-logs\run-verify.txt
+          "size: $s"              | Add-Content ci-logs\run-verify.txt
+          if (-not ($expected -contains $h)) { throw "SHA256 NOT IN ALLOW-LIST: $h" }
+          if ($s -ne 2872320) { throw "SIZE MISMATCH: $s" }
+          $sig = Get-AuthenticodeSignature work\explorer-ref.exe
+          "signature: $($sig.Status) | $($sig.SignerCertificate.Subject)" | Add-Content ci-logs\run-verify.txt
+          if ($sig.Status -ne 'Valid') { throw "SIGNATURE NOT VALID: $($sig.Status)" }
+
+      - name: Dump PE headers of the reference (log evidence)
+        shell: cmd
+        run: |
           echo --- pe headers --- >> ci-logs\run-verify.txt
           python tools\analyze_mui.py work\explorer-ref.exe --dump-headers >> ci-logs\run-verify.txt 2>&1
           if errorlevel 1 exit /b 1

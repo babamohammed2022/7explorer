@@ -257,13 +257,18 @@ int wmain(int argc, wchar_t** argv) {
         return 1;
     }
 
-    // ---- 3. optional Authenticode (secondary control) --------------------
+    // ---- 3. Authenticode: REQUIRED by default ----------------------------
+    // Because more than one legitimate hash variant exists (see config.h),
+    // the Microsoft signature is the control that binds every accepted
+    // variant to Microsoft. --skip-signature exists only for offline tests.
     if (!skipSig) {
         auto ts = ex7::CheckAuthenticode(pristine, diag);
         FileLog(L"authenticode(pristine): %s", diag.c_str());
-        if (ts != ex7::TrustStatus::Valid)
-            FileLog(L"NOTE: continuing; the pinned SHA-256 is the primary "
-                    L"control. Use --skip-signature to silence this.");
+        if (ts != ex7::TrustStatus::Valid) {
+            FileLog(L"FAILED: signature does not verify; refusing to proceed "
+                    L"(use --skip-signature ONLY for offline tests)");
+            return 1;
+        }
     }
 
     // ---- 4. working copy: patch imports ----------------------------------

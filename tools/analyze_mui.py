@@ -376,6 +376,7 @@ def build_report(path: str, with_strings: bool) -> dict:
         "size_of_image": f"0x{pe.size_of_image:X}",
         "imports": [],
         "has_mui_resource": False,
+        "named_rcdata": [],
         "strings": {},   # id -> {"lang": lcid, "len": n, "accel": c, "placeholders": [...]}
         "menus": {},
         "dialogs": {},
@@ -390,6 +391,8 @@ def build_report(path: str, with_strings: bool) -> dict:
         tname = TYPE_NAMES.get(t, t) if isinstance(t, int) else f'"{t}"'
         if t == RT_RCDATA and rid == "MUI":
             rep["has_mui_resource"] = True
+        if t == RT_RCDATA and isinstance(rid, str):
+            rep["named_rcdata"].append(rid)
         key = f"{rid}/lang:{lang:04X}"
         try:
             if t == RT_STRING and isinstance(rid, int):
@@ -493,6 +496,8 @@ def main() -> int:
         print(f"TimeDateStamp  : {rep['time_date_stamp']}")
         print(f"SizeOfImage    : {rep['size_of_image']}")
         print(f"MUI resource   : {rep['has_mui_resource']}")
+        if rep["named_rcdata"]:
+            print(f"named RCDATA   : {sorted(set(rep['named_rcdata']))}")
         print("imports:")
         for n in rep["imports"]:
             marker = "  <-- patched to wrp64.dll" if n.upper() in (
