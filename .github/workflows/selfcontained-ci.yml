@@ -92,6 +92,7 @@ jobs:
           Get-Content SHA256SUMS.txt
 
       - name: Upload artifacts (NO Microsoft binaries)
+        if: always()  # anche in caso di fallimento: servono i log di build
         uses: actions/upload-artifact@v4
         with:
           name: ex7selfcontained-binaries

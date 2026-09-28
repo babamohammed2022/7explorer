@@ -150,7 +150,9 @@ def main() -> int:
     print(f"written {hdr}")
 
     rc = ROOT / "explorerwrapper" / "ex7_languages.rc"
-    rc.write_bytes(b"\xef\xbb\xbf" + gen_rc(catalogs).encode("utf-8"))
+    # rc.exe accetta in modo affidabile i file .rc in UTF-16LE con BOM
+    # (UTF-8 fallisce su runner MSVC: è la stessa codifica di wrapper.rc).
+    rc.write_bytes(gen_rc(catalogs).encode("utf-16"))
     print(f"written {rc}")
 
     if args.patch_vcxproj:
