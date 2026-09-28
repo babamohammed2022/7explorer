@@ -181,10 +181,16 @@ ImportPatchResult PatchImportsInPlace(std::vector<uint8_t>& image) {
     }
 
     uint32_t oldSum = pe.u32(pe.checksumOff);
+    // The whole 4-byte CheckSum field is EXCLUDED from the checksum: zero it
+    // BEFORE computing (bug found by the real-file CI comparison: the high
+    // word of a previous non-zero checksum must not leak into the new one).
+    memset(image.data() + pe.checksumOff, 0, 4);
     uint32_t newSum = ComputePeChecksum(image, pe.checksumOff);
     if (newSum != oldSum) {
         memcpy(image.data() + pe.checksumOff, &newSum, 4);
         r.actions.push_back("PE CheckSum updated");
+    } else {
+        memcpy(image.data() + pe.checksumOff, &newSum, 4);  // keep stored
     }
 
     r.ok = true;

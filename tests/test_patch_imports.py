@@ -94,6 +94,24 @@ class ImportPatchTests(unittest.TestCase):
                          "stored checksum must match the algorithm")
         self.assertTrue(any("CheckSum" in a for a in actions))
 
+    def test_checksum_ignores_previous_value(self):
+        """Regression: the stored result must not depend on the OLD checksum
+        (real explorer.exe ships a non-zero checksum with a non-zero high
+        word; the C++ port originally leaked it — CI byte-compare caught it).
+        """
+        for old in (0x00000001, 0x12345678, 0xFFFF0000):
+            pe = bytearray(self.pe)
+            mod = _PE(bytes(pe))
+            struct.pack_into("<I", pe, mod.checksum_off, old)
+            patched, _ = patch_imports(bytes(pe))
+            mod2 = _PE(patched)
+            stored = struct.unpack_from("<I", patched, mod2.checksum_off)[0]
+            buf = bytearray(patched)
+            struct.pack_into("<I", buf, mod2.checksum_off, 0)
+            calc = pe_checksum(buf, mod2.checksum_off)
+            self.assertEqual(
+                stored, calc, f"checksum depends on previous value {old:#x}")
+
     def test_only_three_bytes_regions_change(self):
         """Diff must be: the 3 name slots + bound dir entry + checksum."""
         patched, _ = patch_imports(self.pe)
