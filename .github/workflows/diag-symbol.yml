@@ -51,11 +51,11 @@ jobs:
         run: |
           echo --- mui probe --- > ci-logs\mui-probe.txt
           for %%I in (6000 5600 5800 8000 A000 C000 10000) do (
-            curl.exe -s -L -o work\mui-%%I.bin "https://msdl.microsoft.com/download/symbols/explorer.exe.mui/4A5BC954%%I/explorer.exe.mui" -w "id%%I code=%%{http_code} size=%%{size_download}
-" >> ci-logs\mui-probe.txt 2>&1
+            curl.exe -s -L -o work\mui-%%I.bin "https://msdl.microsoft.com/download/symbols/explorer.exe.mui/4A5BC954%%I/explorer.exe.mui" -w "id%%I code=%%{http_code} size=%%{size_download}" >> ci-logs\mui-probe.txt 2>&1
+            echo. >> ci-logs\mui-probe.txt
             if exist work\mui-%%I.bin (for %%F in (work\mui-%%I.bin) do echo file%%I %%~zF bytes >> ci-logs\mui-probe.txt)
           )
-          powershell -NoProfile -Command "Get-ChildItem work\mui-*.bin -ErrorAction SilentlyContinue | ForEach-Object { $h=(Get-FileHash $_.FullName -Algorithm SHA256).Hash; Add-Content ci-logs\mui-probe.txt ("$($_.Name) $h") }"
+          powershell -NoProfile -Command "Get-ChildItem work\mui-*.bin -ErrorAction SilentlyContinue | ForEach-Object { $h=(Get-FileHash $_.FullName -Algorithm SHA256).Hash; Add-Content ci-logs\mui-probe.txt ($_.Name + ' ' + $h) }"
 
       - name: Commit diag results
         if: always()
