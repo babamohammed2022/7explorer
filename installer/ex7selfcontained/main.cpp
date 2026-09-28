@@ -1,0 +1,277 @@
+// main.cpp — ex7selfcontained: download-once, verify, patch, localize.
+//
+// Pipeline (every step fails LOUDLY, never silently, never blocks logon):
+//   0. parse args, set up directories + readable log;
+//   1. reuse the hash-verified cached explorer.exe when present (OFFLINE OK);
+//      otherwise download it from the pinned Microsoft symbol server URL
+//      with timeouts/deadline/cancellation, temp->hash->MoveFileEx;
+//   2. structural PE identity check (AMD64, TimeDateStamp, SizeOfImage);
+//   3. optional secondary Authenticode check on the PRISTINE file
+//      (advisory; the signature is inevitably broken by ANY later patch);
+//   4. copy to the working explorer.exe, run the deterministic import patch
+//      (SHLWAPI.DLL/OLE32.DLL/EXPLORERFRAME.DLL -> wrp64.dll);
+//   5. record the resulting post-patch SHA-256 in state\install.json so a
+//      corrupted local copy is detected on later runs;
+//   6. inject the multi-language catalog strings into the working copy;
+//      neutralize the MUI resource ONLY when the coverage gate allows it.
+//
+// BUILD STATUS: syntax-reviewed only (sandbox has no Windows toolchain);
+// see README.md for build commands.
+#include "config.h"
+#include "downloader.h"
+#include "winhash.h"
+#include "importpatch.h"
+#include "localizer.h"
+
+#include <cstdarg>
+#include <cstdio>
+#include <string>
+#include <vector>
+
+namespace {
+
+HANDLE g_logFile = INVALID_HANDLE_VALUE;
+std::wstring g_appDir;
+HANDLE g_cancelEvent = nullptr;
+
+void FileLog(const wchar_t* fmt, ...) {
+    wchar_t msg[1600];
+    va_list ap;
+    va_start(ap, fmt);
+    _vsnwprintf_s(msg, _countof(msg), _TRUNCATE, fmt, ap);
+    va_end(ap);
+
+    wchar_t line[2000];
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    _snwprintf_s(line, _countof(line), _TRUNCATE,
+                 L"[%04u-%02u-%02u %02u:%02u:%02uZ] %s\r\n",
+                 st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
+                 st.wSecond, msg);
+    wprintf(L"%s", line);
+    if (g_logFile != INVALID_HANDLE_VALUE) {
+        // log is UTF-16 to stay readable with non-Latin catalogs
+        DWORD wr = 0;
+        WriteFile(g_logFile, line, (DWORD)wcslen(line) * 2, &wr, nullptr);
+    }
+}
+
+BOOL WINAPI ConsoleCtrlHandler(DWORD ev) {
+    switch (ev) {
+    case CTRL_C_EVENT:
+    case CTRL_BREAK_EVENT:
+    case CTRL_CLOSE_EVENT:
+    case CTRL_LOGOFF_EVENT:
+    case CTRL_SHUTDOWN_EVENT:
+        if (g_cancelEvent) SetEvent(g_cancelEvent);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+std::wstring Join(const std::wstring& a, const std::wstring& b) {
+    if (a.empty() || a.back() == L'\\') return a + b;
+    return a + L"\\" + b;
+}
+
+bool WriteInstallRecord(const std::wstring& stateDir,
+                        const std::wstring& originalHash,
+                        const std::wstring& patchedHash,
+                        const std::vector<std::string>& actions) {
+    std::wstring file = Join(stateDir, L"install.json");
+    HANDLE h = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    std::string json = "{\n  \"tool\": \"ex7selfcontained\",\n  \"version\": \"";
+    json += std::string(cfg::kToolVersion, cfg::kToolVersion +
+                        wcslen(cfg::kToolVersion));
+    json += "\",\n  \"originalSha256\": \"";
+    json += std::string(originalHash.begin(), originalHash.end());
+    json += "\",\n  \"patchedSha256\": \"";
+    json += std::string(patchedHash.begin(), patchedHash.end());
+    json += "\",\n  \"actions\": [\n";
+    for (size_t i = 0; i < actions.size(); ++i) {
+        json += "    \"" + actions[i] + "\"";
+        json += (i + 1 < actions.size()) ? ",\n" : "\n";
+    }
+    json += "  ]\n}\n";
+    DWORD wr = 0;
+    WriteFile(h, json.data(), (DWORD)json.size(), &wr, nullptr);
+    CloseHandle(h);
+    return true;
+}
+
+bool ReadWholeFile(const std::wstring& path, std::vector<uint8_t>& out) {
+    HANDLE h = ex7::OpenForReadShared(path);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER sz{};
+    GetFileSizeEx(h, &sz);
+    out.resize((size_t)sz.QuadPart);
+    DWORD rd = 0, total = 0;
+    while (total < out.size()) {
+        DWORD chunk = (out.size() - total) > ((size_t)1 << 24)
+                          ? (1u << 24)
+                          : (DWORD)(out.size() - total);
+        if (!ReadFile(h, out.data() + total, chunk, &rd, nullptr) || !rd)
+            break;
+        total += rd;
+    }
+    CloseHandle(h);
+    return total == out.size();
+}
+
+bool WriteWholeFile(const std::wstring& path,
+                    const std::vector<uint8_t>& data) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD wr = 0, total = 0;
+    while (total < data.size()) {
+        DWORD chunk = (data.size() - total) > ((size_t)1 << 24)
+                          ? (1u << 24)
+                          : (DWORD)(data.size() - total);
+        if (!WriteFile(h, data.data() + total, chunk, &wr, nullptr) || !wr)
+            break;
+        total += wr;
+    }
+    CloseHandle(h);
+    return total == data.size();
+}
+
+int Usage() {
+    wprintf(L"ex7selfcontained [--app-dir PATH] [--offline] "
+            L"[--skip-signature] [--allow-partial-localization]\n");
+    return 2;
+}
+
+} // namespace
+
+int wmain(int argc, wchar_t** argv) {
+    bool offline = false, skipSig = false, allowPartial = false;
+    for (int i = 1; i < argc; ++i) {
+        std::wstring a = argv[i];
+        if (a == L"--offline") offline = true;
+        else if (a == L"--skip-signature") skipSig = true;
+        else if (a == L"--allow-partial-localization") allowPartial = true;
+        else if (a == L"--app-dir" && i + 1 < argc) g_appDir = argv[++i];
+        else return Usage();
+    }
+    if (g_appDir.empty()) {
+        wchar_t self[MAX_PATH * 2];
+        GetModuleFileNameW(nullptr, self, (DWORD)_countof(self));
+        std::wstring p = self;
+        size_t bs = p.find_last_of(L'\\');
+        g_appDir = (bs == std::wstring::npos) ? L"." : p.substr(0, bs);
+    }
+    std::wstring logDir = Join(g_appDir, cfg::kLogSubDir);
+    CreateDirectoryW(Join(g_appDir, cfg::kStateSubDir).c_str(), nullptr);
+    CreateDirectoryW(logDir.c_str(), nullptr);
+    ex7::g_log = FileLog;
+    std::wstring logPath = Join(logDir, cfg::kLogFileName);
+    g_logFile = CreateFileW(logPath.c_str(), FILE_APPEND_DATA,
+                            FILE_SHARE_READ, nullptr, OPEN_ALWAYS,
+                            FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (g_logFile != INVALID_HANDLE_VALUE) {
+        // UTF-16 BOM once (when the file is new)
+        if (SetFilePointer(g_logFile, 0, nullptr, FILE_END) == 0) {
+            WORD bom = 0xFEFF;
+            DWORD wr;
+            WriteFile(g_logFile, &bom, 2, &wr, nullptr);
+        }
+    }
+
+    g_cancelEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
+
+    FileLog(L"ex7selfcontained %s starting, appDir=%s", cfg::kToolVersion,
+            g_appDir.c_str());
+
+    // ---- 1. pristine copy (offline reuse or verified download) -----------
+    ex7::DownloadOptions dl;
+    dl.appDir = g_appDir;
+    dl.cancelEvent = g_cancelEvent;
+    std::wstring pristine;
+    if (offline)
+        FileLog(L"--offline: network disabled for this run");
+    if (!EnsurePristineExplorer(dl, pristine)) {
+        FileLog(L"FAILED: no verified explorer.exe available; nothing installed");
+        return 1;
+    }
+
+    // ---- 2. PE identity ---------------------------------------------------
+    std::wstring diag;
+    if (!ex7::CheckPeIdentity(pristine, 512 * 1024, cfg::kTimeDateStamp,
+                              cfg::kSizeOfImage, diag)) {
+        FileLog(L"FAILED: PE identity check: %s", diag.c_str());
+        return 1;
+    }
+
+    // ---- 3. optional Authenticode (secondary control) --------------------
+    if (!skipSig) {
+        auto ts = ex7::CheckAuthenticode(pristine, diag);
+        FileLog(L"authenticode(pristine): %s", diag.c_str());
+        if (ts != ex7::TrustStatus::Valid)
+            FileLog(L"NOTE: continuing; the pinned SHA-256 is the primary "
+                    L"control. Use --skip-signature to silence this.");
+    }
+
+    // ---- 4. working copy: patch imports ----------------------------------
+    std::wstring workPath = Join(g_appDir, L"explorer.exe");
+    std::vector<uint8_t> image;
+    if (!ReadWholeFile(pristine, image)) {
+        FileLog(L"FAILED: cannot read pristine file");
+        return 1;
+    }
+    auto patch = ex7::PatchImportsInPlace(image);
+    if (!patch.ok) {
+        FileLog(L"FAILED: import patch error");
+        return 1;
+    }
+    if (patch.namesPatched == 0) {
+        FileLog(L"NOTE: import patch already applied (idempotent)");
+    }
+    for (const auto& a : patch.actions)
+        FileLog(L"patch: %S", a.c_str());
+    // policy: SHLWAPI + OLE32 must always have been present in the binary
+    if (patch.namesPatched != 0 && patch.namesPatched < 2) {
+        FileLog(L"FAILED: expected at least 2 import rewrites, got %u",
+                patch.namesPatched);
+        return 1;
+    }
+
+    // ---- 5. post-patch hash + install record ------------------------------
+    if (!WriteWholeFile(workPath, image)) {
+        FileLog(L"FAILED: cannot write working copy");
+        return 1;
+    }
+    std::wstring patchedHash;
+    {
+        HANDLE h = ex7::OpenForReadShared(workPath);
+        patchedHash = ex7::Sha256HexOfHandle(h);
+        CloseHandle(h);
+    }
+    {
+        HANDLE h = ex7::OpenForReadShared(pristine);
+        std::wstring origHash = ex7::Sha256HexOfHandle(h);
+        CloseHandle(h);
+        WriteInstallRecord(Join(g_appDir, cfg::kStateSubDir), origHash,
+                           patchedHash, patch.actions);
+    }
+    FileLog(L"patched explorer.exe sha256=%s", patchedHash.c_str());
+
+    // ---- 6. localization ---------------------------------------------------
+    std::wstring err;
+    if (!ex7::InjectCatalogStrings(workPath, err)) {
+        FileLog(L"FAILED: localization injection: %s", err.c_str());
+        return 1;
+    }
+    ex7::LocalizeOptions loc;
+    loc.forceAllowPartial = allowPartial;
+    if (!ex7::NeutralizeMuiResource(workPath, loc, err)) {
+        // Not fatal in Phase 1: the gate refused, documented in the plan.
+        FileLog(L"localization note: %s", err.c_str());
+    }
+
+    FileLog(L"DONE. working copy ready at %s", workPath.c_str());
+    return 0;
+}

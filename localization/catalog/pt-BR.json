@@ -1,0 +1,9 @@
+{
+  "language": { "id": "pt-BR", "mui_name": "pt-BR", "lcid": "0x0416", "name": "português (Brasil)", "needs_native_review": true },
+  "strings": {
+    "5381": "Adicionar ao menu Inici&ar",
+    "5382": "Remover do menu Inici&ar",
+    "5384": "Adiciona um atalho a este item no menu Iniciar",
+    "5385": "Remove o atalho a este item do menu Iniciar"
+  }
+}

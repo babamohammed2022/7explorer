@@ -1,0 +1,9 @@
+{
+  "language": { "id": "de", "mui_name": "de-DE", "lcid": "0x0407", "name": "Deutsch", "needs_native_review": true },
+  "strings": {
+    "5381": "Zum Start&menü hinzufügen",
+    "5382": "Aus dem Start&menü entfernen",
+    "5384": "Fügt dem Startmenü eine Verknüpfung zu diesem Element hinzu",
+    "5385": "Entfernt die Verknüpfung zu diesem Element aus dem Startmenü"
+  }
+}

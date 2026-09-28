@@ -1,0 +1,9 @@
+{
+  "language": { "id": "en", "mui_name": "en-US", "lcid": "0x0409", "name": "English (original rewordings)", "needs_native_review": false },
+  "strings": {
+    "5381": "Add to the Start &menu",
+    "5382": "Remove from the Start &menu",
+    "5384": "Puts a shortcut to this item on the Start menu",
+    "5385": "Takes the shortcut for this item off the Start menu"
+  }
+}

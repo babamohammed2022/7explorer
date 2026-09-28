@@ -1,0 +1,9 @@
+{
+  "language": { "id": "it", "mui_name": "it-IT", "lcid": "0x0410", "name": "italiano", "needs_native_review": false },
+  "strings": {
+    "5381": "Aggiungi al menu &Start",
+    "5382": "Rimuovi dal menu &Start",
+    "5384": "Aggiunge un collegamento a questo elemento nel menu Start",
+    "5385": "Toglie il collegamento a questo elemento dal menu Start"
+  }
+}
