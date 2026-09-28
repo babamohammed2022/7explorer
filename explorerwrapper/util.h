@@ -211,7 +211,7 @@ ACCENT_STATE GetAccentState(bool isThumbnail)
 	else if (s_ColorizationOptions == 2) // blurbehind (1507 until 11 21h2)
 		return ACCENT_ENABLE_BLURBEHIND;
 
-	if (isThumbnail) // run this block after the other ones, to ensure that pseudo-aero mode uses opaque thumbnail. using the option definition causes extreme visual bugs for some reason.
+	if (isThumbnail && s_OpaqueThumbnails) // upstream behaviour (opaque thumbnail in pseudo-aero), now opt-in via OpaqueThumbnails=1
 		return ACCENT_ENABLE_GRADIENT;
 
 	// pseudo-aero & solid-color (all versions) - the replacements for option 0 & fallback for other values entered > 4

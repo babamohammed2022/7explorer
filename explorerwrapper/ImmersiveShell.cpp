@@ -2,6 +2,7 @@
 #pragma warning(disable:4311) // type conversions used by Windows 8.1 immersive code
 #pragma warning(disable:4312) // type conversions used by Windows 8.1 immersive code
 
+#include "SafeGuards.h"
 #include "ImmersiveShell.h"
 #include "dbgprint.h"
 
@@ -163,12 +164,14 @@ void CreateTwinUI_UWP()
 
 	CreateTaskManWindow();
 
-	IImmersiveShellCreator* ImmersiveShellCreator;
-	if (SUCCEEDED(CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, (LPVOID*)&ImmersiveShellCreator)))
+	// 7explorer fork: the builder is released automatically (RAII); the
+	// controller is intentionally kept alive for the lifetime of the shell.
+	ex7::ComPtr<IImmersiveShellCreator> ImmersiveShellCreator;
+	if (SUCCEEDED(CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid())))
 	{
 		dbgprintf(L"TwinUI factory created!");
 
-		IImmersiveShellController* controller;
+		static IImmersiveShellController* controller = nullptr;
 		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
 		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
 		if (SUCCEEDED(ret))

@@ -39,6 +39,8 @@
 #include "PatternImports.h"
 #include "MinhookImports.h"
 #include "TypeDefinitions.h"
+#include "SafeGuards.h"
+#include "ShellFixes.h"
 
 LRESULT CALLBACK NewTrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -641,6 +643,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		else
 		{
 			HookAPIs();
+			ex7::InstallShellFixes(hModule); // remaps dead Win7 shell targets, Help name, transparency (SEH-guarded)
 		}
 	}
 	break;
@@ -687,10 +690,10 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	if (rclsid == CLSID_SysTray) //create Metro before tray
 	{
 		dbgprintf(L"create Metro before tray\n");
-		HookImmersive();
+		ex7::SafeInvoke(L"HookImmersive", HookImmersive);
 
 		if (s_EnableImmersiveShellStack == 1) // Ittr: Only create TWinUI UWP mode here if we are going to use it
-			CreateTwinUI_UWP();
+			ex7::SafeCreateTwinUI_UWP(); // SEH + crash sentinel, once per process
 
 	}
 	if (rclsid == CLSID_RegTreeOptions && riid == IID_IRegTreeOptions7) //upgrading RegTreeOptions interface

@@ -208,6 +208,8 @@
     <ClInclude Include="common.h" />
     <ClInclude Include="ImmersiveFactory.h" />
     <ClInclude Include="ImmersiveShell.h" />
+    <ClInclude Include="SafeGuards.h" />
+    <ClInclude Include="ShellFixes.h" />
     <ClInclude Include="MinHook.h" />
     <ClInclude Include="NscTree.h" />
     <ClInclude Include="PinnedList.h" />
@@ -257,6 +259,7 @@
     <ClCompile Include="EnumStartMenu.cpp" />
     <ClCompile Include="ImmersiveFactory.cpp" />
     <ClCompile Include="ImmersiveShell.cpp" />
+    <ClCompile Include="ShellFixes.cpp" />
     <ClCompile Include="minCRT.cpp">
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</WholeProgramOptimization>
     </ClCompile>
