@@ -1,0 +1,110 @@
+name: diag-updres-experiments
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/diag-updres.yml
+permissions:
+  contents: write
+jobs:
+  experiments:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download pristine explorer.exe (symbol server)
+        shell: pwsh
+        run: |
+          mkdir exp | Out-Null
+          $url = "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"
+          Invoke-WebRequest -Uri $url -OutFile exp\pristine.exe -TimeoutSec 60
+          (Get-Item exp\pristine.exe).Length
+      - name: Run UpdateResource experiments
+        shell: pwsh
+        run: |
+          Start-Transcript -Path exp\updres.out -Force
+          $src = @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class RU {
+            [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+            public static extern IntPtr BeginUpdateResource(string file, bool del);
+            [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+            public static extern bool UpdateResource(IntPtr h, IntPtr type, IntPtr name, ushort lang, byte[] data, uint cb);
+            [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+            public static extern bool EndUpdateResource(IntPtr h, bool discard);
+            public static IntPtr RT(int id) { return new IntPtr(id); }
+            public static int TryWriteString(string file, ushort lang, string tag) {
+              CopyPristine(file);
+              IntPtr h = BeginUpdateResource(file, false);
+              if (h == IntPtr.Zero) { Console.WriteLine($"{tag}: Begin fail {Marshal.GetLastWin32Error()}"); return -1; }
+              byte[] payload = new byte[376];
+              for (int i = 0; i < payload.Length; i += 2) { payload[i] = 0x41; payload[i+1] = 0; }
+              bool ok = UpdateResource(h, RT(6), new IntPtr(337), lang, payload, (uint)payload.Length);
+              int gle = Marshal.GetLastWin32Error();
+              bool ok2 = EndUpdateResource(h, !ok);
+              int gle2 = Marshal.GetLastWin32Error();
+              Console.WriteLine($"{tag}: UpdateResource(string,lang=0x{lang:X4}) ok={ok} gle={gle}; End ok={ok2} gle={gle2}");
+              return ok ? 0 : gle;
+            }
+            public static int TryDeleteMuiThenWrite(string file, string tag, bool sameTx, ushort lang) {
+              CopyPristine(file);
+              bool okD = false; int gleD = 0; string err = "";
+              if (!sameTx) {
+                IntPtr h1 = BeginUpdateResource(file, false);
+                okD = UpdateResource(h1, IntPtr.Zero == IntPtr.Zero ? Marshal.StringToHGlobalUni("MUI") : IntPtr.Zero, new IntPtr(1), 0, null, 0);
+                gleD = Marshal.GetLastWin32Error();
+                EndUpdateResource(h1, !okD);
+                err = $"delMUI(commit) ok={okD} gle={gleD}";
+              } else {
+                IntPtr h = BeginUpdateResource(file, false);
+                okD = UpdateResource(h, Marshal.StringToHGlobalUni("MUI"), new IntPtr(1), 0, null, 0);
+                gleD = Marshal.GetLastWin32Error();
+                byte[] payload = new byte[376];
+                for (int i = 0; i < payload.Length; i += 2) { payload[i] = 0x41; payload[i+1] = 0; }
+                bool okW = UpdateResource(h, RT(6), new IntPtr(337), lang, payload, (uint)payload.Length);
+                int gleW = Marshal.GetLastWin32Error();
+                bool okE = EndUpdateResource(h, true);
+                Console.WriteLine($"{tag}: SAME-TX delMUI ok={okD} gle={gleD}; writeString ok={okW} gle={gleW}; End(discard)={okE}");
+                return okW ? 0 : gleW;
+              }
+              Console.WriteLine($"{tag}: {err}");
+              CopyKeepMuiDeleted(file);
+              return TryWriteStringNoCopy(file, lang, tag + " (after MUI deleted)");
+            }
+            static string pristine = "exp\\pristine.exe";
+            static void CopyPristine(string f) { System.IO.File.Copy(pristine, f, true); }
+            static void CopyKeepMuiDeleted(string f) { }
+            static int TryWriteStringNoCopy(string file, ushort lang, string tag) {
+              IntPtr h = BeginUpdateResource(file, false);
+              byte[] payload = new byte[376];
+              for (int i = 0; i < payload.Length; i += 2) { payload[i] = 0x41; payload[i+1] = 0; }
+              bool ok = UpdateResource(h, RT(6), new IntPtr(337), lang, payload, (uint)payload.Length);
+              int gle = Marshal.GetLastWin32Error();
+              bool ok2 = EndUpdateResource(h, !ok);
+              Console.WriteLine($"{tag}: writeString(lng=0x{lang:X4}) ok={ok} gle={gle}; End ok={ok2}");
+              return ok ? 0 : gle;
+            }
+          }
+'@
+          Add-Type -TypeDefinition $src -Language CSharp
+          [RU]::TryWriteString("$PWD\exp\v1.exe", 0x0409, "V1 write-strings-only 0409")
+          [RU]::TryWriteString("$PWD\exp\v2.exe", 0x0407, "V2 write-strings-only 0407")
+          [RU]::TryDeleteMuiThenWrite("$PWD\exp\v3.exe", "V3 delete-MUI(own commit) then write", $false, 0x0409)
+          [RU]::TryDeleteMuiThenWrite("$PWD\exp\v4.exe", "V4 delMUI+write same tx", $true, 0x0409)
+          Stop-Transcript
+          exit 0
+      - name: Collect experiment logs
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "ci@localhost"
+          git config user.name "ci-log-bot"
+          $br = "ci-logs/updres-" + $env:GITHUB_RUN_ID
+          git checkout -b $br 2>$null
+          New-Item -ItemType Directory -Force -Path exp-upload | Out-Null
+          if (Test-Path exp\updres.out) { Copy-Item exp\updres.out exp-upload\ }
+          git add -f exp-upload
+          git commit --allow-empty -m "updres experiments run $env:GITHUB_RUN_ID"
+          git push -f origin $br

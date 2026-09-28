@@ -42,12 +42,15 @@ class ReportTests(unittest.TestCase):
     LANG = 0x409
 
     def _fixture(self):
-        block_id = 337  # covers ids 5376..5391 -> 5381/5382/5384/5385
+        # Win32: block N covers ids (N-1)*16+1 .. (N-1)*16+16 -> here
+        # 5377..5392; slot i holds id (N-1)*16+i+1. Matches the real
+        # shell32.dll ids used by StartMenuPin.cpp: 5381/5382/5384/5385.
+        block_id = 337
         strings = [""] * 16
-        strings[5] = "Attach to the Start Men&u"
-        strings[6] = "Detach from the Start Men&u"
-        strings[8] = "Adds %1!s! to the Start menu"
-        strings[9] = "Removes %1!s! from the Start menu"
+        strings[4] = "Attach to the Start Men&u"     # id 5381
+        strings[5] = "Detach from the Start Men&u"   # id 5382
+        strings[7] = "Adds %1!s! to the Start menu"  # id 5384
+        strings[8] = "Removes %1!s! from the Start menu"  # id 5385
 
         menu = (_res_menu_classic([(0x10, "&Toolbars", None),
                                    (0, "E&xit", 101)])

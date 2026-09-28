@@ -1,9 +1,15 @@
 {
-  "language": { "id": "pl", "mui_name": "pl-PL", "lcid": "0x0415", "name": "polski", "needs_native_review": true },
-  "strings": {
-    "5381": "Dodaj do menu &Start",
-    "5382": "Usuń z menu &Start",
-    "5384": "Umieszcza skrót do tego elementu w menu Start",
-    "5385": "Usuwa skrót do tego elementu z menu Start"
-  }
+ "language": {
+  "id": "pl",
+  "mui_name": "pl-PL",
+  "lcid": "0x0415",
+  "name": "polski",
+  "needs_native_review": true
+ },
+ "strings": {
+  "5381": "Dodaj do menu &Start",
+  "5382": "Usuń z menu &Start",
+  "5384": "Umieszcza skrót do tego elementu w menu Start",
+  "5385": "Usuwa skrót do tego elementu z menu Start"
+ }
 }
