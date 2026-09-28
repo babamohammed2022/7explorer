@@ -162,6 +162,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         shell: pwsh
         run: |
+          Get-ChildItem -Recurse -File | Select-Object -ExpandProperty FullName |
+            Add-Content ci-logs\release.txt
           gh release create "$env:TAG" --prerelease `
             --title "ex7 self-contained bootstrap - test $env:TAG" `
             --notes-file docs/RELEASE_NOTES_test.md `
