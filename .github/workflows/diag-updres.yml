@@ -22,13 +22,20 @@ jobs:
       - name: Run UpdateResource experiments
         shell: pwsh
         run: |
-          Start-Transcript -Path exp\updres.out -Force
-          Add-Type -Path ci\updres\Program.cs
-          [RU]::V1AndV2()
-          [RU]::V3()
-          [RU]::V4()
-          [RU]::V5()
-          Stop-Transcript
+          {
+            try {
+              Add-Type -Path ci\updres\Program.cs -ErrorAction Stop
+              Write-Host "Add-Type OK"
+              [RU]::V1AndV2()
+              [RU]::V3()
+              [RU]::V4()
+              [RU]::V5()
+              Write-Host "experiments DONE"
+            } catch {
+              Write-Host ("EXPERIMENT ERROR: " + $_)
+              Write-Host ($_.ScriptStackTrace)
+            }
+          } *>&1 | Tee-Object -FilePath exp\updres.out
           exit 0
       - name: Collect experiment logs
         if: always()
