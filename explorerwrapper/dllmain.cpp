@@ -359,7 +359,7 @@ static void HookModuleFileNameSpoof(void)
 	if (n == 0) return;
 	const WCHAR suffix[] = L"\\explorer.exe";
 	size_t rl = wcslen(realPath), sl = _countof(suffix) - 1;
-	if (rl <= sl || _wcsicmp(realPath + (rl - sl), suffix) != 0) return;
+	if (rl <= sl || lstrcmpiW(realPath + (rl - sl), suffix) != 0) return;
 
 	// Fake path: %SystemRoot%\explorer.exe. Already there -> nothing to do.
 	WCHAR sysroot[MAX_PATH];
@@ -367,7 +367,7 @@ static void HookModuleFileNameSpoof(void)
 	if (got == 0 || got >= MAX_PATH)
 		GetWindowsDirectoryW(sysroot, MAX_PATH);
 	wsprintfW(g_fakeExePath, L"%s\\explorer.exe", sysroot);
-	if (_wcsicmp(realPath, g_fakeExePath) == 0) return;
+	if (lstrcmpiW(realPath, g_fakeExePath) == 0) return;
 	g_fakeExePathLen = (DWORD)wcslen(g_fakeExePath);
 
 	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
