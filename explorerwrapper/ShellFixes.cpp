@@ -230,7 +230,10 @@ void FixHelpAndSupportName()
 	DWORD n = GetModuleFileNameW(g_self, dll, MAX_PATH);
 	if (!n || n >= MAX_PATH) return;
 	wchar_t value[MAX_PATH + 16];
-	if (FAILED(StringCchPrintfW(value, ARRAYSIZE(value), L"@%s,-7021", dll))) return;
+	// no printf family here: the wrapper links without the CRT stdio
+	if (FAILED(StringCchCopyW(value, ARRAYSIZE(value), L"@")) ||
+		FAILED(StringCchCatW(value, ARRAYSIZE(value), dll)) ||
+		FAILED(StringCchCatW(value, ARRAYSIZE(value), L",-7021"))) return;
 
 	ScopedRegKey user;
 	DWORD disp = 0;

@@ -113,7 +113,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Netapi32.lib;shlwapi.lib;uxtheme.lib;dwmapi.lib;comctl32.lib;libMinHook.x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Netapi32.lib;shlwapi.lib;uxtheme.lib;dwmapi.lib;comctl32.lib;libMinHook.x64.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>comctl32.dll;shlwapi.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
@@ -178,7 +178,7 @@
       <Profile>false</Profile>
       <MapExports>true</MapExports>
       <TurnOffAssemblyGeneration>true</TurnOffAssemblyGeneration>
-      <AdditionalDependencies>Netapi32.lib;shlwapi.lib;uxtheme.lib;dwmapi.lib;comctl32.lib;libMinHook.x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Netapi32.lib;shlwapi.lib;uxtheme.lib;dwmapi.lib;comctl32.lib;libMinHook.x64.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <DelayLoadDLLs>comctl32.dll;shlwapi.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <ProjectReference>
