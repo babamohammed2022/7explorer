@@ -1,1462 +1,1739 @@
 {
- "source": "explorer.exe.mui caricato dall'utente (analisi strutturale locale, nessun testo)",
- "source_sha256": "4cc514a7d9afae763cdd21932ee722ae4a787c968bab971c3b1d30044151cfe3",
- "source_file_size": 22016,
- "time_date_stamp": "0x4a5bc954",
- "note": "Solo struttura (ID, lunghezze, acceleratori, segnaposto, classi controllo): MAI testo Microsoft. Generato a mano dall'utente con analyze_mui locale sul file 3072-rundll di riferimento IT/en-US 0409. require_fallback_coverage=true dal 2026-09-28: en.json copre tutti i 161 ID. [2026-09-28 FIX] fix off-by-one parse_string_table (analyze_mui assegnava slot i -> base+i invece di base+i+1): tutti gli ID stringa di questo file slittano +1 agli ID Win32 reali. shell32.dll constraints invariato (origine: StartMenuPin.cpp).",
- "strings": {
-  "301": {
-   "len": 61
-  },
-  "302": {
-   "len": 47
-  },
-  "303": {
-   "len": 33
-  },
-  "304": {
-   "len": 35
-  },
-  "305": {
-   "len": 66
-  },
-  "306": {
-   "len": 70
-  },
-  "308": {
-   "len": 65
-  },
-  "313": {
-   "len": 39
-  },
-  "317": {
-   "len": 86
-  },
-  "318": {
-   "len": 26
-  },
-  "319": {
-   "len": 90
-  },
-  "320": {
-   "len": 40
-  },
-  "321": {
-   "len": 6
-  },
-  "322": {
-   "len": 24
-  },
-  "323": {
-   "len": 93
-  },
-  "324": {
-   "len": 6,
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "325": {
-   "len": 8,
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "326": {
-   "len": 87
-  },
-  "327": {
-   "len": 6
-  },
-  "328": {
-   "len": 6
-  },
-  "329": {
-   "len": 8
-  },
-  "330": {
-   "len": 5
-  },
-  "331": {
-   "len": 20,
-   "accel": "U"
-  },
-  "332": {
-   "len": 16,
-   "accel": "i"
-  },
-  "333": {
-   "len": 21
-  },
-  "334": {
-   "len": 17
-  },
-  "335": {
-   "len": 35,
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "336": {
-   "len": 29
-  },
-  "337": {
-   "len": 35,
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "338": {
-   "len": 29
-  },
-  "339": {
-   "len": 27
-  },
-  "340": {
-   "len": 31
-  },
-  "341": {
-   "len": 17,
-   "placeholders": [
-    "%s",
-    "%s"
-   ]
-  },
-  "342": {
-   "len": 4
-  },
-  "343": {
-   "len": 144
-  },
-  "344": {
-   "len": 14
-  },
-  "345": {
-   "len": 16,
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "350": {
-   "len": 55
-  },
-  "351": {
-   "len": 44
-  },
-  "352": {
-   "len": 43
-  },
-  "353": {
-   "len": 12
-  },
-  "354": {
-   "len": 17
-  },
-  "511": {
-   "len": 10
-  },
-  "512": {
-   "len": 9,
-   "placeholders": [
-    "%1"
-   ]
-  },
-  "513": {
-   "len": 9
-  },
-  "519": {
-   "len": 7
-  },
-  "531": {
-   "len": 56,
-   "placeholders": [
-    "%1"
-   ]
-  },
-  "534": {
-   "len": 5
-  },
-  "535": {
-   "len": 7,
-   "accel": "U",
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "536": {
-   "len": 7
-  },
-  "537": {
-   "len": 17
-  },
-  "538": {
-   "len": 12
-  },
-  "539": {
-   "len": 12
-  },
-  "543": {
-   "len": 4
-  },
-  "544": {
-   "len": 17
-  },
-  "581": {
-   "len": 12
-  },
-  "582": {
-   "len": 123
-  },
-  "591": {
-   "len": 33
-  },
-  "592": {
-   "len": 26
-  },
-  "594": {
-   "len": 31
-  },
-  "595": {
-   "len": 20
-  },
-  "596": {
-   "len": 5
-  },
-  "597": {
-   "len": 42
-  },
-  "598": {
-   "len": 137
-  },
-  "599": {
-   "len": 54
-  },
-  "611": {
-   "len": 43,
-   "placeholders": [
-    "%s"
-   ]
-  },
-  "612": {
-   "len": 76
-  },
-  "706": {
-   "len": 106
-  },
-  "712": {
-   "len": 220
-  },
-  "719": {
-   "len": 14,
-   "accel": "p"
-  },
-  "720": {
-   "len": 21,
-   "accel": "p"
-  },
-  "721": {
-   "len": 10,
-   "accel": "r"
-  },
-  "723": {
-   "len": 3
-  },
-  "732": {
-   "len": 23
-  },
-  "734": {
-   "len": 10
-  },
-  "811": {
-   "len": 33
-  },
-  "851": {
-   "len": 17,
-   "accel": "S"
-  },
-  "852": {
-   "len": 5
-  },
-  "853": {
-   "len": 5
-  },
-  "854": {
-   "len": 4
-  },
-  "855": {
-   "len": 19
-  },
-  "856": {
-   "len": 20
-  },
-  "857": {
-   "len": 12
-  },
-  "858": {
-   "len": 12
-  },
-  "859": {
-   "len": 12
-  },
-  "1001": {
-   "len": 4
-  },
-  "1002": {
-   "len": 8
-  },
-  "1003": {
-   "len": 18
-  },
-  "1004": {
-   "len": 4
-  },
-  "1005": {
-   "len": 4
-  },
-  "1404": {
-   "len": 13
-  },
-  "1405": {
-   "len": 10
-  },
-  "1411": {
-   "len": 27
-  },
-  "1412": {
-   "len": 28
-  },
-  "1413": {
-   "len": 13
-  },
-  "1421": {
-   "len": 6
-  },
-  "1422": {
-   "len": 4
-  },
-  "1423": {
-   "len": 5
-  },
-  "1424": {
-   "len": 3
-  },
-  "6011": {
-   "len": 23
-  },
-  "6012": {
-   "len": 23
-  },
-  "6013": {
-   "len": 101
-  },
-  "6501": {
-   "len": 41
-  },
-  "6502": {
-   "len": 107
-  },
-  "6503": {
-   "len": 24
-  },
-  "7001": {
-   "len": 54
-  },
-  "7002": {
-   "len": 73
-  },
-  "7004": {
-   "len": 47
-  },
-  "7005": {
-   "len": 46
-  },
-  "7006": {
-   "len": 32
-  },
-  "7021": {
-   "len": 6
-  },
-  "7022": {
-   "len": 16
-  },
-  "7023": {
-   "len": 16
-  },
-  "7024": {
-   "len": 6
-  },
-  "7025": {
-   "len": 8
-  },
-  "7026": {
-   "len": 6
-  },
-  "7029": {
-   "len": 27
-  },
-  "7051": {
-   "len": 28
-  },
-  "8225": {
-   "len": 126
-  },
-  "8226": {
-   "len": 21,
-   "accel": "f"
-  },
-  "8227": {
-   "len": 12
-  },
-  "8228": {
-   "len": 30
-  },
-  "8231": {
-   "len": 175
-  },
-  "8234": {
-   "len": 7
-  },
-  "8235": {
-   "len": 13
-  },
-  "8236": {
-   "len": 9
-  },
-  "8237": {
-   "len": 12
-  },
-  "8242": {
-   "len": 4
-  },
-  "8243": {
-   "len": 16
-  },
-  "8244": {
-   "len": 17
-  },
-  "8245": {
-   "len": 19
-  },
-  "8246": {
-   "len": 24
-  },
-  "8247": {
-   "len": 26
-  },
-  "8259": {
-   "len": 2
-  },
-  "8260": {
-   "len": 2
-  },
-  "8261": {
-   "len": 2
-  },
-  "8262": {
-   "len": 2
-  },
-  "8263": {
-   "len": 3
-  },
-  "8264": {
-   "len": 3
-  },
-  "8265": {
-   "len": 3
-  },
-  "8266": {
-   "len": 3
-  },
-  "8267": {
-   "len": 3
-  },
-  "8268": {
-   "len": 2
-  },
-  "8269": {
-   "len": 2
-  },
-  "8270": {
-   "len": 1
-  },
-  "8271": {
-   "len": 2
-  },
-  "8272": {
-   "len": 1
-  },
-  "8273": {
-   "len": 15,
-   "accel": "S"
-  },
-  "11101": {
-   "len": 13
-  },
-  "11102": {
-   "len": 6
-  },
-  "11103": {
-   "len": 5
-  },
-  "11104": {
-   "len": 4
-  },
-  "11105": {
-   "len": 7
-  },
-  "11106": {
-   "len": 20
-  },
-  "11107": {
-   "len": 79
-  },
-  "11108": {
-   "len": 5
-  },
-  "11109": {
-   "len": 17
-  },
-  "19651": {
-   "len": 42
-  },
-  "19652": {
-   "len": 131
-  },
-  "19653": {
-   "len": 41
-  },
-  "19654": {
-   "len": 176
-  }
- },
- "contexts": {},
- "menus": {
-  "205/lang:0409": {
-   "version": 0,
-   "levels": [
-    [
-     {
-      "popup": true,
-      "popup_level": 1
-     }
-    ],
-    [
-     {
-      "popup": false,
+  "source": "explorer.exe.mui caricato dall'utente (analisi strutturale locale, nessun testo)",
+  "source_sha256": "4cc514a7d9afae763cdd21932ee722ae4a787c968bab971c3b1d30044151cfe3",
+  "source_file_size": 22016,
+  "time_date_stamp": "0x4a5bc954",
+  "note": "Solo struttura (ID, lunghezze, acceleratori, segnaposto, classi controllo): MAI testo Microsoft. Generato a mano dall'utente con analyze_mui locale sul file 3072-rundll di riferimento IT/en-US 0409. require_fallback_coverage=true dal 2026-09-28: en.json copre tutti i 161 ID. [2026-09-28 FIX] fix off-by-one parse_string_table (analyze_mui assegnava slot i -> base+i invece di base+i+1): tutti gli ID stringa di questo file slittano +1 agli ID Win32 reali. shell32.dll constraints invariato (origine: StartMenuPin.cpp).",
+  "strings": {
+    "300": {
+      "len": 61,
+      "placeholders": []
+    },
+    "301": {
+      "len": 47,
+      "placeholders": []
+    },
+    "302": {
+      "len": 33,
+      "placeholders": []
+    },
+    "303": {
+      "len": 35,
+      "placeholders": []
+    },
+    "304": {
+      "len": 66,
+      "placeholders": []
+    },
+    "305": {
+      "len": 70,
+      "placeholders": []
+    },
+    "306": {
+      "len": 70
+    },
+    "307": {
+      "len": 65,
+      "placeholders": []
+    },
+    "308": {
+      "len": 65
+    },
+    "312": {
+      "len": 39,
+      "placeholders": []
+    },
+    "313": {
+      "len": 39
+    },
+    "316": {
+      "len": 86,
+      "placeholders": []
+    },
+    "317": {
+      "len": 26,
+      "placeholders": []
+    },
+    "318": {
+      "len": 90,
+      "placeholders": []
+    },
+    "319": {
+      "len": 40,
+      "placeholders": []
+    },
+    "320": {
+      "len": 6,
+      "placeholders": []
+    },
+    "321": {
+      "len": 24,
+      "placeholders": []
+    },
+    "322": {
+      "len": 93,
+      "placeholders": []
+    },
+    "323": {
+      "len": 6,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "324": {
+      "len": 8,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "325": {
+      "len": 87,
+      "placeholders": []
+    },
+    "326": {
+      "len": 6,
+      "placeholders": []
+    },
+    "327": {
+      "len": 6,
+      "placeholders": []
+    },
+    "328": {
+      "len": 8,
+      "placeholders": []
+    },
+    "329": {
+      "len": 5,
+      "placeholders": []
+    },
+    "330": {
+      "len": 21,
+      "placeholders": []
+    },
+    "331": {
       "len": 17,
-      "accel": "A",
-      "cmd": 0
-     },
-     {
-      "popup": false,
-      "len": 28,
-      "accel": "C",
-      "cmd": 0
-     }
-    ]
-   ]
-  },
-  "211/lang:0409": {
-   "version": 1,
-   "extended": true,
-   "levels": [
-    [
-     {
-      "popup": true,
-      "cmd": null,
-      "popup_level": 1
-     }
-    ],
-    [
-     {
-      "popup": false,
-      "cmd": 32755,
+      "accel": "U",
+      "placeholders": []
+    },
+    "332": {
+      "len": 21,
+      "accel": "i",
+      "placeholders": []
+    },
+    "333": {
+      "len": 17,
+      "placeholders": []
+    },
+    "334": {
+      "len": 35,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "335": {
+      "len": 29,
+      "placeholders": []
+    },
+    "336": {
+      "len": 35,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "337": {
+      "len": 29,
+      "placeholders": []
+    },
+    "338": {
+      "len": 27,
+      "placeholders": []
+    },
+    "339": {
+      "len": 31,
+      "placeholders": []
+    },
+    "340": {
+      "len": 17,
+      "placeholders": [
+        "%s",
+        "%s"
+      ]
+    },
+    "341": {
+      "len": 4,
+      "placeholders": []
+    },
+    "342": {
+      "len": 144,
+      "placeholders": []
+    },
+    "343": {
+      "len": 14,
+      "placeholders": []
+    },
+    "344": {
+      "len": 16,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "345": {
+      "len": 16,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "349": {
+      "len": 55,
+      "placeholders": []
+    },
+    "350": {
+      "len": 44,
+      "placeholders": []
+    },
+    "351": {
+      "len": 43,
+      "placeholders": []
+    },
+    "352": {
+      "len": 12,
+      "placeholders": []
+    },
+    "353": {
+      "len": 17,
+      "placeholders": []
+    },
+    "354": {
+      "len": 17
+    },
+    "510": {
+      "len": 10,
+      "placeholders": []
+    },
+    "511": {
+      "len": 9,
+      "placeholders": [
+        "%1"
+      ]
+    },
+    "512": {
+      "len": 9,
+      "placeholders": []
+    },
+    "513": {
+      "len": 9
+    },
+    "518": {
+      "len": 7,
+      "placeholders": []
+    },
+    "519": {
+      "len": 7
+    },
+    "530": {
+      "len": 56,
+      "placeholders": [
+        "%1"
+      ]
+    },
+    "531": {
+      "len": 56,
+      "placeholders": [
+        "%1"
+      ]
+    },
+    "533": {
+      "len": 5,
+      "placeholders": []
+    },
+    "534": {
+      "len": 8,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "535": {
+      "len": 7,
+      "accel": "U",
+      "placeholders": []
+    },
+    "536": {
+      "len": 17,
+      "placeholders": []
+    },
+    "537": {
+      "len": 12,
+      "placeholders": []
+    },
+    "538": {
+      "len": 12,
+      "placeholders": []
+    },
+    "539": {
+      "len": 12
+    },
+    "542": {
+      "len": 4,
+      "placeholders": []
+    },
+    "543": {
+      "len": 17,
+      "placeholders": []
+    },
+    "544": {
+      "len": 17
+    },
+    "580": {
+      "len": 12,
+      "placeholders": []
+    },
+    "581": {
+      "len": 123,
+      "placeholders": []
+    },
+    "582": {
+      "len": 123
+    },
+    "590": {
+      "len": 33,
+      "placeholders": []
+    },
+    "591": {
+      "len": 26,
+      "placeholders": []
+    },
+    "592": {
+      "len": 26
+    },
+    "593": {
+      "len": 31,
+      "placeholders": []
+    },
+    "594": {
+      "len": 20,
+      "placeholders": []
+    },
+    "595": {
+      "len": 5,
+      "placeholders": []
+    },
+    "596": {
+      "len": 42,
+      "placeholders": []
+    },
+    "597": {
+      "len": 137,
+      "placeholders": []
+    },
+    "598": {
+      "len": 54,
+      "placeholders": []
+    },
+    "599": {
+      "len": 54
+    },
+    "610": {
+      "len": 43,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "611": {
+      "len": 76,
+      "placeholders": []
+    },
+    "612": {
+      "len": 76
+    },
+    "705": {
+      "len": 106,
+      "placeholders": []
+    },
+    "706": {
+      "len": 106
+    },
+    "711": {
+      "len": 220,
+      "placeholders": []
+    },
+    "712": {
+      "len": 220
+    },
+    "718": {
+      "len": 15,
+      "placeholders": []
+    },
+    "719": {
+      "len": 22,
+      "accel": "p",
+      "placeholders": []
+    },
+    "720": {
+      "len": 11,
+      "accel": "p",
+      "placeholders": []
+    },
+    "721": {
       "len": 10,
       "accel": "r"
-     },
-     {
-      "popup": false,
-      "cmd": 32756,
-      "len": 13,
-      "accel": "x"
-     }
-    ]
-   ]
-  },
-  "212/lang:0409": {
-   "version": 1,
-   "extended": true,
-   "levels": [
-    [
-     {
-      "popup": true,
-      "cmd": null,
-      "popup_level": 1
-     }
-    ],
-    [
-     {
-      "popup": false,
-      "cmd": 6601,
-      "len": 39,
-      "accel": "S"
-     },
-     {
-      "popup": true,
-      "cmd": null,
-      "len": 19,
-      "accel": "R",
-      "popup_level": 2
-     },
-     {
-      "popup": false,
-      "cmd": 6603,
-      "len": 9,
-      "accel": "h"
-     },
-     {
-      "popup": false,
-      "cmd": 4294967295
-     },
-     {
-      "popup": false,
-      "cmd": 6604,
+    },
+    "722": {
+      "len": 3,
+      "placeholders": []
+    },
+    "723": {
+      "len": 3
+    },
+    "731": {
+      "len": 23,
+      "placeholders": []
+    },
+    "732": {
+      "len": 23
+    },
+    "733": {
+      "len": 10,
+      "placeholders": []
+    },
+    "734": {
+      "len": 10
+    },
+    "810": {
+      "len": 33,
+      "placeholders": []
+    },
+    "811": {
+      "len": 33
+    },
+    "850": {
+      "len": 18,
+      "placeholders": []
+    },
+    "851": {
+      "len": 5,
+      "accel": "S",
+      "placeholders": []
+    },
+    "852": {
+      "len": 5,
+      "placeholders": []
+    },
+    "853": {
       "len": 4,
-      "accel": "x"
-     }
-    ],
-    [
-     {
-      "popup": false,
-      "cmd": 4294967295
-     }
-    ]
-   ]
-  },
-  "213/lang:0409": {
-   "version": 1,
-   "extended": true,
-   "levels": [
-    [
-     {
-      "popup": true,
-      "cmd": null,
-      "popup_level": 1
-     }
-    ],
-    [
-     {
-      "popup": false,
-      "cmd": 6701,
+      "placeholders": []
+    },
+    "854": {
+      "len": 19,
+      "placeholders": []
+    },
+    "855": {
+      "len": 20,
+      "placeholders": []
+    },
+    "856": {
       "len": 12,
-      "accel": "S"
-     },
-     {
-      "popup": false,
-      "cmd": 6702,
-      "len": 15,
-      "accel": "P"
-     }
-    ]
-   ]
-  },
-  "6003/lang:0409": {
-   "version": 0,
-   "levels": [
-    [
-     {
-      "popup": true,
-      "popup_level": 1
-     }
-    ],
-    [
-     {
-      "popup": false,
-      "len": 17,
-      "accel": "n",
-      "cmd": 128
-     },
-     {
-      "popup": false,
-      "len": 19,
-      "accel": "I",
-      "forced_end_of_buffer": true
-     }
-    ]
-   ]
-  },
-  "12000/lang:0409": {
-   "version": 1,
-   "extended": true,
-   "levels": [
-    [
-     {
-      "popup": true,
-      "cmd": null,
-      "popup_level": 1
-     }
-    ],
-    [
-     {
-      "popup": false,
-      "cmd": 403,
+      "placeholders": []
+    },
+    "857": {
+      "len": 12,
+      "placeholders": []
+    },
+    "858": {
+      "len": 12,
+      "placeholders": []
+    },
+    "859": {
+      "len": 12
+    },
+    "1000": {
+      "len": 4,
+      "placeholders": []
+    },
+    "1001": {
+      "len": 8,
+      "placeholders": []
+    },
+    "1002": {
+      "len": 18,
+      "placeholders": []
+    },
+    "1003": {
+      "len": 4,
+      "placeholders": []
+    },
+    "1004": {
+      "len": 4,
+      "placeholders": []
+    },
+    "1005": {
+      "len": 4
+    },
+    "1403": {
+      "len": 13,
+      "placeholders": []
+    },
+    "1404": {
+      "len": 10,
+      "placeholders": []
+    },
+    "1405": {
+      "len": 10
+    },
+    "1410": {
+      "len": 27,
+      "placeholders": []
+    },
+    "1411": {
+      "len": 28,
+      "placeholders": []
+    },
+    "1412": {
+      "len": 13,
+      "placeholders": []
+    },
+    "1413": {
+      "len": 13
+    },
+    "1420": {
+      "len": 6,
+      "placeholders": []
+    },
+    "1421": {
+      "len": 4,
+      "placeholders": []
+    },
+    "1422": {
+      "len": 5,
+      "placeholders": []
+    },
+    "1423": {
+      "len": 3,
+      "placeholders": []
+    },
+    "1424": {
+      "len": 3
+    },
+    "6010": {
+      "len": 23,
+      "placeholders": []
+    },
+    "6011": {
+      "len": 23,
+      "placeholders": []
+    },
+    "6012": {
+      "len": 101,
+      "placeholders": []
+    },
+    "6013": {
+      "len": 101
+    },
+    "6500": {
+      "len": 41,
+      "placeholders": []
+    },
+    "6501": {
+      "len": 107,
+      "placeholders": []
+    },
+    "6502": {
+      "len": 24,
+      "placeholders": []
+    },
+    "6503": {
+      "len": 24
+    },
+    "7000": {
+      "len": 54,
+      "placeholders": []
+    },
+    "7001": {
+      "len": 73,
+      "placeholders": []
+    },
+    "7002": {
+      "len": 73
+    },
+    "7003": {
+      "len": 47,
+      "placeholders": []
+    },
+    "7004": {
+      "len": 46,
+      "placeholders": []
+    },
+    "7005": {
+      "len": 32,
+      "placeholders": []
+    },
+    "7006": {
+      "len": 32
+    },
+    "7020": {
+      "len": 6,
+      "placeholders": []
+    },
+    "7021": {
+      "len": 16,
+      "placeholders": []
+    },
+    "7022": {
+      "len": 16,
+      "placeholders": []
+    },
+    "7023": {
+      "len": 6,
+      "placeholders": []
+    },
+    "7024": {
+      "len": 8,
+      "placeholders": []
+    },
+    "7025": {
+      "len": 6,
+      "placeholders": []
+    },
+    "7026": {
+      "len": 6
+    },
+    "7028": {
+      "len": 27,
+      "placeholders": []
+    },
+    "7029": {
+      "len": 27
+    },
+    "7050": {
+      "len": 28,
+      "placeholders": []
+    },
+    "7051": {
+      "len": 28
+    },
+    "8224": {
+      "len": 126,
+      "placeholders": []
+    },
+    "8225": {
+      "len": 22,
+      "placeholders": []
+    },
+    "8226": {
+      "len": 12,
+      "accel": "f",
+      "placeholders": []
+    },
+    "8227": {
+      "len": 30,
+      "placeholders": []
+    },
+    "8228": {
+      "len": 30
+    },
+    "8230": {
+      "len": 175,
+      "placeholders": []
+    },
+    "8231": {
+      "len": 175
+    },
+    "8233": {
       "len": 7,
-      "accel": "s"
-     },
-     {
-      "popup": false,
-      "cmd": 405,
-      "len": 20,
-      "accel": "t"
-     },
-     {
-      "popup": false,
-      "cmd": 404,
-      "len": 25,
-      "accel": "i"
-     },
-     {
-      "popup": false,
-      "cmd": 65493,
-      "len": 19,
-      "accel": "R"
-     },
-     {
-      "popup": false,
-      "cmd": 65492,
-      "len": 20,
-      "accel": "M"
-     },
-     {
-      "popup": false,
-      "cmd": 4294967295
-     },
-     {
-      "popup": false,
-      "cmd": 65491,
+      "placeholders": []
+    },
+    "8234": {
+      "len": 13,
+      "placeholders": []
+    },
+    "8235": {
+      "len": 9,
+      "placeholders": []
+    },
+    "8236": {
+      "len": 12,
+      "placeholders": []
+    },
+    "8237": {
+      "len": 12
+    },
+    "8241": {
+      "len": 4,
+      "placeholders": []
+    },
+    "8242": {
+      "len": 16,
+      "placeholders": []
+    },
+    "8243": {
       "len": 17,
-      "accel": "C"
-     }
+      "placeholders": []
+    },
+    "8244": {
+      "len": 19,
+      "placeholders": []
+    },
+    "8245": {
+      "len": 24,
+      "placeholders": []
+    },
+    "8246": {
+      "len": 26,
+      "placeholders": []
+    },
+    "8247": {
+      "len": 26
+    },
+    "8258": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8259": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8260": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8261": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8262": {
+      "len": 3,
+      "placeholders": []
+    },
+    "8263": {
+      "len": 3,
+      "placeholders": []
+    },
+    "8264": {
+      "len": 3,
+      "placeholders": []
+    },
+    "8265": {
+      "len": 3,
+      "placeholders": []
+    },
+    "8266": {
+      "len": 3,
+      "placeholders": []
+    },
+    "8267": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8268": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8269": {
+      "len": 1,
+      "placeholders": []
+    },
+    "8270": {
+      "len": 2,
+      "placeholders": []
+    },
+    "8271": {
+      "len": 1,
+      "placeholders": []
+    },
+    "8272": {
+      "len": 16,
+      "placeholders": []
+    },
+    "8273": {
+      "len": 15,
+      "accel": "S"
+    },
+    "11100": {
+      "len": 13,
+      "placeholders": []
+    },
+    "11101": {
+      "len": 6,
+      "placeholders": []
+    },
+    "11102": {
+      "len": 5,
+      "placeholders": []
+    },
+    "11103": {
+      "len": 4,
+      "placeholders": []
+    },
+    "11104": {
+      "len": 7,
+      "placeholders": []
+    },
+    "11105": {
+      "len": 20,
+      "placeholders": []
+    },
+    "11106": {
+      "len": 79,
+      "placeholders": []
+    },
+    "11107": {
+      "len": 5,
+      "placeholders": []
+    },
+    "11108": {
+      "len": 17,
+      "placeholders": []
+    },
+    "11109": {
+      "len": 17
+    },
+    "19650": {
+      "len": 42,
+      "placeholders": []
+    },
+    "19651": {
+      "len": 131,
+      "placeholders": []
+    },
+    "19652": {
+      "len": 41,
+      "placeholders": []
+    },
+    "19653": {
+      "len": 176,
+      "placeholders": []
+    },
+    "19654": {
+      "len": 176
+    }
+  },
+  "contexts": {},
+  "menus": {
+    "205/lang:0409": {
+      "version": 0,
+      "levels": [
+        [
+          {
+            "popup": true,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "len": 17,
+            "accel": "A",
+            "cmd": 0
+          },
+          {
+            "popup": false,
+            "len": 28,
+            "accel": "C",
+            "cmd": 0
+          }
+        ]
+      ]
+    },
+    "211/lang:0409": {
+      "version": 1,
+      "extended": true,
+      "levels": [
+        [
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 32755,
+            "len": 10,
+            "accel": "r"
+          },
+          {
+            "popup": false,
+            "cmd": 32756,
+            "len": 13,
+            "accel": "x"
+          }
+        ]
+      ]
+    },
+    "212/lang:0409": {
+      "version": 1,
+      "extended": true,
+      "levels": [
+        [
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 6601,
+            "len": 39,
+            "accel": "S"
+          },
+          {
+            "popup": true,
+            "cmd": null,
+            "len": 19,
+            "accel": "R",
+            "popup_level": 2
+          },
+          {
+            "popup": false,
+            "cmd": 6603,
+            "len": 9,
+            "accel": "h"
+          },
+          {
+            "popup": false,
+            "cmd": 4294967295
+          },
+          {
+            "popup": false,
+            "cmd": 6604,
+            "len": 4,
+            "accel": "x"
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 4294967295
+          }
+        ]
+      ]
+    },
+    "213/lang:0409": {
+      "version": 1,
+      "extended": true,
+      "levels": [
+        [
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 6701,
+            "len": 12,
+            "accel": "S"
+          },
+          {
+            "popup": false,
+            "cmd": 6702,
+            "len": 15,
+            "accel": "P"
+          }
+        ]
+      ]
+    },
+    "6003/lang:0409": {
+      "version": 0,
+      "levels": [
+        [
+          {
+            "popup": true,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "len": 17,
+            "accel": "n",
+            "cmd": 128
+          },
+          {
+            "popup": false,
+            "len": 19,
+            "accel": "I",
+            "forced_end_of_buffer": true
+          }
+        ]
+      ]
+    },
+    "12000/lang:0409": {
+      "version": 1,
+      "extended": true,
+      "levels": [
+        [
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 403,
+            "len": 7,
+            "accel": "s"
+          },
+          {
+            "popup": false,
+            "cmd": 405,
+            "len": 20,
+            "accel": "t"
+          },
+          {
+            "popup": false,
+            "cmd": 404,
+            "len": 25,
+            "accel": "i"
+          },
+          {
+            "popup": false,
+            "cmd": 65493,
+            "len": 19,
+            "accel": "R"
+          },
+          {
+            "popup": false,
+            "cmd": 65492,
+            "len": 20,
+            "accel": "M"
+          },
+          {
+            "popup": false,
+            "cmd": 4294967295
+          },
+          {
+            "popup": false,
+            "cmd": 65491,
+            "len": 17,
+            "accel": "C"
+          }
+        ]
+      ]
+    }
+  },
+  "dialogs": {
+    "6/lang:0409": {
+      "ex": true,
+      "rect": [
+        0,
+        0,
+        252,
+        218
+      ],
+      "title_len": 7,
+      "title_accel": null,
+      "controls": [
+        {
+          "id": 1105,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            18,
+            200,
+            10
+          ],
+          "len": 16,
+          "accel": "L"
+        },
+        {
+          "id": 1102,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            32,
+            200,
+            10
+          ],
+          "len": 21,
+          "accel": "u"
+        },
+        {
+          "id": 1139,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            46,
+            200,
+            10
+          ],
+          "len": 15,
+          "accel": "i"
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            13,
+            63,
+            100,
+            10
+          ],
+          "len": 27,
+          "accel": "T"
+        },
+        {
+          "id": 1142,
+          "class": "COMBOBOX",
+          "rect": [
+            117,
+            60,
+            110,
+            14
+          ]
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            13,
+            81,
+            100,
+            10
+          ],
+          "len": 16,
+          "accel": "b"
+        },
+        {
+          "id": 1143,
+          "class": "COMBOBOX",
+          "rect": [
+            117,
+            78,
+            110,
+            14
+          ]
+        },
+        {
+          "id": 65535,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            7,
+            238,
+            91
+          ],
+          "len": 18
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            13,
+            113,
+            171,
+            16
+          ],
+          "len": 72
+        },
+        {
+          "id": 1140,
+          "class": "BUTTON",
+          "rect": [
+            188,
+            113,
+            50,
+            14
+          ],
+          "len": 12,
+          "accel": "C"
+        },
+        {
+          "id": 65535,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            102,
+            238,
+            34
+          ],
+          "len": 17
+        },
+        {
+          "id": 1144,
+          "class": "STATIC",
+          "rect": [
+            13,
+            151,
+            220,
+            16
+          ],
+          "len": 103
+        },
+        {
+          "id": 1141,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            171,
+            200,
+            10
+          ],
+          "len": 36,
+          "accel": "P"
+        },
+        {
+          "id": 1145,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            140,
+            238,
+            48
+          ],
+          "len": 30
+        },
+        {
+          "id": 1114,
+          "class": "SysLink",
+          "rect": [
+            7,
+            200,
+            256,
+            8
+          ],
+          "len": 38
+        }
+      ]
+    },
+    "10/lang:0409": {
+      "ex": true,
+      "rect": [
+        0,
+        0,
+        252,
+        218
+      ],
+      "title_len": 8,
+      "title_accel": null,
+      "controls": [
+        {
+          "id": 1106,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            223,
+            12
+          ],
+          "len": 44
+        },
+        {
+          "id": 1137,
+          "class": "SysTreeView32",
+          "rect": [
+            7,
+            20,
+            236,
+            160
+          ],
+          "len": 12
+        },
+        {
+          "id": 1138,
+          "class": "SysTreeView32",
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "len": 5
+        }
+      ]
+    },
+    "20/lang:0409": {
+      "ex": true,
+      "rect": [
+        0,
+        0,
+        272,
+        81
+      ],
+      "title_len": 17,
+      "title_accel": null,
+      "controls": [
+        {
+          "id": 4610,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            62,
+            139,
+            10
+          ],
+          "len": 35,
+          "accel": "D"
+        },
+        {
+          "id": 1006,
+          "class": "BUTTON",
+          "rect": [
+            159,
+            60,
+            50,
+            14
+          ],
+          "len": 6,
+          "accel": "R"
+        },
+        {
+          "id": 5,
+          "class": "BUTTON",
+          "rect": [
+            215,
+            60,
+            50,
+            14
+          ],
+          "len": 6,
+          "accel": "I"
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            7,
+            51,
+            258,
+            1
+          ]
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            21,
+            20
+          ]
+        },
+        {
+          "id": 1007,
+          "class": "STATIC",
+          "rect": [
+            34,
+            7,
+            224,
+            37
+          ],
+          "len": 201
+        }
+      ]
+    },
+    "23/lang:0409": {
+      "ex": true,
+      "rect": [
+        0,
+        0,
+        320,
+        137
+      ],
+      "title_len": 17,
+      "title_accel": null,
+      "controls": [
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            48,
+            18,
+            256,
+            8
+          ],
+          "len": 43
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            48,
+            37,
+            256,
+            18
+          ],
+          "len": 99
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            14,
+            12,
+            20,
+            20
+          ]
+        },
+        {
+          "id": 1,
+          "class": "BUTTON",
+          "rect": [
+            256,
+            112,
+            50,
+            16
+          ],
+          "len": 5
+        },
+        {
+          "id": 1009,
+          "class": "SysLink",
+          "rect": [
+            48,
+            67,
+            256,
+            18
+          ],
+          "len": 77
+        },
+        {
+          "id": 1008,
+          "class": "BUTTON",
+          "rect": [
+            48,
+            93,
+            256,
+            18
+          ],
+          "len": 46,
+          "accel": "N"
+        }
+      ]
+    },
+    "205/lang:0409": {
+      "ex": true,
+      "rect": [
+        0,
+        0,
+        252,
+        218
+      ],
+      "title_len": 10,
+      "title_accel": null,
+      "controls": [
+        {
+          "id": 1134,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            170,
+            16
+          ],
+          "len": 92
+        },
+        {
+          "id": 1131,
+          "class": "BUTTON",
+          "rect": [
+            192,
+            4,
+            53,
+            14
+          ],
+          "len": 12,
+          "accel": "C"
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            7,
+            35,
+            72,
+            8
+          ],
+          "len": 20,
+          "accel": "b"
+        },
+        {
+          "id": 1133,
+          "class": "COMBOBOX",
+          "rect": [
+            83,
+            32,
+            100,
+            14
+          ]
+        },
+        {
+          "id": 1136,
+          "class": "BUTTON",
+          "rect": [
+            14,
+            68,
+            224,
+            10
+          ],
+          "len": 61,
+          "accel": "p"
+        },
+        {
+          "id": 1135,
+          "class": "BUTTON",
+          "rect": [
+            14,
+            82,
+            224,
+            20
+          ],
+          "len": 73,
+          "accel": "m"
+        },
+        {
+          "id": 300,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            55,
+            238,
+            50
+          ],
+          "len": 7
+        },
+        {
+          "id": 1116,
+          "class": "SysLink",
+          "rect": [
+            7,
+            200,
+            256,
+            8
+          ],
+          "len": 52
+        }
+      ]
+    },
+    "1036/lang:0409": {
+      "ex": true,
+      "rect": [
+        0,
+        0,
+        251,
+        274
+      ],
+      "title_len": 20,
+      "title_accel": null,
+      "controls": [
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            238,
+            16
+          ],
+          "len": 80
+        },
+        {
+          "id": 1123,
+          "class": "SysTreeView32",
+          "rect": [
+            7,
+            26,
+            238,
+            169
+          ],
+          "len": 17,
+          "accel": "t"
+        },
+        {
+          "id": 4294967295,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            202,
+            238,
+            44
+          ],
+          "len": 16
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            14,
+            214,
+            191,
+            8
+          ],
+          "len": 37,
+          "accel": "N"
+        },
+        {
+          "id": 1307,
+          "class": "EDIT",
+          "rect": [
+            211,
+            212,
+            27,
+            12
+          ]
+        },
+        {
+          "id": 1305,
+          "class": "msctls_updown32",
+          "rect": [
+            221,
+            212,
+            11,
+            12
+          ]
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            14,
+            230,
+            191,
+            8
+          ],
+          "len": 48,
+          "accel": "J"
+        },
+        {
+          "id": 1309,
+          "class": "EDIT",
+          "rect": [
+            211,
+            228,
+            27,
+            12
+          ]
+        },
+        {
+          "id": 1308,
+          "class": "msctls_updown32",
+          "rect": [
+            221,
+            228,
+            11,
+            12
+          ]
+        },
+        {
+          "id": 1037,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            253,
+            80,
+            14
+          ],
+          "len": 20,
+          "accel": "D"
+        },
+        {
+          "id": 1,
+          "class": "BUTTON",
+          "rect": [
+            140,
+            253,
+            50,
+            14
+          ],
+          "len": 2
+        },
+        {
+          "id": 2,
+          "class": "BUTTON",
+          "rect": [
+            194,
+            253,
+            50,
+            14
+          ],
+          "len": 6
+        }
+      ]
+    }
+  },
+  "accelerators": {
+    "251/lang:0409": [
+      {
+        "fVirt": 16,
+        "key": 115,
+        "cmd": 305,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 7,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 11,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 15,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 116,
+        "cmd": 41061,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 117,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 19,
+        "key": 13,
+        "cmd": 413,
+        "last": false
+      },
+      {
+        "fVirt": 11,
+        "key": 90,
+        "cmd": 416,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 114,
+        "cmd": 41093,
+        "last": false
+      },
+      {
+        "fVirt": 19,
+        "key": 77,
+        "cmd": 419,
+        "last": true
+      }
     ]
-   ]
-  }
- },
- "dialogs": {
-  "6/lang:0409": {
-   "ex": true,
-   "rect": [
-    0,
-    0,
-    252,
-    218
-   ],
-   "title_len": 7,
-   "title_accel": null,
-   "controls": [
-    {
-     "id": 1105,
-     "class": "BUTTON",
-     "rect": [
-      13,
-      18,
-      200,
-      10
-     ],
-     "len": 16,
-     "accel": "L"
-    },
-    {
-     "id": 1102,
-     "class": "BUTTON",
-     "rect": [
-      13,
-      32,
-      200,
-      10
-     ],
-     "len": 21,
-     "accel": "u"
-    },
-    {
-     "id": 1139,
-     "class": "BUTTON",
-     "rect": [
-      13,
-      46,
-      200,
-      10
-     ],
-     "len": 15,
-     "accel": "i"
-    },
-    {
-     "id": 65535,
-     "class": "STATIC",
-     "rect": [
-      13,
-      63,
-      100,
-      10
-     ],
-     "len": 27,
-     "accel": "T"
-    },
-    {
-     "id": 1142,
-     "class": "COMBOBOX",
-     "rect": [
-      117,
-      60,
-      110,
-      14
-     ]
-    },
-    {
-     "id": 65535,
-     "class": "STATIC",
-     "rect": [
-      13,
-      81,
-      100,
-      10
-     ],
-     "len": 16,
-     "accel": "b"
-    },
-    {
-     "id": 1143,
-     "class": "COMBOBOX",
-     "rect": [
-      117,
-      78,
-      110,
-      14
-     ]
-    },
-    {
-     "id": 65535,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      7,
-      238,
-      91
-     ],
-     "len": 18
-    },
-    {
-     "id": 65535,
-     "class": "STATIC",
-     "rect": [
-      13,
-      113,
-      171,
-      16
-     ],
-     "len": 72
-    },
-    {
-     "id": 1140,
-     "class": "BUTTON",
-     "rect": [
-      188,
-      113,
-      50,
-      14
-     ],
-     "len": 12,
-     "accel": "C"
-    },
-    {
-     "id": 65535,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      102,
-      238,
-      34
-     ],
-     "len": 17
-    },
-    {
-     "id": 1144,
-     "class": "STATIC",
-     "rect": [
-      13,
-      151,
-      220,
-      16
-     ],
-     "len": 103
-    },
-    {
-     "id": 1141,
-     "class": "BUTTON",
-     "rect": [
-      13,
-      171,
-      200,
-      10
-     ],
-     "len": 36,
-     "accel": "P"
-    },
-    {
-     "id": 1145,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      140,
-      238,
-      48
-     ],
-     "len": 30
-    },
-    {
-     "id": 1114,
-     "class": "SysLink",
-     "rect": [
-      7,
-      200,
-      256,
-      8
-     ],
-     "len": 38
-    }
-   ]
   },
-  "10/lang:0409": {
-   "ex": true,
-   "rect": [
-    0,
-    0,
-    252,
-    218
-   ],
-   "title_len": 8,
-   "title_accel": null,
-   "controls": [
-    {
-     "id": 1106,
-     "class": "STATIC",
-     "rect": [
-      7,
-      7,
-      223,
-      12
-     ],
-     "len": 44
-    },
-    {
-     "id": 1137,
-     "class": "SysTreeView32",
-     "rect": [
-      7,
-      20,
-      236,
-      160
-     ],
-     "len": 12
-    },
-    {
-     "id": 1138,
-     "class": "SysTreeView32",
-     "rect": [
-      0,
-      0,
-      0,
-      0
-     ],
-     "len": 5
-    }
-   ]
+  "other_resource_types": {
+    "MUI": [
+      "1/lang:0409 (200 bytes)"
+    ],
+    "VERSION": [
+      "1/lang:0409 (912 bytes)"
+    ]
   },
-  "20/lang:0409": {
-   "ex": true,
-   "rect": [
-    0,
-    0,
-    272,
-    81
-   ],
-   "title_len": 17,
-   "title_accel": null,
-   "controls": [
-    {
-     "id": 4610,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      62,
-      139,
-      10
-     ],
-     "len": 35,
-     "accel": "D"
-    },
-    {
-     "id": 1006,
-     "class": "BUTTON",
-     "rect": [
-      159,
-      60,
-      50,
-      14
-     ],
-     "len": 6,
-     "accel": "R"
-    },
-    {
-     "id": 5,
-     "class": "BUTTON",
-     "rect": [
-      215,
-      60,
-      50,
-      14
-     ],
-     "len": 6,
-     "accel": "I"
-    },
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      7,
-      51,
-      258,
-      1
-     ]
-    },
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      7,
-      7,
-      21,
-      20
-     ]
-    },
-    {
-     "id": 1007,
-     "class": "STATIC",
-     "rect": [
-      34,
-      7,
-      224,
-      37
-     ],
-     "len": 201
-    }
-   ]
-  },
-  "23/lang:0409": {
-   "ex": true,
-   "rect": [
-    0,
-    0,
-    320,
-    137
-   ],
-   "title_len": 17,
-   "title_accel": null,
-   "controls": [
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      48,
-      18,
-      256,
-      8
-     ],
-     "len": 43
-    },
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      48,
-      37,
-      256,
-      18
-     ],
-     "len": 99
-    },
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      14,
-      12,
-      20,
-      20
-     ]
-    },
-    {
-     "id": 1,
-     "class": "BUTTON",
-     "rect": [
-      256,
-      112,
-      50,
-      16
-     ],
-     "len": 5
-    },
-    {
-     "id": 1009,
-     "class": "SysLink",
-     "rect": [
-      48,
-      67,
-      256,
-      18
-     ],
-     "len": 77
-    },
-    {
-     "id": 1008,
-     "class": "BUTTON",
-     "rect": [
-      48,
-      93,
-      256,
-      18
-     ],
-     "len": 46,
-     "accel": "N"
-    }
-   ]
-  },
-  "205/lang:0409": {
-   "ex": true,
-   "rect": [
-    0,
-    0,
-    252,
-    218
-   ],
-   "title_len": 10,
-   "title_accel": null,
-   "controls": [
-    {
-     "id": 1134,
-     "class": "STATIC",
-     "rect": [
-      7,
-      7,
-      170,
-      16
-     ],
-     "len": 92
-    },
-    {
-     "id": 1131,
-     "class": "BUTTON",
-     "rect": [
-      192,
-      4,
-      53,
-      14
-     ],
-     "len": 12,
-     "accel": "C"
-    },
-    {
-     "id": 65535,
-     "class": "STATIC",
-     "rect": [
-      7,
-      35,
-      72,
-      8
-     ],
-     "len": 20,
-     "accel": "b"
-    },
-    {
-     "id": 1133,
-     "class": "COMBOBOX",
-     "rect": [
-      83,
-      32,
-      100,
-      14
-     ]
-    },
-    {
-     "id": 1136,
-     "class": "BUTTON",
-     "rect": [
-      14,
-      68,
-      224,
-      10
-     ],
-     "len": 61,
-     "accel": "p"
-    },
-    {
-     "id": 1135,
-     "class": "BUTTON",
-     "rect": [
-      14,
-      82,
-      224,
-      20
-     ],
-     "len": 73,
-     "accel": "m"
-    },
-    {
-     "id": 300,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      55,
-      238,
-      50
-     ],
-     "len": 7
-    },
-    {
-     "id": 1116,
-     "class": "SysLink",
-     "rect": [
-      7,
-      200,
-      256,
-      8
-     ],
-     "len": 52
-    }
-   ]
-  },
-  "1036/lang:0409": {
-   "ex": true,
-   "rect": [
-    0,
-    0,
-    251,
-    274
-   ],
-   "title_len": 20,
-   "title_accel": null,
-   "controls": [
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      7,
-      7,
-      238,
-      16
-     ],
-     "len": 80
-    },
-    {
-     "id": 1123,
-     "class": "SysTreeView32",
-     "rect": [
-      7,
-      26,
-      238,
-      169
-     ],
-     "len": 17,
-     "accel": "t"
-    },
-    {
-     "id": 4294967295,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      202,
-      238,
-      44
-     ],
-     "len": 16
-    },
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      14,
-      214,
-      191,
-      8
-     ],
-     "len": 37,
-     "accel": "N"
-    },
-    {
-     "id": 1307,
-     "class": "EDIT",
-     "rect": [
-      211,
-      212,
-      27,
-      12
-     ]
-    },
-    {
-     "id": 1305,
-     "class": "msctls_updown32",
-     "rect": [
-      221,
-      212,
-      11,
-      12
-     ]
-    },
-    {
-     "id": 4294967295,
-     "class": "STATIC",
-     "rect": [
-      14,
-      230,
-      191,
-      8
-     ],
-     "len": 48,
-     "accel": "J"
-    },
-    {
-     "id": 1309,
-     "class": "EDIT",
-     "rect": [
-      211,
-      228,
-      27,
-      12
-     ]
-    },
-    {
-     "id": 1308,
-     "class": "msctls_updown32",
-     "rect": [
-      221,
-      228,
-      11,
-      12
-     ]
-    },
-    {
-     "id": 1037,
-     "class": "BUTTON",
-     "rect": [
-      7,
-      253,
-      80,
-      14
-     ],
-     "len": 20,
-     "accel": "D"
-    },
-    {
-     "id": 1,
-     "class": "BUTTON",
-     "rect": [
-      140,
-      253,
-      50,
-      14
-     ],
-     "len": 2
-    },
-    {
-     "id": 2,
-     "class": "BUTTON",
-     "rect": [
-      194,
-      253,
-      50,
-      14
-     ],
-     "len": 6
-    }
-   ]
-  }
- },
- "accelerators": {
-  "251/lang:0409": [
-   {
-    "fVirt": 16,
-    "key": 115,
-    "cmd": 305,
-    "last": false
-   },
-   {
-    "fVirt": 3,
-    "key": 9,
-    "cmd": 41008,
-    "last": false
-   },
-   {
-    "fVirt": 7,
-    "key": 9,
-    "cmd": 41008,
-    "last": false
-   },
-   {
-    "fVirt": 11,
-    "key": 9,
-    "cmd": 41008,
-    "last": false
-   },
-   {
-    "fVirt": 15,
-    "key": 9,
-    "cmd": 41008,
-    "last": false
-   },
-   {
-    "fVirt": 3,
-    "key": 116,
-    "cmd": 41061,
-    "last": false
-   },
-   {
-    "fVirt": 3,
-    "key": 117,
-    "cmd": 41008,
-    "last": false
-   },
-   {
-    "fVirt": 19,
-    "key": 13,
-    "cmd": 413,
-    "last": false
-   },
-   {
-    "fVirt": 11,
-    "key": 90,
-    "cmd": 416,
-    "last": false
-   },
-   {
-    "fVirt": 3,
-    "key": 114,
-    "cmd": 41093,
-    "last": false
-   },
-   {
-    "fVirt": 19,
-    "key": 77,
-    "cmd": 419,
-    "last": true
-   }
-  ]
- },
- "other_resource_types": {
-  "MUI": [
-   "1/lang:0409 (200 bytes)"
-  ],
-  "VERSION": [
-   "1/lang:0409 (912 bytes)"
-  ]
- },
- "require_fallback_coverage": true
+  "require_fallback_coverage": true
 }

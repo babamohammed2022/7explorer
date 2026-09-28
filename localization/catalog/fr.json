@@ -1,15 +1,15 @@
 {
- "language": {
-  "id": "fr",
-  "mui_name": "fr-FR",
-  "lcid": "0x040C",
-  "name": "français",
-  "needs_native_review": true
- },
- "strings": {
-  "5381": "Ajouter au menu Démarr&er",
-  "5382": "Retirer du menu Démarr&er",
-  "5384": "Ajoute un raccourci vers cet élément dans le menu Démarrer",
-  "5385": "Enlève le raccourci vers cet élément du menu Démarrer"
- }
+  "language": {
+    "id": "fr",
+    "mui_name": "fr-FR",
+    "lcid": "0x040C",
+    "name": "français",
+    "needs_native_review": true
+  },
+  "strings": {
+    "5381": "Ajouter au menu Démarr&er",
+    "5382": "Retirer du menu Démarr&er",
+    "5384": "Ajoute un raccourci vers cet élément dans le menu Démarrer",
+    "5385": "Enlève le raccourci vers cet élément du menu Démarrer"
+  }
 }

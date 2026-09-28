@@ -32,6 +32,16 @@ modificare `localization/catalog/*.json` e far girare
 - 320-353 (ipotesi "personalizzazione menu Start": nomi voci albero,
   opzioni) — verificare dentro il dialog 1036 a runtime
 - 1403-1423, 6010-6012, 6500-6502, 7100 (non presente), 850-858 tooltip
+
+## Aggiornamento 2026-09-28 — fonte autorevole utente (SUPERA le bozze)
+L'utente ha fornito un estratto completo del MUI reale di explorer.exe con
+ID Win32 veri, lunghezze, acceleratori e placeholder (300..19653). Cataloghi
+e constraints ora seguono quella fonte: i vecchi ID stimati erano shiftati
+rispetto agli ID veri in molte tabelle (es. 850→859, 510→513), cosa che
+causava testi sbagliati in UI ("Almost there" nell'overflow era il vecchio
+857; "Show desktop" vero resta all'id 857). Gli id precedenti "bozza" non
+coperti dalla fonte (41) restano nel catalogo marcati a bassa confidenza,
+poiché la loro origine era l'analisi di struttura del binario base.
 - 8258-8271 (14 stringhe 1-3 caratteri: ipotesi abbreviazioni calendario)
 
 ## Note operative

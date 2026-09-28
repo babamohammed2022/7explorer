@@ -96,6 +96,20 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
 
 
 
+
+## Update 2026-09-28 (v0.0.3-test5)
+
+- **Catalog stringhe rifatto su fonte autorevole** (estratto MUI reale
+  fornito dall'utente con ID Win32 veri + len + acceleratori + placeholder):
+  i vecchi ID erano shiftati in molt*. tabelle → testi sbagliati in UI
+  ("Almost there" nell'overflow, "Riavvia" al posto di Control Panel,
+  tooltip errati). Ora: 857 = "Show desktop", 852 = "Clock", 8234 =
+  "Control Panel", 205/211/212/12000 menu corretti, tooltip Aero Peek e
+  Jump List corretti con placeholder `%s`/`%1` verificati in CI.
+- **Italiano riformulato** (nostro, non testo MS) per tutte le 201 stringhe.
+- verify_catalog: 0 errori; build_resources: 90 payload (2 lingue);
+  embed deterministico; suite 43/43.
+
 ## Update 2026-09-28 (v0.0.3-test4)
 
 - **Tutto in uno ZIP**: nuovo asset `ex7-test-bundle.zip` (binari +
