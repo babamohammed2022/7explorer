@@ -63,9 +63,15 @@ jobs:
           EXPECTED_SHA: "5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b"
         run: |
           mkdir work
-          curl.exe -L -s -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"
-          powershell -NoProfile -Command "$h=(Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower(); $s=(Get-Item work\explorer-ref.exe).Length; Write-Host \"sha256: $h\"; Write-Host \"size: $s\"; if ($h -ne '%EXPECTED_SHA%') { Write-Error 'SHA256 MISMATCH'; exit 1 }; if ($s -ne 2872320) { Write-Error 'SIZE MISMATCH'; exit 1 }"
-          python tools\analyze_mui.py work\explorer-ref.exe --dump-headers
+          echo --- download --- > ci-logs\run-verify.txt
+          curl.exe -L -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe" 2>> ci-logs\run-verify.txt
+          if errorlevel 1 exit /b 1
+          echo --- hash+size --- >> ci-logs\run-verify.txt
+          powershell -NoProfile -Command "$h=(Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower(); $s=(Get-Item work\explorer-ref.exe).Length; Write-Host \"sha256: $h\"; Write-Host \"size: $s\"; if ($h -ne '%EXPECTED_SHA%') { Write-Error 'SHA256 MISMATCH'; exit 1 }; if ($s -ne 2872320) { Write-Error 'SIZE MISMATCH'; exit 1 }" >> ci-logs\run-verify.txt 2>&1
+          if errorlevel 1 exit /b 1
+          echo --- pe headers --- >> ci-logs\run-verify.txt
+          python tools\analyze_mui.py work\explorer-ref.exe --dump-headers >> ci-logs\run-verify.txt 2>&1
+          if errorlevel 1 exit /b 1
 
       - name: Patch imports on the REAL file with the Python reference
         run: python tools\patch_imports.py work\explorer-ref.exe work\explorer-py.exe
