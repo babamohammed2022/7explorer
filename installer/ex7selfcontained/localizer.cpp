@@ -6,6 +6,8 @@
 
 #include <windows.h>
 
+#include <cstdarg>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <map>
