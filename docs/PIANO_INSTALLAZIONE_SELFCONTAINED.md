@@ -159,6 +159,9 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
 
 - **explorer.exe (copia privata)**: neutralizzazione della risorsa
   `MUI` → `CUI` (stesso trucco della tua mod B) e **iniezione** nel binario
+  — *v0.0.3: la fase è diventata riscrittura atomica completa della tabella
+  risorse da payload generati dal progetto (vedi banner sopra e
+  `localization/ROOT_CAUSE_v0.0.3.md`); i dettagli qui sotto sono storici.*
   delle STRINGTABLE per lingue del catalogo (`localizer.cpp`,
   `Begin/Update/EndUpdateResource`). **Cancelletto di sicurezza**: la
   neutralizzazione è rifiutata finché non esiste
