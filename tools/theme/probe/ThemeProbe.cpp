@@ -473,6 +473,11 @@ int wmain(int argc, wchar_t** argv)
         EnumResources(argv[2]);
         return 0;
     }
+    if (argc > 2 && !lstrcmpiW(argv[1], L"--single")) {
+        ProbeOne(argv[2]);
+        fflush(stdout);
+        return 0;
+    }
     if (argc > 2 && !lstrcmpiW(argv[1], L"--analyze")) {
         AnalyzeOne(argv[2]);
         return 0;

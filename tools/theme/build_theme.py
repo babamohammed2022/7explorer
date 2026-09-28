@@ -72,6 +72,13 @@ RESERVED = ["documentation", "", "", "sizevariant.NormalSize", "",
 CLASSES = RESERVED + ["GLOBALS", "TASKBAR", "TASKBAND", "REBAR",
                       "STARTPANEL", "TRAYNOTIFY", "CLOCK", "MENU",
                       "MENUBAND"]
+
+
+def final_classes():
+    """CMAP for the shippable theme: reserved region + win7-shell class
+    names + legacy probe classes (harmless if unreferenced)."""
+    from theme_style import CLS7
+    return RESERVED + CLS7
 CID_RESERVED = len(RESERVED)
 CID_GLOBALS = CID_RESERVED + 0
 CID_TASKBAR = CID_RESERVED + 1
@@ -297,6 +304,8 @@ def main():
                     help="write the CI candidate matrix into --out (a dir)")
     ap.add_argument("--dump-res", default=None,
                     help="with --batch: also dump raw resource payloads")
+    ap.add_argument("--final", action="store_true",
+                    help="write the complete shippable theme (v1)")
     args = ap.parse_args()
     sig = None
     if args.sig == "dummy":
@@ -345,11 +354,52 @@ def main():
                 fh.write(blob)
             print(f"build_theme: wrote {path} ({len(blob)} bytes)")
         return
+    if args.final:
+        blob, stats = build_final_theme()
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)),
+                    exist_ok=True)
+        with open(args.out, "wb") as fh:
+            fh.write(blob)
+        print(f"build_theme: FINAL theme {args.out} "
+              f"({len(blob)} bytes) {stats}")
+        return
     blob, stats = build_theme(sig)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "wb") as fh:
         fh.write(blob)
     print(f"build_theme: wrote {args.out} ({len(blob)} bytes) {stats}")
+
+
+def build_final_theme():
+    """The shippable theme: authored style, unsigned, self-contained."""
+    from theme_style import make_style_records
+    classes = final_classes()
+    cmap = build_cmap(classes)
+    idx = {nm: i for i, nm in enumerate(classes)}
+    cid_of = idx.get
+    recs = make_style_records(cid_of)
+    # globals identity strings on the reserved 'globals' slot (index 10)
+    ident = [Rec(600, T_STRING, 10, 0, 0, "7explorer Aero"),
+             Rec(TMT_DISPLAYNAME, T_STRING, 10, 0, 0, "7explorer Aero"),
+             Rec(TMT_COMPANY, T_STRING, 10, 0, 0, "7explorer project"),
+             Rec(TMT_AUTHOR, T_STRING, 10, 0, 0, "7explorer project"),
+             Rec(TMT_COPYRIGHT, T_STRING, 10, 0, 0,
+                 "Original work of the 7explorer project"),
+             Rec(TMT_VERSION, T_STRING, 10, 0, 0, "1.0")]
+    variant = build_variant(recs + ident)
+    resources = [
+        ("CMAP", "CMAP", 0x0409, cmap),
+        ("VARIANT", "NORMAL", 0x0409, variant),
+        ("PACKTHEM_VERSION", 1, 0x0409, struct.pack("<H", 4)),
+        ("RMAP", "RMAP", 0x0409, rmap_stream()),
+        ("VMAP", "VMAP", 0x0409, vmap_exact()),
+        ("BCMAP", "BCMAP", 0x0409, bcmap_all_inherit(len(classes))),
+        ("DESKTOP", 1, 0x0409, struct.pack("<I", 0)),
+        ("MINCOLORDEPTH", 1, 0x0409, struct.pack("<H", 32)),
+    ]
+    pe, _info = pebuilder.build_resource_pe(resources)
+    return pe, {"cmap": len(cmap), "variant": len(variant),
+                "classes": len(classes), "records": len(recs)}
 
 
 if __name__ == "__main__":
