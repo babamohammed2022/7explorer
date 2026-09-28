@@ -110,7 +110,7 @@ jobs:
         run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers
 
       # ---- v0.0.3: generated-resource pipeline, END-TO-END on real Windows
-      - name: E2E run: installer download->patch->localize (no .mui anywhere)
+      - name: "E2E run — installer download/patch/localize (no .mui anywhere)"
         shell: cmd
         run: |
           mkdir e2e
@@ -119,14 +119,14 @@ jobs:
           ex7selfcontained.exe > run.out 2>&1
           if errorlevel 1 (type run.out & exit /b 1)
           type run.out
-      - name: E2E proof: generated resources verified in the REAL PE
+      - name: "E2E proof — generated resources verified in the REAL PE"
         shell: cmd
         run: |
           python tools\check_pe_resources.py e2e\explorer.exe ^
             > ci-logs\check-pe-resources.txt 2>&1
           if errorlevel 1 (type ci-logs\check-pe-resources.txt & exit /b 1)
           type ci-logs\check-pe-resources.txt
-      - name: E2E rerun: idempotency (second run rewrites identically)
+      - name: "E2E rerun — idempotency (second run rewrites identically)"
         shell: cmd
         run: |
           cd e2e
