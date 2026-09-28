@@ -30,8 +30,7 @@ jobs:
         shell: cmd
         run: |
           mkdir work ci-logs
-          python tools\theme\build_theme.py --out work\probe-nosig.msstyles --sig none
-          python tools\theme\build_theme.py --out work\probe-dummysig.msstyles --sig dummy
+          python tools\theme\build_theme.py --batch --out work\probe
 
       - name: Compile ThemeProbe
         shell: cmd
@@ -43,7 +42,7 @@ jobs:
       - name: Run probe (own unsigned themes + system aero as control)
         shell: cmd
         run: |
-          (echo == enum: system aero.msstyles layout & work\ThemeProbe.exe --enum "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == enum: system aerolite.msstyles layout & work\ThemeProbe.exe --enum "%SystemRoot%\Resources\Themes\aerolite.msstyles" & echo == control: load system aero.msstyles & work\ThemeProbe.exe "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == probe: unsigned, no trailer & work\ThemeProbe.exe work\probe-nosig.msstyles & echo == probe: unsigned, dummy-trailer & work\ThemeProbe.exe work\probe-dummysig.msstyles) 2>&1 | tee ci-logs\theme-probe.txt
+          (echo == control: load system aero.msstyles & work\ThemeProbe.exe "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == candidates & work\ThemeProbe.exe work\probe\a_packthem_only.msstyles work\probe\b_packthem_rmap.msstyles work\probe\c_packthem_rmap_vmap1.msstyles work\probe\d_packthem_rmap_vmap2.msstyles) 2>&1 | tee ci-logs\theme-probe.txt
 
       - name: Upload probe logs as artifact
         uses: actions/upload-artifact@v4

@@ -150,19 +150,26 @@ def make_records_probe():
     return recs
 
 
-def build_theme(sig128: bytes | None):
+def build_theme(sig128: bytes | None, rmap=None, vmap=None):
     """Returns (pe_bytes, stats). sig128: None = no signature trailer,
     otherwise appended with the community-documented footer structure
     (magic 0x84692426, sigSize, fileSize, 0) — still NOT a valid
     cryptographic signature; used only to probe uxtheme's behaviour."""
     cmap = build_cmap(CLASSES)
     variant = build_variant(make_records_probe())
-    packthem = struct.pack("<HH", 4, 0)  # v4 documented for Vista+
+    packthem = struct.pack("<H", 4)  # v4 documented for Vista+
+    # layout proven by the CI probe enum on a real system theme:
+    #   type 'PACKTHEM_VERSION' id #1 (2 bytes), type 'VMAP' name 'VMAP',
+    #   type 'RMAP' name 'RMAP'
     resources = [
         ("CMAP", "CMAP", 0x0409, cmap),
         ("VARIANT", "NORMAL", 0x0409, variant),
-        ("PACKTHEM_VERSION", "PACKTHEM_VERSION", 0x0409, packthem),
+        ("PACKTHEM_VERSION", 1, 0x0409, packthem),
     ]
+    if rmap is not None:
+        resources.append(("RMAP", "RMAP", 0x0409, rmap))
+    if vmap is not None:
+        resources.append(("VMAP", "VMAP", 0x0409, vmap))
     pe, _ = pebuilder.build_resource_pe(resources)
     stats = {"cmap": len(cmap), "variant": len(variant), "classes":
              len(CLASSES), "signed": sig128 is not None}
@@ -175,16 +182,56 @@ def build_theme(sig128: bytes | None):
     return pe, stats
 
 
+def _globals_stream():
+    recs = [r for r in make_records_probe() if r.cid == CID_GLOBALS]
+    return b"".join(r.bytes() for r in recs)
+
+
+def vmap_guess1():
+    """count + plain utf16 strings: variant, color, size"""
+    return (struct.pack("<i", 1) + "NORMAL\0".encode("utf-16-le") +
+            "NormalColor\0".encode("utf-16-le") +
+            "NormalSize\0".encode("utf-16-le"))
+
+
+def vmap_guess2():
+    """count + (len32 + utf16 string) x3 — totals 76 bytes like a real one"""
+    out = struct.pack("<i", 1)
+    for st in ("NORMAL", "NormalColor", "NormalSize"):
+        u = (st + "\0").encode("utf-16-le")
+        out += struct.pack("<i", len(st) + 1) + u
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--sig", choices=["none", "dummy"], default="none",
                     help="append a dummy 128-byte signature trailer")
+    ap.add_argument("--batch", action="store_true",
+                    help="write the CI candidate matrix into --out (a dir)")
     args = ap.parse_args()
     sig = None
     if args.sig == "dummy":
         # 128 bytes, OUR OWN filler pattern (documented as non-crypto)
         sig = bytes((0x7E, 0x58) * 64)
+    if args.batch:
+        # candidate-matrix probes for the CI theme loader experiment
+        os.makedirs(args.out, exist_ok=True)
+        rmap = _globals_stream()
+        cases = {
+            "a_packthem_only.msstyles": (None, None),
+            "b_packthem_rmap.msstyles": (rmap, None),
+            "c_packthem_rmap_vmap1.msstyles": (rmap, vmap_guess1()),
+            "d_packthem_rmap_vmap2.msstyles": (rmap, vmap_guess2()),
+        }
+        for name, (rm, vm) in cases.items():
+            blob, stats = build_theme(None, rmap=rm, vmap=vm)
+            path = os.path.join(args.out, name)
+            with open(path, "wb") as fh:
+                fh.write(blob)
+            print(f"build_theme: wrote {path} ({len(blob)} bytes)")
+        return
     blob, stats = build_theme(sig)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "wb") as fh:

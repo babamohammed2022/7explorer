@@ -119,30 +119,47 @@ static void ProbeOne(LPCWSTR path)
     memcpy(f.end, "end", 3);
 
     HANDLE hSharable = NULL, hNonSharable = NULL, hReuse = NULL;
-    hr = ((LoaderLoadTheme_t)pLoaderLoadTheme)(
-        0, 0, path, szColor, szSize,
-        &hSharable, NULL, 0, &hNonSharable, NULL, 0,
-        NULL, &hReuse, 0, 0, FALSE);
-    wprintf(L"   LoaderLoadTheme(18)   : 0x%08lx  sharable=%p nonsharable=%p\n",
-            (unsigned long)hr, hSharable, hNonSharable);
-    if (FAILED(hr)) {
-        hr = ((LoaderLoadTheme_t_win11)pLoaderLoadTheme)(
+    SetLastError(0);
+    DWORD av = 0;
+    __try {
+        hr = ((LoaderLoadTheme_t)pLoaderLoadTheme)(
             0, 0, path, szColor, szSize,
             &hSharable, NULL, 0, &hNonSharable, NULL, 0,
-            NULL, &hReuse, 0, 0);
-        wprintf(L"   LoaderLoadTheme(17w11): 0x%08lx  sharable=%p nonsharable=%p\n",
-                (unsigned long)hr, hSharable, hNonSharable);
+            NULL, &hReuse, 0, 0, FALSE);
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+                ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        av = GetExceptionCode();
+        hr = E_FAIL;
+    }
+    wprintf(L"   LoaderLoadTheme(18)   : 0x%08lx  sharable=%p nonsharable=%p%s\n",
+            (unsigned long)hr, hSharable, hNonSharable,
+            av ? L"  <ACCESS-VIOLATION in loader>" : L"");
+    if (FAILED(hr) && !av) {
+        __try {
+            hr = ((LoaderLoadTheme_t_win11)pLoaderLoadTheme)(
+                0, 0, path, szColor, szSize,
+                &hSharable, NULL, 0, &hNonSharable, NULL, 0,
+                NULL, &hReuse, 0, 0);
+        } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+                    ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+            av = GetExceptionCode();
+            hr = E_FAIL;
+        }
+        wprintf(L"   LoaderLoadTheme(17w11): 0x%08lx  sharable=%p nonsharable=%p%s\n",
+                (unsigned long)hr, hSharable, hNonSharable,
+                av ? L"  <ACCESS-VIOLATION in loader>" : L"");
     }
     if (FAILED(hr)) {
-        wprintf(L"   -> load FAILED (signature?), GetLastError=%lu\n",
-                GetLastError());
+        wprintf(L"   -> load FAILED, GetLastError=%lu\n", GetLastError());
         return;
     }
 
     f.hSharableSection = hSharable;
     f.hNsSection = hNonSharable;
-    f.sharableSectionView = MapViewOfFile(hSharable, FILE_MAP_READ, 0, 0, 0);
-    f.nsSectionView = MapViewOfFile(hNonSharable, FILE_MAP_READ, 0, 0, 0);
+    f.sharableSectionView = hSharable
+        ? MapViewOfFile(hSharable, FILE_MAP_READ, 0, 0, 0) : NULL;
+    f.nsSectionView = hNonSharable
+        ? MapViewOfFile(hNonSharable, FILE_MAP_READ, 0, 0, 0) : NULL;
     wprintf(L"   map views             : share=%p noshare=%p (err %lu)\n",
             f.sharableSectionView, f.nsSectionView, GetLastError());
 
