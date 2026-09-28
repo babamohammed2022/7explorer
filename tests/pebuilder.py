@@ -93,6 +93,61 @@ def build_pe(sections, directories, characteristics=0x2022,
     return bytes(out), {s["name"]: s for s in sections}
 
 
+def build_pe32(sections, directories, characteristics=0x2002,
+               time_date_stamp=0x4CE7A144, image_base=0x400000):
+    """32-bit (PE32, i386) resource-only image — real .msstyles files are
+    PE32 even on x64 (resources are architecture-neutral). Mirrors
+    build_pe."""
+    num_sections = len(sections)
+    headers = _dos_and_pe_stub()
+    coff_size = 20
+    opt_size = 224  # PE32 optional header incl. 16 data directories
+    size_headers = _align(len(headers) + 4 + coff_size + opt_size + 40 * num_sections,
+                          FILE_ALIGN)
+    cur_raw = size_headers
+    cur_rva = SECTION_ALIGN
+    for s in sections:
+        s["raw_off"] = cur_raw
+        s["raw_size"] = _align(len(s["data"]), FILE_ALIGN) if s["data"] else 0
+        s["vaddr"] = cur_rva
+        span = max(s.get("vsize", len(s["data"])), s["raw_size"])
+        cur_raw += s["raw_size"]
+        cur_rva += _align(span, SECTION_ALIGN)
+    size_image = cur_rva
+    total = size_headers + sum(s["raw_size"] for s in sections)
+    out = bytearray(total)
+    out[0:len(headers)] = headers
+    pe = 0x80
+    out[pe:pe + 4] = b"PE\0\0"
+    coff = pe + 4
+    struct.pack_into("<HHIIIHH", out, coff,
+                     0x14C, num_sections, time_date_stamp, 0, 0, opt_size,
+                     characteristics)
+    opt = coff + 20
+    struct.pack_into("<HBBIII", out, opt, 0x10B, 14, 0, 0x200, 0, 0)
+    struct.pack_into("<III", out, opt + 16, 0, SECTION_ALIGN, 0)  # EP, BaseOfCode, BaseOfData
+    struct.pack_into("<I", out, opt + 28, image_base)
+    struct.pack_into("<II", out, opt + 32, SECTION_ALIGN, FILE_ALIGN)
+    struct.pack_into("<HHHHHH", out, opt + 40, 6, 0, 0, 0, 6, 0)
+    struct.pack_into("<I", out, opt + 52, 0)
+    struct.pack_into("<II", out, opt + 56, size_image, size_headers)
+    struct.pack_into("<I", out, opt + 64, 0)
+    struct.pack_into("<HH", out, opt + 68, 3, 0x8160)
+    struct.pack_into("<IIII", out, opt + 72, 0x100000, 0x1000, 0x100000, 0x1000)
+    struct.pack_into("<II", out, opt + 88, 0, 16)
+    dirs_off = opt + 96
+    for idx, (rva, size) in directories.items():
+        struct.pack_into("<II", out, dirs_off + 8 * idx, rva, size)
+    sec_hdr = opt + opt_size
+    for i, s in enumerate(sections):
+        name = s["name"].encode("ascii")[:8].ljust(8, b"\0")
+        struct.pack_into("<8sIIIIIIHHI", out, sec_hdr + 40 * i,
+                         name, s.get("vsize", len(s["data"])), s["vaddr"],
+                         s["raw_size"], s["raw_off"], 0, 0, 0, 0, s["chars"])
+        out[s["raw_off"]:s["raw_off"] + len(s["data"])] = s["data"]
+    return bytes(out), {s["name"]: s for s in sections}
+
+
 def build_import_pe(dll_names, bound_import_names=None, mixed_case=None):
     """
     Build a PE importing each name in dll_names (with a couple of thunks),

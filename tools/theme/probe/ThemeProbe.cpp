@@ -97,6 +97,27 @@ static void EnumResources(LPCWSTR path)
     FreeLibrary(m);
 }
 
+
+static void PeHeader(LPCWSTR path)
+{
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                           OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) { wprintf(L"!! open err %lu\n",
+        GetLastError()); return; }
+    uint8_t hdr[512]; DWORD rd = 0;
+    ReadFile(f, hdr, sizeof(hdr), &rd, NULL);
+    CloseHandle(f);
+    DWORD peOff = *(DWORD*)(hdr + 0x3C);
+    WORD machine = *(WORD*)(hdr + peOff + 4);
+    WORD chars = *(WORD*)(hdr + peOff + 4 + 18);
+    WORD magic = *(WORD*)(hdr + peOff + 24);
+    wprintf(L"== pehdr %s\n   machine=0x%04x (%s) optmagic=0x%04x (%s) "
+            L"chars=0x%04x\n", path, machine,
+            machine == 0x14c ? L"i386" : machine == 0x8664 ? L"AMD64"
+            : L"other", magic, magic == 0x10b ? L"PE32"
+            : magic == 0x20b ? L"PE32+" : L"?", chars);
+}
+
 static void ProbeOne(LPCWSTR path)
 {
     wprintf(L"== %s\n", path);
@@ -370,6 +391,10 @@ int wmain(int argc, wchar_t** argv)
     }
     if (argc > 2 && !lstrcmpiW(argv[1], L"--analyze")) {
         AnalyzeOne(argv[2]);
+        return 0;
+    }
+    if (argc > 2 && !lstrcmpiW(argv[1], L"--pehdr")) {
+        for (int i = 2; i < argc; i++) PeHeader(argv[i]);
         return 0;
     }
     if (argc > 3 && !lstrcmpiW(argv[1], L"--stripsig")) {

@@ -150,6 +150,30 @@ def make_records_probe():
     return recs
 
 
+def _build_resource_pe32(resources):
+    """PE32 variant of pebuilder's resource-only image builder."""
+    tris = []
+    for type_id, name_id, lang, payload in resources:
+        tris.append((type_id, [(name_id, [(lang, payload)])]))
+    # delegate three-level resource serialization to pebuilder by reusing
+    # its build_resource_pe internals is not exposed; call build_pe32 with
+    # the same resource-section blob by replicating build_resource_pe's
+    # section construction via monkey-shim: easiest is temporary import hook
+    import types
+    helper = pebuilder.build_resource_pe  # defined below uses build_pe
+    # patch: call helper but with build_pe32 swapped in
+    orig = pebuilder.build_pe
+    pebuilder.build_pe = pebuilder.build_pe32
+    try:
+        blob, meta = helper(resources)
+    finally:
+        pebuilder.build_pe = orig
+    return blob
+
+
+build_pe32 = True  # default: real themes are PE32; --pe64 switches back
+
+
 def build_theme(sig128: bytes | None, rmap=None, vmap=None,
                 bcmap=None):
     """Returns (pe_bytes, stats). sig128: None = no signature trailer,
@@ -173,7 +197,10 @@ def build_theme(sig128: bytes | None, rmap=None, vmap=None,
         resources.append(("VMAP", "VMAP", 0x0409, vmap))
     if bcmap is not None:
         resources.append(("BCMAP", "BCMAP", 0x0409, bcmap))
-    pe, _ = pebuilder.build_resource_pe(resources)
+    if build_pe32:
+        pe = _build_resource_pe32(resources)
+    else:
+        pe, _ = pebuilder.build_resource_pe(resources)
     stats = {"cmap": len(cmap), "variant": len(variant), "classes":
              len(CLASSES), "signed": sig128 is not None}
     if sig128 is not None:
