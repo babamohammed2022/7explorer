@@ -26,9 +26,11 @@ jobs:
         run: |
           cd repro-ci
           copy /Y ..\installer\ex7selfcontained\bin\ex7selfcontained.exe .
-          ex7selfcontained.exe --applocal --keep-logs > run1.out 2>&1
+          ex7selfcontained.exe > run1.out 2>&1
           echo exit=%ERRORLEVEL% > run-exit.txt
+          exit /b 0
       - name: Collect repro logs
+        if: always()
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

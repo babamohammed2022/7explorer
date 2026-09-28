@@ -351,6 +351,245 @@ def parse_dialog(raw: bytes):
             "font": font, "style": style, "controls": controls}
 
 
+
+
+def build_templates(path: str) -> dict:
+    """FULL structural descriptor for tools/build_resources.py.
+
+    Like build_constraints but keeps EVERY structural field needed to
+    rebuild the resource templates byte-compatible (styles, exstyles,
+    help ids, font block, class ordinals/strings, creation data).
+    Reference TEXT is replaced by stable keys (same keying as the
+    catalogs): never emits UI prose. Font and window-class names are
+    technical identifiers, documented as such.
+    """
+    blob = open(path, "rb").read()
+    pe = _PE(blob)
+    out = {
+        "source": ("explorer.exe.mui full structural template dump "
+                   "(analyze_mui --templates; NO UI text)"),
+        "source_sha256": hashlib.sha256(blob).hexdigest(),
+        "source_file_size": len(blob),
+        "time_date_stamp": f"0x{pe.time_date_stamp:08X}",
+        "machine": f"0x{pe.machine:04X}",
+        "menus": {},
+        "dialogs": {},
+        "accelerators": {},
+        "notes": ("Font face names and window class names (SysLink, "
+                  "SysTreeView32, ...) are public Win32 API identifiers, "
+                  "not prose text. Any extra data blob that LOOKS textual "
+                  "is flagged and must be reviewed before use."),
+    }
+    for t, rid, lang, data in Resources(pe).walk():
+        key = f"{rid}/lang:{lang:04X}"
+        try:
+            if t == RT_MENU:
+                m = parse_menu_full(data)
+                if m: out["menus"][key] = m
+            elif t == RT_DIALOG:
+                d = parse_dialog_full(data)
+                if d: out["dialogs"][key] = d
+            elif t == RT_ACCELERATOR:
+                out["accelerators"][key] = parse_accelerators(data)
+        except Exception as exc:
+            out.setdefault("parse_errors", []).append(
+                {"type": str(t), "id": str(rid), "lang": lang,
+                 "error": str(exc)})
+    return out
+
+
+def parse_menu_full(raw: bytes):
+    """Full menu descriptor: every numeric field, texts as len/accel only.
+
+    Level/index numbers match parse_menu walking exactly (menu 205/6003
+    classic v0, altri MENUEX v4).
+    """
+    if len(raw) < 4:
+        return None
+    version, header = struct.unpack_from("<HH", raw, 0)
+    items_by_level = {}
+    level_counter = [0]
+
+    def classic_store(off, lvl):
+        items_by_level.setdefault(lvl, [])
+        items = items_by_level[lvl]
+        pending = []
+        while True:
+            (flags,) = struct.unpack_from("<H", raw, off)
+            off += 2
+            end = u16_cstr_end(raw, off)
+            text = raw[off:end].decode("utf-16-le", "replace")
+            off = end + 2
+            entry = {"flags": flags, "popup": bool(flags & 0x10)}
+            if text:
+                entry["text"] = {"len": len(text),
+                                 "accel": extract_accel(text)}
+            if entry["popup"]:
+                entry["cmd"] = None
+                pending.append((len(items), entry))
+            else:
+                (cmd,) = struct.unpack_from("<H", raw, off)
+                off += 2
+                entry["cmd"] = cmd
+            items.append(entry)
+            if flags & 0x80:
+                break
+        for idx, entry in pending:
+            child = level_counter[0]
+            level_counter[0] += 1
+            entry["popup_level"] = child
+            off = classic_store(off, child)
+        return off
+
+    def extended_store(off, lvl):
+        items_by_level.setdefault(lvl, [])
+        items = items_by_level[lvl]
+        pending = []
+        while True:
+            dwType, dwState, uId, bResInfo = struct.unpack_from("<IIIB",
+                                                                raw, off)
+            off += 13
+            end = u16_cstr_end(raw, off)
+            text = raw[off:end].decode("utf-16-le", "replace")
+            off = end + 2
+            off = (off + 3) & ~3
+            entry = {"dwType": dwType, "dwState": dwState, "cmd": uId,
+                     "bResInfo": bResInfo,
+                     "popup": bool(bResInfo & 0x01)}
+            if text:
+                entry["text"] = {"len": len(text),
+                                 "accel": extract_accel(text)}
+            if entry["popup"]:
+                (help_id,) = struct.unpack_from("<I", raw, off)
+                off += 4
+                entry["help_id"] = help_id
+                pending.append((len(items), entry))
+            items.append(entry)
+            if bResInfo & 0x80:
+                break
+        for idx, entry in pending:
+            child = level_counter[0]
+            level_counter[0] += 1
+            entry["popup_level"] = child
+            off = extended_store(off, child)
+        return off
+
+    if version == 0:
+        level_counter[0] = 1
+        classic_store(4, 0)
+        return {"version": 0,
+                "levels": [items_by_level.get(i, [])
+                           for i in range(level_counter[0])]}
+    if version == 1 and header == 4:
+        level_counter[0] = 1
+        extended_store(8, 0)
+        return {"version": 4,
+                "levels": [items_by_level.get(i, [])
+                           for i in range(level_counter[0])]}
+    return {"version": version, "levels": None,
+            "note": "unrecognized menu template"}
+
+
+def parse_dialog_full(raw: bytes):
+    """Full dialog descriptor: every structural field (title/control text
+    replaced by len+accel markers; class atoms AND class strings kept)."""
+    if len(raw) < 4:
+        return None
+    sig, sig2 = struct.unpack_from("<HH", raw, 0)
+    is_ex = (sig == 0xFFFF and sig2 == 0xFFFF)
+
+    def sz_or_ord2(off):
+        (w,) = struct.unpack_from("<H", raw, off)
+        if w == 0x0000:
+            return {"kind": "null"}, off + 2
+        if w == 0xFFFF:
+            (o,) = struct.unpack_from("<H", raw, off + 2)
+            return {"kind": "atom", "value": o}, off + 4
+        end = u16_cstr_end(raw, off)
+        s = raw[off:end].decode("utf-16-le", "replace")
+        return {"kind": "string", "value": s}, end + 2
+
+    if is_ex:
+        help_id, ex_style, style, c_items = struct.unpack_from("<IIIH",
+                                                               raw, 4)
+        off = 18
+    else:
+        help_id = None
+        style, ex_style, c_items = struct.unpack_from("<IIH", raw, 0)
+        off = 10
+    x, y, cx_, cy = struct.unpack_from("<hhhh", raw, off)
+    off += 8
+    menu, off = sz_or_ord2(off)
+    cls, off = sz_or_ord2(off)
+    title, off = sz_or_ord2(off)
+    title_meta = None
+    if title.get("kind") == "string":
+        title_meta = {"len": len(title["value"]),
+                      "accel": extract_accel(title["value"])}
+        title = {"kind": "text"}  # testo proibito, solo presenza
+    font = None
+    if style & 0x40:
+        if is_ex:
+            pts, weight, italic, charset = struct.unpack_from("<HHBB",
+                                                              raw, off)
+            off += 6
+        else:
+            (pts,) = struct.unpack_from("<H", raw, off)
+            weight = italic = charset = None
+            off += 2
+        face, off = sz_or_ord2(off)
+        font = {"points": pts, "weight": weight, "italic": italic,
+                "charset": charset,
+                "face": face.get("value") if face.get("kind") == "string"
+                else face}
+    controls = []
+    for _ in range(c_items):
+        off = (off + 3) & ~3
+        if is_ex:
+            c_help, c_exs, c_st = struct.unpack_from("<III", raw, off)
+            ix, iy, icx, icy = struct.unpack_from("<hhhh", raw, off + 12)
+            (cid,) = struct.unpack_from("<I", raw, off + 20)
+            off += 24
+        else:
+            c_help = None
+            c_st, c_exs = struct.unpack_from("<II", raw, off)
+            ix, iy, icx, icy = struct.unpack_from("<hhhh", raw, off + 8)
+            (cid,) = struct.unpack_from("<H", raw, off + 16)
+            off += 18
+        c_cls, off = sz_or_ord2(off)
+        if c_cls.get("kind") == "atom":
+            c_cls = {"kind": "atom",
+                     "name": _KNOWN_CTRL_ATOMS.get(c_cls["value"],
+                                                   f'atom:{c_cls["value"]}')}
+        c_txt, off = sz_or_ord2(off)
+        tmeta = None
+        if c_txt.get("kind") == "string":
+            tmeta = {"len": len(c_txt["value"]),
+                     "accel": extract_accel(c_txt["value"])}
+        (extra,) = struct.unpack_from("<H", raw, off)
+        off += 2
+        extra_hex = raw[off:off + extra].hex()
+        extra_textual = _looks_utf16_text(raw[off:off + extra]) if extra else False
+        off += extra
+        controls.append({
+            "id": cid, "help_id": c_help, "ex_style": c_exs, "style": c_st,
+            "rect": [ix, iy, icx, icy], "class": c_cls,
+            "text": tmeta,
+            "extra_hex": extra_hex,
+            "extra_looks_textual": extra_textual})
+    return {"ex": is_ex, "help_id": help_id, "ex_style": ex_style,
+            "style": style, "rect": [x, y, cx_, cy], "menu": menu,
+            "window_class": cls, "title": title_meta, "font": font,
+            "controls": controls}
+
+def _looks_utf16_text(raw: bytes) -> bool:
+    """True se la maggior parte dei word sono stampabili (euristica)."""
+    if len(raw) < 4 or len(raw) % 2:
+        return False
+    words = struct.unpack(f"<{len(raw)//2}H", raw)
+    printable = sum(1 for w in words if 0x20 <= w <= 0x7E or w >= 0xA0)
+    return printable * 4 >= len(words) * 3
+
 def parse_accelerators(raw: bytes):
     out = []
     for off in range(0, len(raw) - 7, 8):
@@ -480,6 +719,8 @@ def main() -> int:
                     help="write verify_catalog constraints JSON")
     ap.add_argument("--dump-headers", action="store_true",
                     help="print header/import info to verify pinned constants")
+    ap.add_argument("--templates", metavar="OUT.json",
+                    help="write FULL structural descriptor (build_resources)")
     args = ap.parse_args()
 
     try:
@@ -504,11 +745,16 @@ def main() -> int:
                 "SHLWAPI.DLL", "OLE32.DLL", "EXPLORERFRAME.DLL") else ""
             print(f"  {n}{marker}")
 
+    if args.templates:
+        tpl = build_templates(args.pe_file)
+        with open(args.templates, "w", encoding="utf-8") as f:
+            json.dump(tpl, f, ensure_ascii=False, indent=2)
+        print(f"templates written to {args.templates}")
     if args.constraints:
         with open(args.constraints, "w", encoding="utf-8") as f:
             json.dump(build_constraints(rep), f, ensure_ascii=False, indent=2)
         print(f"constraints written to {args.constraints}")
-    elif not args.dump_headers:
+    elif not args.dump_headers and not args.templates and not args.constraints:
         json.dump(rep, sys.stdout, ensure_ascii=False, indent=2)
         print()
     return 0
