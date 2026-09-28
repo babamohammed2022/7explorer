@@ -1,5 +1,13 @@
 # Metodo per il catalogo linguistico di explorer.exe.mui
 
+> **v0.0.3 (2026-09-28)**: il catalogo non serve più a *riempire* le risorse
+> di un `.mui` di riferimento (il trapianto è stato eliminato): i testi qui
+> descritti diventano **risorse PE generate interamente dal progetto** —
+> struttura da `localization/templates/`, testi da `localization/catalog/`,
+> generazione+validazione in `tools/build_resources.py`. La regola copyright
+> sotto resta invariata e vale ancora di più: nel repo NON entra testo
+> Microsoft.
+
 *(Istruzioni concordate con il proprietario del progetto il 2026-09-28:
 procedura collaudata su dialog 205.)*
 

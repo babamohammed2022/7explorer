@@ -5,6 +5,17 @@
 
 explorer7 is a **wrapper library** that allows Windows 7's explorer.exe to run properly on modern Windows versions, aiming to resurrect the original Windows 7 shell experience.
 
+> **This fork — self-contained bootstrap + progetto di localizzazione integrato**
+> This fork adds `installer/ex7selfcontained` (download-verifica-patch-localizza
+> in una sola esecuzione) e una **pipeline di risorse generate dal progetto**:
+> tutte le risorse UI della copia privata (stringhe, menu, dialoghi,
+> acceleratori — en-US + it-IT) sono **prodotte dal repository**
+> (`localization/catalog` + `localization/templates`
+> → `tools/build_resources.py` → blob validati) e iniettate con riscrittura
+> atomica della tabella risorse. **Non serve nessun `explorer.exe.mui`** né
+> alcun altro file Microsoft oltre al singolo `explorer.exe` scaricato dal
+> symbol server. Dettagli: `installer/ex7selfcontained/README.md`.
+
 <details>
   <summary>Screenshots</summary>
 

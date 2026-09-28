@@ -1,4 +1,4 @@
-# Pre-release di PROVA — ex7 self-contained bootstrap
+# Pre-release di PROVA — ex7 self-contained bootstrap (v0.0.3)
 
 Binari compilati dal CI (GitHub Actions, `windows-latest`, MSVC) nel workflow
 `selfcontained-ci`. Hash in `SHA256SUMS.txt`.
@@ -11,59 +11,85 @@ Binari compilati dal CI (GitHub Actions, `windows-latest`, MSVC) nel workflow
 | `ex7selfcontained.exe` | l'installer/bootstrap self-contained |
 | `SHA256SUMS.txt` | SHA-256 degli eseguibili sopra |
 
-## Cosa FUNZIONA (verificato nel CI su file reale)
+## Novità v0.0.3 — localizzazione SENZA `.mui` (rottura con v0.0.2)
 
-- Download di `explorer.exe` (Win7 SP1 x64) dal symbol server Microsoft con
-  verifica SHA-256 pinnato, dimensione esatta 2.872.320 byte, controllo
-  identità PE (TimeDateStamp 0x4CE7A144, SizeOfImage 0x2C0000, AMD64);
-  timeout/deadline/cancellazione a logoff-shutdown; riuso offline della copia
-  verificata.
-- Patch import `SHLWAPI.DLL`/`OLE32.DLL`/`EXPLORERFRAME.DLL` → `wrp64.dll`:
-  **deterministica**, **idempotente**, C++ byte-identico al riferimento
-  Python (confronto `fc /b` nel CI), import risultanti verificati nel log.
-- Stringhe shell32 per pin/unpin menu Start in 10 lingue, testi originali,
-  verificate dal checker (segnaposto/acceleratori/lunghezze) e servite dal
-  fallback del wrapper.
+Dopo i test reali di v0.0.2-test1 (fallimento identico in 3 corrid su
+`UpdateResource`), il meccanismo del **trapianto da `explorer.exe.mui`
+fornito dall'utente è stato RIMOSSO COMPLETAMENTE**:
+
+- niente `.mui` da procurarsi, niente `EX7_REFERENCE_MUI`, niente identity
+  check sul `.mui`, niente valutazione symbol server per `.mui`;
+- **tutte** le risorse UI della copia privata (STRINGTABLE, MENU, DIALOGEX,
+  ACCELERATOR) sono **generate dal progetto**:
+  `localization/catalog/{en,it}.json` (testi del progetto) +
+  `localization/templates/explorer.exe.templates.json` (solo struttura) →
+  `tools/build_resources.py` (payload PE + rivalidazione round-trip) →
+  blob embeddati in `lang_catalog.h`;
+- a install time l'installer fa la **riscrittura atomica della tabella
+  risorse**: enumera e ricopia tutte le risorse esistenti, omette `MUI`
+  (parcheggiato come `CUI`), scrive i blob en-US + it-IT, committa, quindi
+  ricalcola il CheckSum PE e registra l'hash FINALE in `state\install.json`;
+- **stop netto**: qualsiasi errore di generazione/validazione/iniezione
+  interrompe l'installazione (exit 1) con la transazione SCARTATA — mai una
+  shell mezzo localizzata. Rimosso `--allow-partial-localization`
+  (v0.0.2 lo rendeva cosmetico: il gate era *dopo* il punto di fallimento).
+
+### Root cause v0.0.2 (provata nel CI, per onestà documentale)
+
+Il file reale è un binario **LN marcato MU**; `UpdateResourceW` rifiuta
+l'inserimento di risorse con `ERROR_NOT_SUPPORTED (50)` (qualunque lingua),
+la cancellazione del solo marcatore `MUI` fallisce con
+`ERROR_INVALID_PARAMETER (87)`, mentre `BeginUpdateResource(
+bDeleteExistingResources=TRUE)` con riscrittura completa viene accettata.
+Probe: `ci/updres/Program.cs` (run 36415198307+); repro originale
+`ci-logs/diagloc-36412428950` (`GetLastError=50` su blocco STRING 337).
+
+### Bug corretto lungo la strada
+
+`parse_string_table` assegnava gli ID di stringa con off-by-one
+(slot `i` → `base+i` invece di `base+i+1`). Tutti i 161 ID stringa di
+`explorer.exe.constraints.json` (derivati dal tool buggy) e i testi catalogo
+corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
+(5381/5382/5384/5385, da `StartMenuPin.cpp`) erano e restano corretti.
+
+## Cosa FUNZIONA (verificato nel CI su file reale, ad ogni push/tag)
+
+- Download verificato di `explorer.exe` (hash allow-list, identità PE,
+  deadline/cancellazione), riuso offline della copia `.pris`.
+- Patch import → `wrp64.dll`: deterministica, idempotente, C++ ≡ Python
+  byte-per-byte (`fc /b` nel CI).
+- Pipeline risorse: 43 test Python ovunque + sul runner Windows: **run
+  end-to-end dell'installer** e prova sul PE prodotto con
+  `tools/check_pe_resources.py` (presenza **byte-per-byte** di tutti gli
+  88 payload per (tipo,id,lcid), parsing menu/dialog/stringhe/acceleratori,
+  `MUI` assente, `CUI` presente) + **secondo run idempotente**.
+- Stringhe wrapper (pin/unpin Start menu) in 10 lingue via fallback
+  `LoadStringW` (file `.rc` multilingua generato).
 
 ## Cosa NON fa ancora
 
 - **Nessuna integrazione shell** (switch di userinit/Winlogon): questa
-  release testa solo download+verifica+patch+stringhe.
-- Menu/dialog/acceleratori `explorer.exe.mui`: in attesa dell'elenco ID
-  confermato; la neutralizzazione `MUI`→`CUI` resta dietro il cancelletto di
-  copertura e richiede `--allow-partial-localization`.
-- Test su macchina reale con shell avviata: da fare su Windows 10/11.
+  release prepara solo la cartella `explorer7/` completa e verificata.
+- Aspetti che richiedono **Windows reale eseguito dall'utente**: avvio
+  effettivo della shell patchata (rendering taskbar/start menu, dialoghi
+  non tronchi a video). Il CI prova tutto ciò che è verificabile statico/
+  programmatico, ma non *lancia* la shell.
 
-## Come provare (Windows 10 21H2 LTSC e superiori)
+## Uso
 
-```bat
-mkdir X:\ex7test
-copy wrp64.dll X:\ex7test\
-copy ex7selfcontained.exe X:\ex7test\
-cd /d X:\ex7test
-ex7selfcontained.exe
-:: atteso: download una tantum, hash verificato, patch applicata,
-:: explorer.exe patchata in X:\ex7test\, log in log\ex7setup.log
-ex7selfcontained.exe --offline
-:: atteso: nessuna rete, riuso della copia verificata
-```
+1. scaricare `ex7selfcontained.exe` e `wrp64.dll` nella stessa cartella
+   (es. una vuota `ex7test`);
+2. `ex7selfcontained.exe` (doppio click o da prompt);
+3. atteso: `cache\explorer-*.pris`, `explorer.exe` patchato **e localizzato
+   (en-US + it-IT)**, `wrp64.dll`, `state\install.json`, `log\ex7setup.log`.
 
-Mai puntare `--app-dir` dentro `C:\Windows`: l'installer non tocca i file di
-sistema per costruzione.
+Nessun file utente aggiuntivo richiesto. Con OS in lingua diversa da
+it/en la shell sarà en-US (fallback voluto).
 
-## Novita' v0.0.2-test1 — localizzazione COMPLETA (strings + menus + dialogs)
+## Sicurezza
 
-- Catalogo explorer.exe.mui completo: **161 stringhe, 6 menu, 6 dialog** in
-  inglese (fallback) e **italiano**, testi nostri verificati dal checker
-  (segnaposto/acceleratori/lunghezze) in CI. Mappa di confidenza:
-  `localization/BOZZE_CONFIDENZA.md`.
-- L'installer ora **trapianta** menu/dialog/acceleratori dal file di
-  riferimento `explorer.exe.mui` (Win7 RTM en-US) dentro la copia privata,
-  sostituendo solo i testi con il catalogo. Identita' del .mui pinnata
-  (dimensione 22016, TimeDateStamp 0x4A5BC954, SHA-256 in allow-list).
-- **Per la prova serve il .mui**: metti `explorer.exe.mui` accanto
-  all'installer (o in `reference\`, o `set EX7_REFERENCE_MUI=percorso`).
-  Senza il file: solo stringhe, menu/dialog restano en-US e la
-  neutralizzazione viene rifiutata (log chiaro).
-- Sonda documentata: il symbol server Microsoft NON serve .mui (404 su
-  ogni chiave provata) — il file resta offline/verified-reuse by design.
+- Solo HTTPS su host Microsoft fissato; identità multilivello documentata in
+  `config.h` (due varianti Authenticode note, allow-list);
+- nessun binario Microsoft (né `.mui`) negli artifact o nella release;
+- catalogo/testi/strutture: 100% authoring del progetto (vedi tabella
+  copyright in `installer/ex7selfcontained/README.md`).

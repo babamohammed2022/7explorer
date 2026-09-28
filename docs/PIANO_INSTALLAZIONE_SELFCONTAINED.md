@@ -143,7 +143,19 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
    muirct: scartata come strada principale (vedi sotto). — Dichiarato come
    conoscenza di dominio, 🌐 non ri-testata qui.
 
-### Scelta: opzione (b) ibrida ✅ motivata
+### Scelta: opzione (b) ibrida ✅ motivata — **SUPERATA da v0.0.3**
+
+> ⚠️ **Aggiornamento 2026-09-28 (v0.0.3)** — la strategia qui sotto
+> (iniezione in-place + `.mui` di riferimento utente) è FALLITA ai test reali
+> ed è stata sostituita. Root cause provata nel CI: `UpdateResource` nel
+> binario LN marcato MU è rifiutato con `ERROR_NOT_SUPPORTED (50)`; la
+> cancellazione del marcatore `MUI` con `ERROR_INVALID_PARAMETER (87)`. La
+> v0.0.3 fa la **riscrittura atomica completa della tabella risorse**
+> (`BeginUpdateResource(TRUE)` dopo enumerazione di tutte le risorse) con
+> **payload generati dal progetto** (`tools/build_resources.py` da
+> `localization/catalog` + `localization/templates`): nessun `.mui` serve più
+> in nessun punto della pipeline. `--allow-partial-localization` rimosso.
+> Vedi `installer/ex7selfcontained/README.md` e `localizer.h`.
 
 - **explorer.exe (copia privata)**: neutralizzazione della risorsa
   `MUI` → `CUI` (stesso trucco della tua mod B) e **iniezione** nel binario
