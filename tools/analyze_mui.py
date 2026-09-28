@@ -195,7 +195,7 @@ def parse_string_table(block: bytes, block_id: int):
         raw = block[off: off + 2 * ln]
         off += 2 * ln
         if ln:
-            out[base + i] = raw.decode("utf-16-le", "replace")
+            out[base + i + 1] = raw.decode("utf-16-le", "replace")
     return out
 
 

@@ -1,0 +1,1694 @@
+{
+ "_notice": "BEST-EFFORT structural descriptor derived from the project's constraint files (ids/rects/cmds/accels are REAL) plus standard Win32 style defaults for control/dialog style bits (PROVISIONAL until diffed against the reference file). To reconcile: on a Windows box run 'python3 tools/analyze_mui.py <reference.mui> --templates ref.json' then 'python3 tools/build_resources.py --compare localization/templates/explorer.exe.templates.json ref.json'; reconcile structure only (never text).",
+ "menus": {
+  "205/lang:0409": {
+   "version": 0,
+   "levels": [
+    [
+     {
+      "flags": 144,
+      "cmd": 0,
+      "id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": true,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "flags": 0,
+      "cmd": 0,
+      "id": 0,
+      "text_meta": {
+       "len": 17,
+       "accel": "A",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "flags": 128,
+      "cmd": 0,
+      "id": 0,
+      "text_meta": {
+       "len": 28,
+       "accel": "C",
+       "used": true
+      },
+      "popup": false
+     }
+    ]
+   ]
+  },
+  "211/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 129,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": true,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 32755,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 10,
+       "accel": "r",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 32756,
+      "bResInfo": 128,
+      "help_id": 0,
+      "text_meta": {
+       "len": 13,
+       "accel": "x",
+       "used": true
+      },
+      "popup": false
+     }
+    ]
+   ]
+  },
+  "212/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 129,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": true,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6601,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 39,
+       "accel": "S",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 1,
+      "help_id": 0,
+      "text_meta": {
+       "len": 19,
+       "accel": "R",
+       "used": true
+      },
+      "popup": true,
+      "popup_level": 2
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6603,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 9,
+       "accel": "h",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6604,
+      "bResInfo": 128,
+      "help_id": 0,
+      "text_meta": {
+       "len": 4,
+       "accel": "x",
+       "used": true
+      },
+      "popup": false
+     }
+    ],
+    [
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 128,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": false
+     }
+    ]
+   ]
+  },
+  "213/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 129,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": true,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6701,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 12,
+       "accel": "S",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6702,
+      "bResInfo": 128,
+      "help_id": 0,
+      "text_meta": {
+       "len": 15,
+       "accel": "P",
+       "used": true
+      },
+      "popup": false
+     }
+    ]
+   ]
+  },
+  "6003/lang:0409": {
+   "version": 0,
+   "levels": [
+    [
+     {
+      "flags": 144,
+      "cmd": 0,
+      "id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": true,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "flags": 0,
+      "cmd": 128,
+      "id": 128,
+      "text_meta": {
+       "len": 17,
+       "accel": "n",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "flags": 128,
+      "cmd": 0,
+      "id": 0,
+      "text_meta": {
+       "len": 19,
+       "accel": "I",
+       "used": true
+      },
+      "popup": false
+     }
+    ]
+   ]
+  },
+  "12000/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 129,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": true,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 403,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 7,
+       "accel": "s",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 405,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 20,
+       "accel": "t",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 404,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 25,
+       "accel": "i",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 65493,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 19,
+       "accel": "R",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 65492,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 20,
+       "accel": "M",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 65491,
+      "bResInfo": 128,
+      "help_id": 0,
+      "text_meta": {
+       "len": 17,
+       "accel": "C",
+       "used": true
+      },
+      "popup": false
+     }
+    ]
+   ]
+  }
+ },
+ "dialogs": {
+  "6/lang:0409": {
+   "ex": true,
+   "help_id": null,
+   "ex_style": 0,
+   "style": 1342177352,
+   "rect": [
+    0,
+    0,
+    252,
+    218
+   ],
+   "menu": {
+    "kind": "null",
+    "value": null
+   },
+   "window_class": {
+    "kind": "null",
+    "value": null
+   },
+   "title": {
+    "len": 7,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 400,
+    "italic": 0,
+    "charset": 0,
+    "face": {
+     "kind": "string",
+     "value": "MS Shell Dlg"
+    }
+   },
+   "controls": [
+    {
+     "id": 1105,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      13,
+      18,
+      200,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 16,
+      "accel": "L"
+     }
+    },
+    {
+     "id": 1102,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      13,
+      32,
+      200,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 21,
+      "accel": "u"
+     }
+    },
+    {
+     "id": 1139,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      13,
+      46,
+      200,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 15,
+      "accel": "i"
+     }
+    },
+    {
+     "id": 65535,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      13,
+      63,
+      100,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 27,
+      "accel": "T"
+     }
+    },
+    {
+     "id": 1142,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1344339971,
+     "class": {
+      "kind": "atom",
+      "value": 133
+     },
+     "rect": [
+      117,
+      60,
+      110,
+      14
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 65535,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      13,
+      81,
+      100,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 16,
+      "accel": "b"
+     }
+    },
+    {
+     "id": 1143,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1344339971,
+     "class": {
+      "kind": "atom",
+      "value": 133
+     },
+     "rect": [
+      117,
+      78,
+      110,
+      14
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 65535,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177287,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      7,
+      238,
+      91
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 18,
+      "accel": null
+     }
+    },
+    {
+     "id": 65535,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      13,
+      113,
+      171,
+      16
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 72,
+      "accel": null
+     }
+    },
+    {
+     "id": 1140,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      188,
+      113,
+      50,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 12,
+      "accel": "C"
+     }
+    },
+    {
+     "id": 65535,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177287,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      102,
+      238,
+      34
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 17,
+      "accel": null
+     }
+    },
+    {
+     "id": 1144,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      13,
+      151,
+      220,
+      16
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 103,
+      "accel": null
+     }
+    },
+    {
+     "id": 1141,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      13,
+      171,
+      200,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 36,
+      "accel": "P"
+     }
+    },
+    {
+     "id": 1145,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177287,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      140,
+      238,
+      48
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 30,
+      "accel": null
+     }
+    },
+    {
+     "id": 1114,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242816,
+     "class": {
+      "kind": "string",
+      "name": "SysLink"
+     },
+     "rect": [
+      7,
+      200,
+      256,
+      8
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 38,
+      "accel": null
+     }
+    }
+   ]
+  },
+  "10/lang:0409": {
+   "ex": true,
+   "help_id": null,
+   "ex_style": 0,
+   "style": 1342177352,
+   "rect": [
+    0,
+    0,
+    252,
+    218
+   ],
+   "menu": {
+    "kind": "null",
+    "value": null
+   },
+   "window_class": {
+    "kind": "null",
+    "value": null
+   },
+   "title": {
+    "len": 8,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 400,
+    "italic": 0,
+    "charset": 0,
+    "face": {
+     "kind": "string",
+     "value": "MS Shell Dlg"
+    }
+   },
+   "controls": [
+    {
+     "id": 1106,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      7,
+      7,
+      223,
+      12
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 44,
+      "accel": null
+     }
+    },
+    {
+     "id": 1137,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1350631463,
+     "class": {
+      "kind": "string",
+      "name": "SysTreeView32"
+     },
+     "rect": [
+      7,
+      20,
+      236,
+      160
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 12,
+      "accel": null
+     }
+    },
+    {
+     "id": 1138,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1350631463,
+     "class": {
+      "kind": "string",
+      "name": "SysTreeView32"
+     },
+     "rect": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 5,
+      "accel": null
+     }
+    }
+   ]
+  },
+  "20/lang:0409": {
+   "ex": true,
+   "help_id": null,
+   "ex_style": 0,
+   "style": 2160591048,
+   "rect": [
+    0,
+    0,
+    272,
+    81
+   ],
+   "menu": {
+    "kind": "null",
+    "value": null
+   },
+   "window_class": {
+    "kind": "null",
+    "value": null
+   },
+   "title": {
+    "len": 17,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 400,
+    "italic": 0,
+    "charset": 0,
+    "face": {
+     "kind": "string",
+     "value": "MS Shell Dlg"
+    }
+   },
+   "controls": [
+    {
+     "id": 4610,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      62,
+      139,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 35,
+      "accel": "D"
+     }
+    },
+    {
+     "id": 1006,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      159,
+      60,
+      50,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 6,
+      "accel": "R"
+     }
+    },
+    {
+     "id": 5,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      215,
+      60,
+      50,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 6,
+      "accel": "I"
+     }
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      7,
+      51,
+      258,
+      1
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      7,
+      7,
+      21,
+      20
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 1007,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      34,
+      7,
+      224,
+      37
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 201,
+      "accel": null
+     }
+    }
+   ]
+  },
+  "23/lang:0409": {
+   "ex": true,
+   "help_id": null,
+   "ex_style": 0,
+   "style": 2160591048,
+   "rect": [
+    0,
+    0,
+    320,
+    137
+   ],
+   "menu": {
+    "kind": "null",
+    "value": null
+   },
+   "window_class": {
+    "kind": "null",
+    "value": null
+   },
+   "title": {
+    "len": 17,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 400,
+    "italic": 0,
+    "charset": 0,
+    "face": {
+     "kind": "string",
+     "value": "MS Shell Dlg"
+    }
+   },
+   "controls": [
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      48,
+      18,
+      256,
+      8
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 43,
+      "accel": null
+     }
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      48,
+      37,
+      256,
+      18
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 99,
+      "accel": null
+     }
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      14,
+      12,
+      20,
+      20
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 1,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242817,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      256,
+      112,
+      50,
+      16
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 5,
+      "accel": null
+     }
+    },
+    {
+     "id": 1009,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242816,
+     "class": {
+      "kind": "string",
+      "name": "SysLink"
+     },
+     "rect": [
+      48,
+      67,
+      256,
+      18
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 77,
+      "accel": null
+     }
+    },
+    {
+     "id": 1008,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      48,
+      93,
+      256,
+      18
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 46,
+      "accel": "N"
+     }
+    }
+   ]
+  },
+  "205/lang:0409": {
+   "ex": true,
+   "help_id": null,
+   "ex_style": 0,
+   "style": 1342177352,
+   "rect": [
+    0,
+    0,
+    252,
+    218
+   ],
+   "menu": {
+    "kind": "null",
+    "value": null
+   },
+   "window_class": {
+    "kind": "null",
+    "value": null
+   },
+   "title": {
+    "len": 10,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 400,
+    "italic": 0,
+    "charset": 0,
+    "face": {
+     "kind": "string",
+     "value": "MS Shell Dlg"
+    }
+   },
+   "controls": [
+    {
+     "id": 1134,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      7,
+      7,
+      170,
+      16
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 92,
+      "accel": null
+     }
+    },
+    {
+     "id": 1131,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      192,
+      4,
+      53,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 12,
+      "accel": "C"
+     }
+    },
+    {
+     "id": 65535,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      7,
+      35,
+      72,
+      8
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 20,
+      "accel": "b"
+     }
+    },
+    {
+     "id": 1133,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1344339971,
+     "class": {
+      "kind": "atom",
+      "value": 133
+     },
+     "rect": [
+      83,
+      32,
+      100,
+      14
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 1136,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      14,
+      68,
+      224,
+      10
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 61,
+      "accel": "p"
+     }
+    },
+    {
+     "id": 1135,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      14,
+      82,
+      224,
+      20
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 73,
+      "accel": "m"
+     }
+    },
+    {
+     "id": 300,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177287,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      55,
+      238,
+      50
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 7,
+      "accel": null
+     }
+    },
+    {
+     "id": 1116,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242816,
+     "class": {
+      "kind": "string",
+      "name": "SysLink"
+     },
+     "rect": [
+      7,
+      200,
+      256,
+      8
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 52,
+      "accel": null
+     }
+    }
+   ]
+  },
+  "1036/lang:0409": {
+   "ex": true,
+   "help_id": null,
+   "ex_style": 0,
+   "style": 1342177352,
+   "rect": [
+    0,
+    0,
+    251,
+    274
+   ],
+   "menu": {
+    "kind": "null",
+    "value": null
+   },
+   "window_class": {
+    "kind": "null",
+    "value": null
+   },
+   "title": {
+    "len": 20,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 400,
+    "italic": 0,
+    "charset": 0,
+    "face": {
+     "kind": "string",
+     "value": "MS Shell Dlg"
+    }
+   },
+   "controls": [
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      7,
+      7,
+      238,
+      16
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 80,
+      "accel": null
+     }
+    },
+    {
+     "id": 1123,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1350631463,
+     "class": {
+      "kind": "string",
+      "name": "SysTreeView32"
+     },
+     "rect": [
+      7,
+      26,
+      238,
+      169
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 17,
+      "accel": "t"
+     }
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177287,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      202,
+      238,
+      44
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 16,
+      "accel": null
+     }
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      14,
+      214,
+      191,
+      8
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 37,
+      "accel": "N"
+     }
+    },
+    {
+     "id": 1307,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1350639616,
+     "class": {
+      "kind": "atom",
+      "value": 129
+     },
+     "rect": [
+      211,
+      212,
+      27,
+      12
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 1305,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177318,
+     "class": {
+      "kind": "string",
+      "name": "msctls_updown32"
+     },
+     "rect": [
+      221,
+      212,
+      11,
+      12
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 4294967295,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177280,
+     "class": {
+      "kind": "atom",
+      "value": 130
+     },
+     "rect": [
+      14,
+      230,
+      191,
+      8
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 48,
+      "accel": "J"
+     }
+    },
+    {
+     "id": 1309,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1350639616,
+     "class": {
+      "kind": "atom",
+      "value": 129
+     },
+     "rect": [
+      211,
+      228,
+      27,
+      12
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 1308,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342177318,
+     "class": {
+      "kind": "string",
+      "name": "msctls_updown32"
+     },
+     "rect": [
+      221,
+      228,
+      11,
+      12
+     ],
+     "extra_hex": ""
+    },
+    {
+     "id": 1037,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242819,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      7,
+      253,
+      80,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 20,
+      "accel": "D"
+     }
+    },
+    {
+     "id": 1,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242817,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      140,
+      253,
+      50,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 2,
+      "accel": null
+     }
+    },
+    {
+     "id": 2,
+     "help_id": null,
+     "ex_style": 0,
+     "style": 1342242816,
+     "class": {
+      "kind": "atom",
+      "value": 128
+     },
+     "rect": [
+      194,
+      253,
+      50,
+      14
+     ],
+     "extra_hex": "",
+     "text": {
+      "len": 6,
+      "accel": null
+     }
+    }
+   ]
+  }
+ },
+ "accelerators": {
+  "251/lang:0409": [
+   {
+    "fVirt": 16,
+    "key": 115,
+    "cmd": 305
+   },
+   {
+    "fVirt": 3,
+    "key": 9,
+    "cmd": 41008
+   },
+   {
+    "fVirt": 7,
+    "key": 9,
+    "cmd": 41008
+   },
+   {
+    "fVirt": 11,
+    "key": 9,
+    "cmd": 41008
+   },
+   {
+    "fVirt": 15,
+    "key": 9,
+    "cmd": 41008
+   },
+   {
+    "fVirt": 3,
+    "key": 116,
+    "cmd": 41061
+   },
+   {
+    "fVirt": 3,
+    "key": 117,
+    "cmd": 41008
+   },
+   {
+    "fVirt": 19,
+    "key": 13,
+    "cmd": 413
+   },
+   {
+    "fVirt": 11,
+    "key": 90,
+    "cmd": 416
+   },
+   {
+    "fVirt": 3,
+    "key": 114,
+    "cmd": 41093
+   },
+   {
+    "fVirt": 19,
+    "key": 77,
+    "cmd": 419
+   }
+  ]
+ }
+}
