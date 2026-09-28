@@ -25,9 +25,8 @@ import struct
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                os.pardir, "tests"))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_HERE, os.pardir, os.pardir, "tests"))
 import pebuilder  # noqa: E402  (tests/pebuilder.py, local deterministic builder)
 
 # ---- msstyles property format ----------------------------------------------
