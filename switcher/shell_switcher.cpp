@@ -670,7 +670,9 @@ static void MenuProbe(HWND hwnd, BOOL headless) {
         lstrcpyW(out, L"7explorer-menudump.txt");
     }
 
-    FILE* f = _wfopen(out, L"w, ccs=UTF-8");
+    FILE* f = NULL;
+    if (_wfopen_s(&f, out, L"w, ccs=UTF-8") != 0)
+        f = NULL;
     if (f) {
         WCHAR own[MAX_PATH * 2];
         DWORD pid = 0;
