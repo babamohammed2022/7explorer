@@ -224,6 +224,35 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
   - Uso: vedi sezione nel README radice / `switcher/README.md`.
 - Bootstrap, pipeline risorse, wrapper e mod Windhawk **immodificati**.
 
+## Update 2026-09-28 (v0.0.3-test9)
+
+- **Tema Win7-like 100% AUTOSUFFICIENTE, DISEGNATO DA ZERO**: nessun file
+  richiesto all'utente, nessun asset Microsoft, nessun download.
+  - `tools/theme/` genera un `.msstyles` originale del progetto (formato
+    ricostruito via reverse-engineering strutturale del formato: CMAP a
+    separatore singolo + regione riservata `documentation/sizevariant.*/
+    colorvariant.*/globals/sysmetrics`, VMAP/RMAP/BCMAP esatti, record
+    proprietà verificati contro il parser uxtheme reale — accettato:
+    `GetThemeDefaults=S_OK` in CI, unsigned).
+  - Lo stile è volutamente **molto simile a Win7** (gradiente vetro scuro
+    sulla taskbar 40px, menu chiari con selezione blu, StartPanel
+    bianco/azzurrino, Segoe UI 9pt nei record FONT reali — palette e
+    metriche sono authoring originale, non valori Microsoft).
+  - Il blob è **embedded nella `wrp64.dll`** (risorsa RCDATA, 12,8 KB):
+    al primo avvio viene auto-estratto in
+    `%LocalAppData%\7explorer\theme\aero.msstyles` (se non presente) e
+    caricato dal percorso upstream esistente. Se il sistema non lo
+    accetta, **fallback silenzioso al look precedente** — nessuna
+    regressione, nessun prompt. Diagnostica (senza interazione utente) su
+    `%LocalAppData%\7explorer\theme.log`, alfine per segnalazioni GitHub.
+  - Gate CI extra: blob rigenerato byte-per-byte da sorgente ad ogni run
+    (riproducibilità garantita).
+- Sonda CI `tools/theme/probe/ThemeProbe.exe` (solo dev, non rilasciata):
+  matrice COMPLETA di decodifica (carve/swap/analyze) documentata in
+  `tools/theme/`.
+- Menu taskbar, "Help and Support" e resto del bootstrap **immodificati**
+  rispetto a test8.
+
 ## Uso
 
 1. scaricare `ex7selfcontained.exe` e `wrp64.dll` nella stessa cartella
