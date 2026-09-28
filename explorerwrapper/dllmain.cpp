@@ -8,6 +8,7 @@
 
 #include "util.h"
 #include "common.h"
+#include <intrin.h>
 #include "forwards.h"
 #include "StartMenuResolver.h"
 #include "TrayObject.h"
@@ -297,6 +298,86 @@ void ModifyDesktopHwnd()
 	}
 }
 
+// ---------------------------------------------------------------------
+// 7explorer fork: self-contained "fake explorer path".
+//
+// The original setup relies on the Windhawk mod "ex7-fake-explorer-path"
+// so that explorer.exe's own GetModuleFileNameW(NULL, ...) calls report
+// %SystemRoot%\explorer.exe (several code paths assume that). Since
+// wrp64.dll is already loaded inside the explorer process by the import
+// patch, we apply the same spoof here — no Windhawk required.
+//
+// Precision guard: only call sites INSIDE the main executable image
+// (explorer.exe itself) receive the fake path. Calls from this DLL or
+// other modules keep the real answer, so wrapper code that resolves
+// orb/theme paths from the real exe location is not confused (the
+// Windhawk mod spoofed the answer for the whole process).
+// ---------------------------------------------------------------------
+typedef DWORD (WINAPI *GetModuleFileNameW_t)(HMODULE, LPWSTR, DWORD);
+static GetModuleFileNameW_t GMFN_SpoofOrig = NULL;
+static WCHAR g_fakeExePath[MAX_PATH * 2] = { 0 };
+static DWORD g_fakeExePathLen = 0;
+
+static __declspec(noinline) DWORD WINAPI GetModuleFileNameW_Spoof(
+	HMODULE hModule, LPWSTR lpFilename, DWORD nSize)
+{
+	if (hModule == NULL && g_fakeExePathLen)
+	{
+		HMODULE caller = NULL;
+		if (GetModuleHandleExW(
+				GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+				GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+				(LPCWSTR)_ReturnAddress(), &caller) &&
+			caller == GetModuleHandleW(NULL))
+		{
+			if (!lpFilename || nSize == 0)
+			{
+				SetLastError(ERROR_INSUFFICIENT_BUFFER);
+				return 0;
+			}
+			if (nSize > g_fakeExePathLen)
+			{
+				memcpy(lpFilename, g_fakeExePath,
+				       (g_fakeExePathLen + 1) * sizeof(WCHAR));
+				return g_fakeExePathLen;
+			}
+			memcpy(lpFilename, g_fakeExePath,
+			       (nSize - 1) * sizeof(WCHAR));
+			lpFilename[nSize - 1] = L'\0';
+			SetLastError(ERROR_INSUFFICIENT_BUFFER);
+			return nSize;
+		}
+	}
+	return GMFN_SpoofOrig(hModule, lpFilename, nSize);
+}
+
+static void HookModuleFileNameSpoof(void)
+{
+	// Only inside an explorer.exe process.
+	WCHAR realPath[MAX_PATH * 2] = { 0 };
+	DWORD n = GetModuleFileNameW(NULL, realPath, MAX_PATH * 2);
+	if (n == 0) return;
+	const WCHAR suffix[] = L"\\explorer.exe";
+	size_t rl = wcslen(realPath), sl = _countof(suffix) - 1;
+	if (rl <= sl || lstrcmpiW(realPath + (rl - sl), suffix) != 0) return;
+
+	// Fake path: %SystemRoot%\explorer.exe. Already there -> nothing to do.
+	WCHAR sysroot[MAX_PATH];
+	DWORD got = GetEnvironmentVariableW(L"SystemRoot", sysroot, MAX_PATH);
+	if (got == 0 || got >= MAX_PATH)
+		GetWindowsDirectoryW(sysroot, MAX_PATH);
+	wsprintfW(g_fakeExePath, L"%s\\explorer.exe", sysroot);
+	if (lstrcmpiW(realPath, g_fakeExePath) == 0) return;
+	g_fakeExePathLen = (DWORD)wcslen(g_fakeExePath);
+
+	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
+	if (!kb) return;
+	FARPROC fp = GetProcAddress(kb, "GetModuleFileNameW");
+	if (!fp) return;
+	MH_CreateHook((void*)fp, (void*)GetModuleFileNameW_Spoof,
+	              (void**)&GMFN_SpoofOrig);
+}
+
 void HookShell32();
 void HookAPIs() // largely a legacy function now
 {
@@ -334,6 +415,9 @@ void HookAPIs() // largely a legacy function now
 
 	// Handle custom start orb feature
 	HookLoadImageForSizeAndFont();
+
+	// 7explorer fork: self-contained fake path (replaces the Windhawk mod)
+	HookModuleFileNameSpoof();
 
 	// Enable MinHook hooks at the end
 	MH_EnableHook(MH_ALL_HOOKS);
@@ -480,6 +564,30 @@ void InitPinnedListHack()
 	}
 }
 
+// ---------------------------------------------------------------------
+// 7explorer fork: per-process UI language override for the private
+// explorer, selected by the shell switcher at launch time through the
+// EX7_UI_LANG environment variable (e.g. "it-IT" / "en-US"). Registry-
+// free and fully reversible (only this process's environment). Without
+// the variable, normal system MUI resolution applies.
+// ---------------------------------------------------------------------
+static void ApplyPerProcessUILanguage()
+{
+	WCHAR lang[32];
+	DWORD n = GetEnvironmentVariableW(L"EX7_UI_LANG", lang, 31);
+	if (n == 0 || n >= 31)
+		return;
+	// pcszzList double-NUL terminated: "<lang>;en-US "
+	WCHAR list[64];
+	ZeroMemory(list, sizeof(list));
+	lstrcpyW(list, lang);
+	size_t rl = wcslen(list);
+	list[rl] = L';';
+	lstrcpyW(list + rl + 1, L"en-US");
+	ULONG num = 2;
+	SetProcessPreferredUILanguages(MUI_LANGUAGE_NAME, list, &num);
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule,
 	DWORD  ul_reason_for_call,
 	LPVOID lpReserved)
@@ -504,13 +612,16 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			InitPinnedListHack();
 		}*/
 
+		ApplyPerProcessUILanguage(); // 7explorer fork: EX7_UI_LANG override
+
 		CreateShellFolder(); // Fix shell folder for 1607+...
 		EnsureWindowColorization(); // Correct colorization enablement setting for Win10/11
 		FirstRunCompatibilityWarning(); // Warn users on Windows 11 24H2+ and Server 2022 of potential problems
 		FirstRunPrereleaseWarning(); // Warn users if this is a pre-release build that this is the case on first run ONLY
 		ThemeHandlesInit(); // Basically start the inactive theme management process
 
-		dbgprintf(L"Dll Attach\n");
+	
+	dbgprintf(L"Dll Attach\n");
 
 		// Ittr: Load user configuration from the registry, important that we do this first before applying API hooks
 		InitializeConfiguration();

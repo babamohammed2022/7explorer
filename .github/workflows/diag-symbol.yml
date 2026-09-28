@@ -1,0 +1,75 @@
+name: diag-symbol-server
+
+# Diagnostica ONE-SHOT: caratterizza cosa serve davvero il symbol server per
+# il percorso explorer.exe di Win7 SP1 x64 al variare di user-agent, e verifica
+# che il contenuto scaricato sia il PE atteso. Risultati nel branch
+# ci-logs/diag-<run>. Nessun file Microsoft viene conservato.
+on:
+  push:
+    branches: ["arena/**", "ci-logs/**"]
+    paths: [".github/workflows/diag-symbol.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diag:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe explorer.exe.mui on the symbol server
+        shell: cmd
+        run: |
+          echo --- mui probe --- > ci-logs\mui-probe.txt
+          for %%I in (6000 5600 5800 8000 A000 C000 10000) do (
+            curl.exe -s -L -o work\mui-%%I.bin "https://msdl.microsoft.com/download/symbols/explorer.exe.mui/4A5BC954%%I/explorer.exe.mui" -w "id%%I code=%%{http_code} size=%%{size_download}" >> ci-logs\mui-probe.txt 2>&1
+            echo. >> ci-logs\mui-probe.txt
+            if exist work\mui-%%I.bin (for %%F in (work\mui-%%I.bin) do echo file%%I %%~zF bytes >> ci-logs\mui-probe.txt)
+          )
+          powershell -NoProfile -Command "Get-ChildItem work\mui-*.bin -ErrorAction SilentlyContinue | ForEach-Object { $h=(Get-FileHash $_.FullName -Algorithm SHA256).Hash; Add-Content ci-logs\mui-probe.txt ($_.Name + ' ' + $h) }"
+
+      - name: Probe symbol server with different user agents
+        continue-on-error: true
+        shell: cmd
+        run: |
+          mkdir work
+          echo === probe run %GITHUB_RUN_ID% > ci-logs\diag-probe.txt
+          for %%U in ("curl-default" "-" "Microsoft-Symbol-Server/6.3" "MSDL-PROD") do (
+            setlocal enabledelayedexpansion
+            set UA=%%~U
+            if "!UA!"=="curl-default" (set AOPT=) else (set AOPT=-A "!UA!")
+            curl.exe -L -s !AOPT! -o work\probe-!UA:-=_!.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"
+            powershell -NoProfile -Command "$h=(Get-FileHash -Algorithm SHA256 work\probe-!UA:-=_!.exe).Hash.ToLower(); $s=(Get-Item work\probe-!UA:-=_!.exe).Length; Add-Content ci-logs\diag-probe.txt \"UA=!UA! size=$s sha256=$h\""
+            endlocal
+          )
+          echo === headers of first probe >> ci-logs\diag-probe.txt
+          python tools\analyze_mui.py work\probe-curl_default.exe --dump-headers >> ci-logs\diag-probe.txt 2>&1
+          echo === signature status >> ci-logs\diag-probe.txt
+          powershell -NoProfile -Command "$sig = Get-AuthenticodeSignature work\probe-curl_default.exe; Add-Content ci-logs\diag-probe.txt "sig: $($sig.Status) | $($sig.SignerCertificate.Subject)"" >> ci-logs\diag-probe.txt 2>&1
+          echo === byte-diff between UA variants >> ci-logs\diag-probe.txt
+          fc /b work\probe-curl_default.exe work\probe-Microsoft-Symbol-Server_6.3.exe >> ci-logs\diag-probe.txt 2>&1 || echo files differ >> ci-logs\diag-probe.txt
+      - name: Signature status of the probe
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature work\probe-curl_default.exe
+          "sig status: $($sig.Status) / $($sig.SignerCertificate.Subject)" | Add-Content ci-logs\diag-probe.txt
+
+      - name: Commit diag results
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "ci@localhost"
+          git config user.name "ci-log-bot"
+          $br = "ci-logs/diag-" + $env:GITHUB_RUN_ID
+          git checkout -b $br 2>$null
+          git add -f ci-logs
+          git commit -m "diag probe for run $env:GITHUB_RUN_ID" -m "(auto)"
+          git push -f origin $br

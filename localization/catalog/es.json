@@ -1,0 +1,15 @@
+{
+  "language": {
+    "id": "es",
+    "mui_name": "es-ES",
+    "lcid": "0x0C0A",
+    "name": "español",
+    "needs_native_review": true
+  },
+  "strings": {
+    "5381": "Agregar al menú Inic&io",
+    "5382": "Quitar del menú Inic&io",
+    "5384": "Agrega un acceso directo a este elemento en el menú Inicio",
+    "5385": "Quita el acceso directo a este elemento del menú Inicio"
+  }
+}

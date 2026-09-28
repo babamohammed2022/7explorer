@@ -3,6 +3,103 @@
 #include "pathcch.h"
 #include "OSVersion.h"
 #include "RegistryManager.h"
+#include "resource.h"
+#include "shlobj.h"
+#include <stdarg.h>
+
+// Extracts the embedded, self-contained 7explorer theme (generated at
+// build time from our own assets) to %LocalAppData%\7explorer\theme
+// if the file is not present yet. Returns true when the theme file
+// exists afterwards. No user interaction, no downloads, silent.
+// Theme diagnostics go to OutputDebugString AND %LocalAppData%\7explorer
+// \theme.log so users can attach the log to bug reports without any
+// extra steps. Append-only, tiny size guard.
+static void ThemeLog(const wchar_t *fmt, ...)
+{
+	WCHAR msg[512];
+	va_list argp;
+	va_start(argp, fmt);
+	int cnt = wvsprintfW(msg, fmt, argp);
+	va_end(argp);
+	if (cnt <= 0) return;
+	OutputDebugStringW(msg);
+	WCHAR szBase[MAX_PATH];
+	if (FAILED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, szBase)))
+		return;
+	WCHAR szDir[MAX_PATH];
+	wsprintfW(szDir, L"%s\\7explorer", szBase);
+	CreateDirectoryW(szDir, NULL);
+	WCHAR szLog[MAX_PATH];
+	wsprintfW(szLog, L"%s\\theme.log", szDir);
+	WIN32_FILE_ATTRIBUTE_DATA info;
+	if (GetFileAttributesExW(szLog, GetFileExInfoStandard, &info))
+	{
+		// rotate at 256 KB
+		if (info.nFileSizeLow > (256 << 10))
+			DeleteFileW(szLog);
+	}
+	HANDLE h = CreateFileW(szLog, FILE_APPEND_DATA, FILE_SHARE_READ, NULL,
+		OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (h == INVALID_HANDLE_VALUE) return;
+	SYSTEMTIME st; GetLocalTime(&st);
+	WCHAR line[560];
+	int len = wsprintfW(line, L"[%04u-%02u-%02u %02u:%02u:%02u] %s\r\n",
+		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, msg);
+	DWORD written;
+	// convert to UTF-8 for portability
+	int n = WideCharToMultiByte(CP_UTF8, 0, line, len, NULL, 0, NULL, NULL);
+	CHAR buf8[1200];
+	if (n > 0 && n < (int)sizeof(buf8))
+	{
+		WideCharToMultiByte(CP_UTF8, 0, line, len, buf8, n, NULL, NULL);
+		WriteFile(h, buf8, n, &written, NULL);
+	}
+	CloseHandle(h);
+}
+
+static BOOL EnsureEmbeddedThemeFile(wchar_t *szOut, DWORD cchOut)
+{
+	WCHAR szBase[MAX_PATH];
+	if (FAILED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, szBase)))
+		return FALSE;
+	WCHAR szDir[MAX_PATH];
+	wsprintfW(szDir, L"%s\\7explorer", szBase);
+	CreateDirectoryW(szDir, NULL);
+	wsprintfW(szDir, L"%s\\7explorer\\theme", szBase);
+	CreateDirectoryW(szDir, NULL);
+	wsprintfW(szOut, L"%s\\aero.msstyles", szDir);
+
+	// already extracted? keep user modifications if any
+	DWORD attr = GetFileAttributesW(szOut);
+	if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
+		return TRUE;
+
+	HMODULE hSelf = NULL;
+	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+		GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		(LPCWSTR)&EnsureEmbeddedThemeFile, &hSelf);
+	if (!hSelf)
+		hSelf = GetModuleHandleW(L"explorerwrapper.dll");
+	if (!hSelf)
+		return FALSE;
+	HRSRC hRes = FindResourceW(hSelf, MAKEINTRESOURCEW(IDR_BUILTIN_THEME),
+		RT_RCDATA);
+	if (!hRes) return FALSE;
+	HGLOBAL hData = LoadResource(hSelf, hRes);
+	if (!hData) return FALSE;
+	DWORD size = SizeofResource(hSelf, hRes);
+	void *blob = LockResource(hData);
+	if (!blob || !size) return FALSE;
+	HANDLE hFile = CreateFileW(szOut, GENERIC_WRITE, 0, NULL,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) return FALSE;
+	DWORD written = 0;
+	WriteFile(hFile, blob, size, &written, NULL);
+	CloseHandle(hFile);
+	ThemeLog(L"7explorer: extracted embedded theme to %s (%u bytes)\n",
+		szOut, written);
+	return written == size;
+}
 
 decltype(GetThemeDefaults) GetThemeDefaults = 0;
 decltype(LoaderLoadTheme) LoaderLoadTheme = 0;
@@ -57,26 +154,91 @@ void ThemeManagerInitialize()
 	if (*backslash == L'\\')
 		*backslash = L'\0';
 
+	// --- Theme selection policy --------------------------------------------
+	// Priority: <exedir>\config.ini [Theme] Mode=... Name=...
+	//   Mode=Fallback  -> always the embedded, self-contained theme
+	//   Mode=Custom    -> <exedir>\theme\<Name>.msstyles first, embedded
+	//                      on any failure
+	//   Mode=Auto (default) -> legacy behaviour: registry "Theme" name (or
+	//                      "aero") from <exedir>\theme\ if the file exists,
+	//                      otherwise / on failure the embedded theme.
+	// The embedded theme is ALWAYS available as final fallback. We never
+	// touch uxtheme.dll, themeui.dll or any other system file.
+	WCHAR szMode[32];
+	WCHAR szIni[MAX_PATH * 2];
+	wsprintfW(szIni, L"%s\\config.ini", szExeDir);
+	GetPrivateProfileStringW(L"Theme", L"Mode", L"Auto", szMode,
+		ARRAYSIZE(szMode), szIni);
+
+	enum class ThemeMode { Auto, Fallback, Custom };
+	ThemeMode mode = ThemeMode::Auto;
+	if (!lstrcmpiW(szMode, L"Fallback"))
+		mode = ThemeMode::Fallback;
+	else if (!lstrcmpiW(szMode, L"Custom"))
+		mode = ThemeMode::Custom;
+	// "Windows7"/"Windows81" are accepted aliases for Custom themes
+	else if (!lstrcmpiW(szMode, L"Windows7") || !lstrcmpiW(szMode, L"Windows81"))
+		mode = ThemeMode::Custom;
+
 	WCHAR szThemeName[MAX_PATH];
-	LSTATUS res = g_registry.QueryValue(L"Theme", (LPBYTE)szThemeName, sizeof(szThemeName));
-	if (!*szThemeName || ERROR_SUCCESS != res)
-		StringCchCopyW(szThemeName, MAX_PATH, L"aero");
+	szThemeName[0] = L'\0';
+	GetPrivateProfileStringW(L"Theme", L"Name", L"", szThemeName,
+		ARRAYSIZE(szThemeName), szIni);
+	if (!*szThemeName)
+	{
+		LSTATUS res = g_registry.QueryValue(L"Theme", (LPBYTE)szThemeName,
+			sizeof(szThemeName));
+		if (!*szThemeName || ERROR_SUCCESS != res)
+			StringCchCopyW(szThemeName, MAX_PATH, L"aero");
+	}
 
-	dbgprintf(L"theme name: %s", szThemeName);
+	ThemeLog(L"theme mode: %s, name: %s\n", szMode, szThemeName);
 
-	WCHAR szThemePath[MAX_PATH * 2];
-	wsprintfW(
-		szThemePath,
-		L"%s\\theme\\%s.msstyles",
-		szExeDir,
-		szThemeName
-	);
+	auto TryEmbeddedTheme = [&]() -> HRESULT
+	{
+		WCHAR szEmbedded[MAX_PATH];
+		if (EnsureEmbeddedThemeFile(szEmbedded, ARRAYSIZE(szEmbedded)))
+			return LoadThemeFile(szEmbedded);
+		ThemeLog(L"embedded theme extraction FAILED\n");
+		return E_FAIL;
+	};
 
-	dbgprintf(L"theme path: %s", szThemePath);
+	HRESULT hr;
+	if (mode == ThemeMode::Fallback)
+	{
+		hr = TryEmbeddedTheme();
+	}
+	else
+	{
+		WCHAR szThemePath[MAX_PATH * 2];
+		wsprintfW(
+			szThemePath,
+			L"%s\\theme\\%s.msstyles",
+			szExeDir,
+			szThemeName
+		);
 
-	auto hr = LoadThemeFile(szThemePath);
+		DWORD attr = GetFileAttributesW(szThemePath);
+		BOOL fileExists = (attr != INVALID_FILE_ATTRIBUTES &&
+			!(attr & FILE_ATTRIBUTE_DIRECTORY));
+		if (mode == ThemeMode::Custom || fileExists)
+		{
+			hr = LoadThemeFile(szThemePath);
+			if (hr != S_OK)
+			{
+				ThemeLog(L"LOADTHEMEFILE %x for %s, falling back to embedded\n",
+					hr, szThemePath);
+				hr = TryEmbeddedTheme();
+			}
+		}
+		else
+		{
+			hr = TryEmbeddedTheme();
+		}
+	}
+
 	if (hr != S_OK)
-		dbgprintf(L"LOADTHEMEFILE FAILED %x\n", hr);
+		ThemeLog(L"LOADTHEMEFILE FAILED %x (keeping classic theme)\n", hr);
 }
 
 HRESULT LoadThemeFile(wchar_t *Path)
@@ -97,6 +259,7 @@ HRESULT LoadThemeFile(wchar_t *Path)
 	WCHAR szColor[MAX_PATH];
 	WCHAR szSize[MAX_PATH];
 
+	ThemeLog(L"LoadThemeFile: %s\n", Path);
 	hr = GetThemeDefaults(
 		Path,
 		szColor,
@@ -106,6 +269,7 @@ HRESULT LoadThemeFile(wchar_t *Path)
 	);
 	if (hr != S_OK)
 	{
+		ThemeLog(L"GetThemeDefaults failed %x\n", hr);
 		if (g_loadedTheme)
 		{
 			if (g_loadedTheme->sharableSectionView)
@@ -164,6 +328,7 @@ HRESULT LoadThemeFile(wchar_t *Path)
 		return hr;
 	}
 
+	ThemeLog(L"theme sections loaded OK\n");
 	memcpy(g_loadedTheme->header, "thmfile", 7);
 	memcpy(g_loadedTheme->end, "end", 3);
 	g_loadedTheme->sharableSectionView = MapViewOfFile(hSharable, 4, 0, 0, 0);

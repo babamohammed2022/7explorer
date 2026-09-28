@@ -5,6 +5,45 @@
 
 explorer7 is a **wrapper library** that allows Windows 7's explorer.exe to run properly on modern Windows versions, aiming to resurrect the original Windows 7 shell experience.
 
+> **This fork — self-contained bootstrap + progetto di localizzazione integrato**
+> This fork adds `installer/ex7selfcontained` (download-verifica-patch-localizza
+> in una sola esecuzione) e una **pipeline di risorse generate dal progetto**:
+> tutte le risorse UI della copia privata (stringhe, menu, dialoghi,
+> acceleratori — en-US + it-IT) sono **prodotte dal repository**
+> (`localization/catalog` + `localization/templates`
+> → `tools/build_resources.py` → blob validati) e iniettate con riscrittura
+> atomica della tabella risorse. **Non serve nessun `explorer.exe.mui`** né
+> alcun altro file Microsoft oltre al singolo `explorer.exe` scaricato dal
+> symbol server. Dettagli: `installer/ex7selfcontained/README.md`.
+
+> **Runtime shell switcher (test tool) — `switcher/`**
+> Small native Win32 GUI (`CreateWindowExW` + standard controls, static CRT)
+> to swap the **running** shell at runtime between `%SystemRoot%\explorer.exe`
+> and the private Explorer7 — no logout/reboot, no registry, no Winlogon.
+> Identifies the shell via the owner of `GetShellWindow()` +
+> `QueryFullProcessImageNameW` (immune to the Windhawk path spoof): only that
+> process is stopped (graceful `WM_QUIT`, terminate after timeout). Build:
+> `msbuild switcher\shell_switcher.vcxproj`.
+
+### Quick test (all-in-one ZIP, recommended)
+
+1. Download **`ex7-test-bundle.zip`** from the test release and extract it
+   into a single folder, e.g. `C:\ex7test`.
+2. Run `ex7selfcontained.exe` from that folder → it produces the patched +
+   localized `explorer.exe` right there (side-by-side with the switcher).
+3. Start `7explorer-shell-switcher.exe` — it finds the private explorer
+   automatically (own folder first; `EX7_EXPLORER_PATH` honored; Browse…
+   available).
+4. Select **Windows 7 Explorer** → **Switch** → the Windows 7 taskbar
+   replaces the Windows 11 taskbar immediately. Since test4 the
+   `%SystemRoot%\explorer.exe` path-spoof is **built into `wrp64.dll`** —
+   no Windhawk install needed for the runtime switch (Windhawk mods kept as
+   source/optional, `windhawk/`).
+5. Select **Native Windows Explorer** → **Switch** → back to the Win11 shell.
+   No logout, no registry. Optional: the checkbox "Start Windows 7 Explorer
+   automatically at logon" uses a plain link in the user Startup folder
+   (file-based, non invasivo, rimovibile).
+
 <details>
   <summary>Screenshots</summary>
 
@@ -156,7 +195,36 @@ These options are located under `HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Cu
 | AlphaValue | REG_DWORD | For use alongside OverrideAlpha, to specify a 2-digit hex code for the colorization system to use. | **0x6B** |
 | UseTaskbarPinning | REG_DWORD | Determines whether taskbar pinning functionality is available to the user. When set to 0, pins will not be loaded and cannot be modified from jumplists. | **1** |
 
-## Theme support
+## Theme support (7explorer fork)
+
+This fork adds a **self-contained theming layer** on top of the upstream
+mechanism, while keeping the classic option below untouched:
+
+- **Embedded fallback theme**: `wrp64.dll` carries a project-authored,
+  Windows-7-like `.msstyles` (drawn from scratch, no Microsoft assets).
+  On first run it is extracted automatically to
+  `%LocalAppData%\7explorer\theme\aero.msstyles` and used whenever no
+  user theme is installed or the chosen theme fails to load. **No
+  download, no user file, no prompt — ever.**
+- **`config.ini` next to `explorer.exe`** selects the mode (see
+  `docs/config.ini.example`):
+  - `Mode=Auto` (default): user theme from `theme\` if present, else
+    embedded;
+  - `Mode=Fallback`: always the embedded theme;
+  - `Mode=Custom` / `Mode=Windows7` / `Mode=Windows81`: load the named
+    `.msstyles` from `theme\` (keep the upstream folder layout below),
+    automatic fallback to the embedded theme on any error;
+  - `Name=<file>` picks the theme file base name (default `aero`, the
+    registry `Theme` value is honoured when `Name` is omitted).
+- The shell never becomes unusable: if every theme load fails, 7explorer
+  silently keeps the classic look (identical to previous builds).
+- Diagnostics: `%LocalAppData%\7explorer\theme.log` (attach it to bug
+  reports; no extra steps needed).
+- Nothing on the system is modified: no `uxtheme.dll`/`themeui.dll`
+  patching, no changes to the Windows theme configuration — everything
+  happens inside the 7explorer directory/process.
+
+### Upstream theme files (optional)
 
 explorer7 allows any theme from Windows Vista to Windows 8.0 to be used for the start menu and taskbar. If applicable, you **must** include the "en-US" folder that comes along with your .msstyles file, otherwise the theme won't be applied. Themes from Windows 8.1 and later do work, but will not have the proper classes for the start menu, an issue which cannot currently be resolved.
 
@@ -238,6 +306,38 @@ explorer7/
 **NOTE 2:** If an image is larger than what the system expects, the image might clip out. Use the example layout as a reference! For more information, you can also check out this guide: https://www.sevenforums.com/tutorials/73616-how-create-custom-start-orb-image.html
 
 **NOTE 3:** If you're looking to create high-quality orbs (32-bit bitmaps), you could use a tool to convert your images from other formats. Check out [Pixelformer](https://www.qualibyte.com/pixelformer/).
+
+## Localized resources without any `.mui` (v0.0.3, self-contained installer)
+
+The private copy of explorer.exe that `installer/ex7selfcontained` prepares
+is localized with **resources generated by this project** — STRINGTABLE,
+MENU, DIALOGEX and ACCELERATOR payloads are built by
+`tools/build_resources.py` from:
+
+- `localization/catalog/{en,it}.json` — the project's own texts
+  (**en-US = fallback, always present; it-IT**; other UI languages planned,
+  the structure is language-agnostic: adding a catalog file adds the
+  language);
+- `localization/templates/explorer.exe.templates.json` — the full
+  **structural** descriptor (resource IDs, control IDs, styles, rects,
+  class atoms, command IDs, virtual keys). No Microsoft text anywhere in
+  the repo.
+
+At install time the installer enumerates all existing resources of the copy
+and **rewrites the whole resource table atomically**
+(`BeginUpdateResource(deleteExisting=TRUE)`), replacing/adding our payloads
+per language and parking the old `MUI` marker as `CUI`. No `.mui` file is
+needed, requested, read or downloaded — `EX7_REFERENCE_MUI` and the old
+transplant code were removed after the v0.0.2 real-world failures (root
+cause: `localization/ROOT_CAUSE_v0.0.3.md`).
+
+**Licensing note**: catalogs and templates are project-generated original
+data; the only Microsoft artifact ever involved is the pristine
+`explorer.exe` downloaded from Microsoft's symbol server at install time
+(never redistributed by us, never present in release assets). If a resource
+proves impossible to reconstruct safely, we document it — we do not
+silently guess (see `localization/templates/*._notice` and the `--compare`
+mode of `tools/build_resources.py`).
 
 ## Development plan
 
