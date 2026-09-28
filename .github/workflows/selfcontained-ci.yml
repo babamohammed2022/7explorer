@@ -91,6 +91,21 @@ jobs:
           $lines | Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
 
+      - name: Commit build logs on failure (readable from the dev sandbox)
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "ci@localhost"
+          git config user.name "ci-log-bot"
+          $br = "ci-logs/sc-" + $env:GITHUB_RUN_ID
+          Copy-Item msbuild-*.log ci-logs\ -Force -ErrorAction SilentlyContinue
+          git checkout -b $br 2>$null; git checkout $br 2>$null
+          git add ci-logs
+          git commit -m "build logs for run $env:GITHUB_RUN_ID" -m "(auto)"
+          git push -f origin $br
+
       - name: Upload artifacts (NO Microsoft binaries)
         if: always()  # anche in caso di fallimento: servono i log di build
         uses: actions/upload-artifact@v4
