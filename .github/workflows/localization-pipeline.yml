@@ -10,6 +10,8 @@ on:
       - tools/verify_catalog.py
       - installer/ex7selfcontained/**
       - localization/**
+      - switcher/**
+      - windhawk/**
 permissions:
   contents: write
 jobs:
