@@ -305,21 +305,20 @@ static void AnalyzeVariant(const uint8_t* v, DWORD size)
 
 static void AnalyzeCmap(const uint8_t* c, DWORD size)
 {
-    wprintf(L"   CMAP %lu bytes; class %d: '", (unsigned long)size, 0);
-    int cls = 0, start = 0;
-    for (DWORD i = 0; i + 1 < size && cls < 12; i += 2) {
+    // class names are functional identifiers (interface ids); print them
+    wprintf(L"   CMAP %lu bytes; first 24 class names:\n", (unsigned long)size);
+    int cls = 0; DWORD start = 0;
+    for (DWORD i = 0; i + 1 < size; i += 2) {
         if (c[i] == 0 && c[i + 1] == 0) {
-            if (i - (DWORD)start > 2) {
-                // identifiers only (class NAMES — functional interface ids)
-                wprintf(L"%.*S' %d:'", (int)((i - start) / 2),
-                        (const char*)(c + start), ++cls);
-                if (cls >= 12) break;
-                wprintf(L"'");
-            }
-            start = (int)i + 2;
+            int wlen = (int)((i - start) / 2);
+            if (wlen > 0 && cls < 24)
+                wprintf(L"     [%d] '%.*ls'\n", cls, wlen,
+                        (const WCHAR*)(c + start));
+            cls++;
+            start = i + 2;
         }
     }
-    wprintf(L"' ...\n");
+    wprintf(L"     (total classes: %d)\n", cls);
 }
 
 static void AnalyzeOne(LPCWSTR path)
