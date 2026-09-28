@@ -22,7 +22,7 @@ jobs:
       - name: Run UpdateResource experiments
         shell: pwsh
         run: |
-          {
+          & {
             try {
               Add-Type -Path ci\updres\Program.cs -ErrorAction Stop
               Write-Host "Add-Type OK"
