@@ -35,7 +35,10 @@ jobs:
 
       - name: Compile ThemeProbe
         shell: cmd
-        run: cl /nologo /MT /W4 /O2 tools\theme\probe\ThemeProbe.cpp /Fe:work\ThemeProbe.exe
+        run: |
+          cl /nologo /MT /W4 /O2 tools\theme\probe\ThemeProbe.cpp /Fe:work\ThemeProbe.exe > ci-logs\compile.txt 2>&1
+          if errorlevel 1 (type ci-logs\compile.txt & exit /b 1)
+          type ci-logs\compile.txt
 
       - name: Run probe (own unsigned themes + system aero as control)
         shell: cmd
