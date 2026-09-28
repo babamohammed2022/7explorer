@@ -167,7 +167,9 @@ jobs:
           gh release create "$env:TAG" --prerelease `
             --title "ex7 self-contained bootstrap - test $env:TAG" `
             --notes-file docs/RELEASE_NOTES_test.md `
-            wrp64.dll ex7selfcontained.exe SHA256SUMS.txt *>&1 |
+            "Release/wrp64.dll#wrp64.dll" `
+            "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
+            "SHA256SUMS.txt" *>&1 |
             Out-File ci-logs\release.txt -Append
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
           gh release view "$env:TAG" *>&1 | Out-File ci-logs\release.txt -Append
