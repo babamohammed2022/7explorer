@@ -45,7 +45,7 @@ static OpenThemeDataFromFile_t pOpenThemeDataFromFile;
 
 static LPCWSTR g_enumPath;
 
-static void PrintName(LPCWSTR label, LPWSTR v)
+static void PrintName(LPCWSTR label, LPCWSTR v)
 {
     if (IS_INTRESOURCE(v))
         wprintf(L"      %s: #%lu\n", label, (unsigned long)(UINT_PTR)v);
@@ -54,7 +54,7 @@ static void PrintName(LPCWSTR label, LPWSTR v)
 }
 
 static BOOL CALLBACK EnumLangCB(HMODULE hModule, LPCWSTR lpType,
-                                LPWSTR lpName, WORD wLang, LONG_PTR lParam)
+                                LPCWSTR lpName, WORD wLang, LONG_PTR lParam)
 {
     HRSRC h = FindResourceExW(hModule, lpType, lpName, wLang);
     DWORD sz = h ? SizeofResource(hModule, h) : 0;
@@ -64,14 +64,14 @@ static BOOL CALLBACK EnumLangCB(HMODULE hModule, LPCWSTR lpType,
 }
 
 static BOOL CALLBACK EnumNameCB(HMODULE hModule, LPCWSTR lpType,
-                                LPWSTR lpName, LONG_PTR lParam)
+                                LPCWSTR lpName, LONG_PTR lParam)
 {
     PrintName(L"name", lpName);
     EnumResourceLanguagesW(hModule, lpType, lpName, EnumLangCB, 0);
     return TRUE;
 }
 
-static BOOL CALLBACK EnumTypeCB(HMODULE hModule, LPWSTR lpType,
+static BOOL CALLBACK EnumTypeCB(HMODULE hModule, LPCWSTR lpType,
                                 LONG_PTR lParam)
 {
     if (IS_INTRESOURCE(lpType))
