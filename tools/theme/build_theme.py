@@ -147,6 +147,18 @@ def build_cmap(classes):
     return "".join(c + "\0" for c in classes).encode("utf-16-le")
 
 
+def make_records_k():
+    """f's records + at least one property for each reserved variant
+    class (sizevariant.NormalSize/Default, colorvariant.NormalColor,
+    globals, sysmetrics) — hypothesis: the loader requires property
+    blocks for the default variant classes it resolves."""
+    recs = make_records_probe()
+    for cid in (3, 5, 6, 10, 11):
+        recs.append(Rec(TMT_FILLCOLOR, T_COLOR, cid, 0, 0,
+                        PALETTE["globals_accent"]))
+    return recs
+
+
 def make_records_probe():
     recs = []
     g = CID_GLOBALS
@@ -191,13 +203,14 @@ build_pe32 = False  # match host arch (x64 themes are PE32+/AMD64)
 
 
 def build_theme(sig128: bytes | None, rmap=None, vmap=None,
-                bcmap=None, extras=()):
+                bcmap=None, extras=(), variant=None):
     """Returns (pe_bytes, stats). sig128: None = no signature trailer,
     otherwise appended with the community-documented footer structure
     (magic 0x84692426, sigSize, fileSize, 0) — still NOT a valid
     cryptographic signature; used only to probe uxtheme's behaviour."""
     cmap = build_cmap(CLASSES)
-    variant = build_variant(make_records_probe())
+    if variant is None:
+        variant = build_variant(make_records_probe())
     packthem = struct.pack("<H", 4)  # v4 documented for Vista+
     # layout proven by the CI probe enum on a real system theme:
     #   type 'PACKTHEM_VERSION' id #1 (2 bytes), type 'VMAP' name 'VMAP',
@@ -307,6 +320,9 @@ def main():
              dict(rmap=rmap, vmap=vmap_exact(), extras=desktop)),
             ("i_f_plus_streams.msstyles",
              dict(rmap=rmap, vmap=vmap_exact(), extras=desktop + streams)),
+            ("k_f_variantclass_rec.msstyles",
+             dict(rmap=rmap, vmap=vmap_exact(),
+                  variant=build_variant(make_records_k()))),
         ]
         dump_dir = getattr(args, "dump_res", None)
         if dump_dir:
