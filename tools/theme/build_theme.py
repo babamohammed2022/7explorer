@@ -191,7 +191,7 @@ build_pe32 = False  # match host arch (x64 themes are PE32+/AMD64)
 
 
 def build_theme(sig128: bytes | None, rmap=None, vmap=None,
-                bcmap=None):
+                bcmap=None, extras=()):
     """Returns (pe_bytes, stats). sig128: None = no signature trailer,
     otherwise appended with the community-documented footer structure
     (magic 0x84692426, sigSize, fileSize, 0) — still NOT a valid
@@ -213,6 +213,8 @@ def build_theme(sig128: bytes | None, rmap=None, vmap=None,
         resources.append(("VMAP", "VMAP", 0x0409, vmap))
     if bcmap is not None:
         resources.append(("BCMAP", "BCMAP", 0x0409, bcmap))
+    for type_id, name_id, payload in extras:
+        resources.append((type_id, name_id, 0x0409, payload))
     if build_pe32:
         pe = _build_resource_pe32(resources)
     else:
@@ -291,13 +293,20 @@ def main():
         # candidate-matrix probes for the CI theme loader experiment
         os.makedirs(args.out, exist_ok=True)
         rmap = rmap_stream()
+        desktop = [("DESKTOP", 1, struct.pack("<I", 0)),
+                   ("MINCOLORDEPTH", 1, struct.pack("<H", 32)),
+                   ("PVL", 1, struct.pack("<I", 1))]
+        streams = [("STREAM", 1, bytes(64)), ("IMAGE", 1, bytes(64))]
         cases = [
-            ("e_packthem_only.msstyles", dict()),
             ("f_packthem_rmap_vmap.msstyles",
              dict(rmap=rmap, vmap=vmap_exact())),
             ("g_f_plus_bcmap.msstyles",
              dict(rmap=rmap, vmap=vmap_exact(),
                   bcmap=bcmap_all_inherit(len(CLASSES)))),
+            ("h_f_plus_desktop.msstyles",
+             dict(rmap=rmap, vmap=vmap_exact(), extras=desktop)),
+            ("i_f_plus_streams.msstyles",
+             dict(rmap=rmap, vmap=vmap_exact(), extras=desktop + streams)),
         ]
         dump_dir = getattr(args, "dump_res", None)
         if dump_dir:
