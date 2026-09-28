@@ -100,9 +100,9 @@ jobs:
           git config user.email "ci@localhost"
           git config user.name "ci-log-bot"
           $br = "ci-logs/sc-" + $env:GITHUB_RUN_ID
-          Copy-Item msbuild-*.log ci-logs\ -Force -ErrorAction SilentlyContinue
-          git checkout -b $br 2>$null; git checkout $br 2>$null
-          git add ci-logs
+          Get-ChildItem msbuild-*.log -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName ("ci-logs\" + $_.BaseName + ".txt") -Force }
+          git checkout -b $br 2>$null
+          git add -f ci-logs
           git commit -m "build logs for run $env:GITHUB_RUN_ID" -m "(auto)"
           git push -f origin $br
 
