@@ -13,7 +13,10 @@ from build_theme import (Rec, T_COLOR, T_INT, T_BOOL, T_STRING,
 
 # class names the Win7 shell asks uxtheme for (functional identifiers,
 # case matches Win7 OpenThemeData callers)
-CLS7 = ["GLOBALS", "Taskbar", "TaskBand", "Rebar", "StartPanel",
+# NOTE: no case-insensitive duplicates of the reserved names (e.g. an
+# extra "GLOBALS" collides with reserved "globals" and the loader's
+# class-name table reports ALREADY_EXISTS).
+CLS7 = ["Taskbar", "TaskBand", "Rebar", "StartPanel",
         "TrayNotify", "Clock", "Menu", "MenuBand", "StartMenu",
         "TaskBar::Taskbar", "Toolbar", "Tooltip"]
 
@@ -57,7 +60,7 @@ def make_style_records(cid_of):
             R(Rec(TMT_FILLCOLOR, T_COLOR, cid, 0, 0, C_TASKBAR_BOT))
 
     # ---- globals ----
-    g = cid_of("GLOBALS")
+    g = cid_of("globals")
     if g is not None:
         R(Rec(TMT_FLATMENUS, T_BOOL, g, 0, 0, 1))
 
