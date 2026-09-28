@@ -253,6 +253,21 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
 - Menu taskbar, "Help and Support" e resto del bootstrap **immodificati**
   rispetto a test8.
 
+## Update 2026-09-28 (v0.0.3-test10)
+
+- **Opzione temi confermata e strutturata** (grazie alla prova sul campo
+  dell'utente: un `.msstyles` di Windows 7 in `theme\` viene caricato
+  correttamente su desktop reale):
+  - `config.ini` accanto a `explorer.exe` (esempio:
+    `docs/config.ini.example`) con `[Theme] Mode=Auto|Fallback|Custom|
+    Windows7|Windows81` e `Name=<file>`;
+  - il tema embedded (Win7-like, da zero) resta **sempre** il fallback
+    automatico: qualunque errore di caricamento di un tema custom
+    ripiega su quello, e se anche quello fallisce resta il look classico
+    — mai un avvio impedito, mai un prompt;
+  - compatibilita' piena col meccanismo registry `Theme` originale:
+    senza `config.ini` il comportamento resta quello collaudato.
+
 ## Uso
 
 1. scaricare `ex7selfcontained.exe` e `wrp64.dll` nella stessa cartella

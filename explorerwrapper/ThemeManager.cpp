@@ -154,46 +154,86 @@ void ThemeManagerInitialize()
 	if (*backslash == L'\\')
 		*backslash = L'\0';
 
+	// --- Theme selection policy --------------------------------------------
+	// Priority: <exedir>\config.ini [Theme] Mode=... Name=...
+	//   Mode=Fallback  -> always the embedded, self-contained theme
+	//   Mode=Custom    -> <exedir>\theme\<Name>.msstyles first, embedded
+	//                      on any failure
+	//   Mode=Auto (default) -> legacy behaviour: registry "Theme" name (or
+	//                      "aero") from <exedir>\theme\ if the file exists,
+	//                      otherwise / on failure the embedded theme.
+	// The embedded theme is ALWAYS available as final fallback. We never
+	// touch uxtheme.dll, themeui.dll or any other system file.
+	WCHAR szMode[32];
+	WCHAR szIni[MAX_PATH * 2];
+	wsprintfW(szIni, L"%s\\config.ini", szExeDir);
+	GetPrivateProfileStringW(L"Theme", L"Mode", L"Auto", szMode,
+		ARRAYSIZE(szMode), szIni);
+
+	enum class ThemeMode { Auto, Fallback, Custom };
+	ThemeMode mode = ThemeMode::Auto;
+	if (!lstrcmpiW(szMode, L"Fallback"))
+		mode = ThemeMode::Fallback;
+	else if (!lstrcmpiW(szMode, L"Custom"))
+		mode = ThemeMode::Custom;
+	// "Windows7"/"Windows81" are accepted aliases for Custom themes
+	else if (!lstrcmpiW(szMode, L"Windows7") || !lstrcmpiW(szMode, L"Windows81"))
+		mode = ThemeMode::Custom;
+
 	WCHAR szThemeName[MAX_PATH];
-	LSTATUS res = g_registry.QueryValue(L"Theme", (LPBYTE)szThemeName, sizeof(szThemeName));
-	if (!*szThemeName || ERROR_SUCCESS != res)
-		StringCchCopyW(szThemeName, MAX_PATH, L"aero");
-
-	ThemeLog(L"theme name: %s", szThemeName);
-
-	WCHAR szThemePath[MAX_PATH * 2];
-	wsprintfW(
-		szThemePath,
-		L"%s\\theme\\%s.msstyles",
-		szExeDir,
-		szThemeName
-	);
-
-	ThemeLog(L"theme path: %s", szThemePath);
-
-	auto hr = S_OK;
-	DWORD attr = GetFileAttributesW(szThemePath);
-	if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY))
+	szThemeName[0] = L'\0';
+	GetPrivateProfileStringW(L"Theme", L"Name", L"", szThemeName,
+		ARRAYSIZE(szThemeName), szIni);
+	if (!*szThemeName)
 	{
-		// The theme file is not installed next to explorer.exe. Use the
-		// embedded, self-contained theme instead: it is extracted to
-		// %LocalAppData%\7explorer\theme and loaded from there.
+		LSTATUS res = g_registry.QueryValue(L"Theme", (LPBYTE)szThemeName,
+			sizeof(szThemeName));
+		if (!*szThemeName || ERROR_SUCCESS != res)
+			StringCchCopyW(szThemeName, MAX_PATH, L"aero");
+	}
+
+	ThemeLog(L"theme mode: %s, name: %s\n", szMode, szThemeName);
+
+	auto TryEmbeddedTheme = [&]() -> HRESULT
+	{
 		WCHAR szEmbedded[MAX_PATH];
 		if (EnsureEmbeddedThemeFile(szEmbedded, ARRAYSIZE(szEmbedded)))
-		hr = LoadThemeFile(szEmbedded);
-		else
+			return LoadThemeFile(szEmbedded);
 		ThemeLog(L"embedded theme extraction FAILED\n");
+		return E_FAIL;
+	};
+
+	HRESULT hr;
+	if (mode == ThemeMode::Fallback)
+	{
+		hr = TryEmbeddedTheme();
 	}
 	else
 	{
-		hr = LoadThemeFile(szThemePath);
-		if (hr != S_OK)
+		WCHAR szThemePath[MAX_PATH * 2];
+		wsprintfW(
+			szThemePath,
+			L"%s\\theme\\%s.msstyles",
+			szExeDir,
+			szThemeName
+		);
+
+		DWORD attr = GetFileAttributesW(szThemePath);
+		BOOL fileExists = (attr != INVALID_FILE_ATTRIBUTES &&
+			!(attr & FILE_ATTRIBUTE_DIRECTORY));
+		if (mode == ThemeMode::Custom || fileExists)
 		{
-			ThemeLog(L"LOADTHEMEFILE %x for %s, trying embedded\n",
-				hr, szThemePath);
-			WCHAR szEmbedded[MAX_PATH];
-			if (EnsureEmbeddedThemeFile(szEmbedded, ARRAYSIZE(szEmbedded)))
-				hr = LoadThemeFile(szEmbedded);
+			hr = LoadThemeFile(szThemePath);
+			if (hr != S_OK)
+			{
+				ThemeLog(L"LOADTHEMEFILE %x for %s, falling back to embedded\n",
+					hr, szThemePath);
+				hr = TryEmbeddedTheme();
+			}
+		}
+		else
+		{
+			hr = TryEmbeddedTheme();
 		}
 	}
 

@@ -195,7 +195,36 @@ These options are located under `HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\Cu
 | AlphaValue | REG_DWORD | For use alongside OverrideAlpha, to specify a 2-digit hex code for the colorization system to use. | **0x6B** |
 | UseTaskbarPinning | REG_DWORD | Determines whether taskbar pinning functionality is available to the user. When set to 0, pins will not be loaded and cannot be modified from jumplists. | **1** |
 
-## Theme support
+## Theme support (7explorer fork)
+
+This fork adds a **self-contained theming layer** on top of the upstream
+mechanism, while keeping the classic option below untouched:
+
+- **Embedded fallback theme**: `wrp64.dll` carries a project-authored,
+  Windows-7-like `.msstyles` (drawn from scratch, no Microsoft assets).
+  On first run it is extracted automatically to
+  `%LocalAppData%\7explorer\theme\aero.msstyles` and used whenever no
+  user theme is installed or the chosen theme fails to load. **No
+  download, no user file, no prompt — ever.**
+- **`config.ini` next to `explorer.exe`** selects the mode (see
+  `docs/config.ini.example`):
+  - `Mode=Auto` (default): user theme from `theme\` if present, else
+    embedded;
+  - `Mode=Fallback`: always the embedded theme;
+  - `Mode=Custom` / `Mode=Windows7` / `Mode=Windows81`: load the named
+    `.msstyles` from `theme\` (keep the upstream folder layout below),
+    automatic fallback to the embedded theme on any error;
+  - `Name=<file>` picks the theme file base name (default `aero`, the
+    registry `Theme` value is honoured when `Name` is omitted).
+- The shell never becomes unusable: if every theme load fails, 7explorer
+  silently keeps the classic look (identical to previous builds).
+- Diagnostics: `%LocalAppData%\7explorer\theme.log` (attach it to bug
+  reports; no extra steps needed).
+- Nothing on the system is modified: no `uxtheme.dll`/`themeui.dll`
+  patching, no changes to the Windows theme configuration — everything
+  happens inside the 7explorer directory/process.
+
+### Upstream theme files (optional)
 
 explorer7 allows any theme from Windows Vista to Windows 8.0 to be used for the start menu and taskbar. If applicable, you **must** include the "en-US" folder that comes along with your .msstyles file, otherwise the theme won't be applied. Themes from Windows 8.1 and later do work, but will not have the proper classes for the start menu, an issue which cannot currently be resolved.
 
