@@ -118,6 +118,66 @@ static void PeHeader(LPCWSTR path)
             : magic == 0x20b ? L"PE32+" : L"?", chars);
 }
 
+
+// ---- carve experiment: remove resources from a copy of a real theme ----
+static WCHAR g_keep[32][64]; static int g_nKeep;
+static BOOL NameInKeep(LPCWSTR v)
+{
+    if (IS_INTRESOURCE(v)) {
+        WCHAR buf[16]; swprintf(buf, 16, L"#%d", (int)(DWORD_PTR)v);
+        for (int i = 0; i < g_nKeep; i++)
+            if (!lstrcmpiW(g_keep[i], buf)) return TRUE;
+        return FALSE;
+    }
+    for (int i = 0; i < g_nKeep; i++)
+        if (!lstrcmpiW(g_keep[i], v)) return TRUE;
+    return FALSE;
+}
+static HMODULE g_carveH;
+struct CarveTypeCtx { LPCWSTR type; HMODULE h; };
+static BOOL CALLBACK CarveLangW(HMODULE m, LPCWSTR t, LPCWSTR n, WORD lang,
+                                LONG_PTR)
+{
+    if (!NameInKeep(t) && !NameInKeep(n)) {
+        UpdateResourceW(g_carveH, t, n, lang, NULL, 0);
+    }
+    return TRUE;
+}
+static BOOL CALLBACK CarveNameW(HMODULE m, LPCWSTR t, LPWSTR n, LONG_PTR)
+{
+    EnumResourceLanguagesW(m, t, n, CarveLangW, 0);
+    return TRUE;
+}
+static BOOL CALLBACK CarveTypeW(HMODULE m, LPWSTR t, LONG_PTR)
+{
+    EnumResourceNamesW(m, t, CarveNameW, 0);
+    return TRUE;
+}
+static int CarveOne(LPCWSTR in, LPCWSTR out, const WCHAR* keepCsv)
+{
+    // keep list: comma separated (case-insens, #n for numeric)
+    WCHAR buf[512]; lstrcpynW(buf, keepCsv, 512);
+    g_nKeep = 0;
+    WCHAR* ctx = NULL;
+    for (WCHAR* tok = wcstok(buf, L",", &ctx); tok && g_nKeep < 32;
+         tok = wcstok(NULL, L",", &ctx)) {
+        lstrcpynW(g_keep[g_nKeep++], tok, 64);
+    }
+    if (!CopyFileW(in, out, FALSE)) { wprintf(L"!! copy err %lu\n",
+        GetLastError()); return 1; }
+    HMODULE m = LoadLibraryExW(out, NULL, LOAD_LIBRARY_AS_DATAFILE |
+                               LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    if (!m) { wprintf(L"!! carve load err %lu\n", GetLastError()); return 1; }
+    g_carveH = BeginUpdateResourceW(out, FALSE);
+    if (!g_carveH) { wprintf(L"!! beginupdate err %lu\n", GetLastError());
+        FreeLibrary(m); return 1; }
+    EnumResourceTypesW(m, CarveTypeW, 0);
+    FreeLibrary(m);
+    if (!EndUpdateResourceW(g_carveH, FALSE)) {
+        wprintf(L"!! endupdate err %lu\n", GetLastError()); return 1; }
+    wprintf(L"== carved %s (kept only: %s)\n", out, keepCsv);
+    return 0;
+}
 static void ProbeOne(LPCWSTR path)
 {
     wprintf(L"== %s\n", path);
@@ -395,6 +455,10 @@ int wmain(int argc, wchar_t** argv)
     if (argc > 2 && !lstrcmpiW(argv[1], L"--pehdr")) {
         for (int i = 2; i < argc; i++) PeHeader(argv[i]);
         return 0;
+    }
+    if (argc > 3 && !lstrcmpiW(argv[1], L"--carve")) {
+        // --carve <in> <out> <keepCsv>
+        return CarveOne(argv[2], argv[3], argv[4]);
     }
     if (argc > 3 && !lstrcmpiW(argv[1], L"--stripsig")) {
         StripSig(argv[2], argv[3]);
