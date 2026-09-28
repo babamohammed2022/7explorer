@@ -34,6 +34,12 @@ jobs:
       - name: Python test suite (patcher / analyzer / catalog verifier)
         run: python tests/run_tests.py
 
+      - name: Regenerate embedded theme and verify it matches the commit
+        shell: cmd
+        run: |
+          python tools\theme\build_theme.py --final --out work-theme-check\7explorer_theme.msstyles
+          fc /b work-theme-check\7explorer_theme.msstyles explorerwrapper\res\7explorer_theme.msstyles
+
       - name: Catalog verify + deterministic generation (twice, diff-exit)
         shell: cmd
         run: |
