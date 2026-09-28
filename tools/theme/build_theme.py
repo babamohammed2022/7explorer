@@ -171,7 +171,7 @@ def _build_resource_pe32(resources):
     return blob
 
 
-build_pe32 = True  # default: real themes are PE32; --pe64 switches back
+build_pe32 = False  # match host arch (x64 themes are PE32+/AMD64)
 
 
 def build_theme(sig128: bytes | None, rmap=None, vmap=None,
