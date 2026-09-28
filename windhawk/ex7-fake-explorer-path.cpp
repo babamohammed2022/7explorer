@@ -29,6 +29,7 @@ Disable it (and the companion mod), sign out/in, and everything is back.
 
 #include <windhawk_api.h>
 #include <windows.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef DWORD (WINAPI *GetModuleFileNameW_t)(HMODULE hModule,
