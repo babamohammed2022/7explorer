@@ -5,6 +5,7 @@
 #include "RegistryManager.h"
 #include "resource.h"
 #include "shlobj.h"
+#include <stdarg.h>
 
 // Extracts the embedded, self-contained 7explorer theme (generated at
 // build time from our own assets) to %LocalAppData%\7explorer\theme
