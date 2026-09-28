@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: |
           Start-Transcript -Path exp\updres.out -Force
-          Add-Type -Path ci\updres\Program.cs -Language CSharp
+          Add-Type -Path ci\updres\Program.cs
           [RU]::V1AndV2()
           [RU]::V3()
           [RU]::V4()
