@@ -25,14 +25,33 @@ Technical notes (design is intentionally conservative):
   `Shell` registry value, or the registry in general.
 - Builds with static CRT (`/MT`) — no Visual C++ Redistributable required.
 
-## Paths
+## Paths (no hardcode)
 
 | shell | path |
 |---|---|
 | Native | `%SystemRoot%\explorer.exe` |
-| 7explorer | env var `EX7_EXPLORER_PATH` (expands `%VAR%`), default `C:\ex7test\explorer.exe` |
+| 7explorer | first hit of: ① env var `EX7_EXPLORER_PATH` (expands `%VAR%`) → ② `explorer.exe` **next to the switcher exe** (the bundle-zip layout: one folder for everything) → ③ legacy fallback `C:\ex7test\explorer.exe` |
 
-The resolved paths are always shown in the window.
+A **Browse…** button lets you point anywhere else.
+
+## Login-time auto-start (file-based, optional)
+
+Checkbox **"Start Windows 7 Explorer automatically at logon"**: creates/removes
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\7explorer-shell.lnk`
+(per-user Startup folder — a plain file, no registry, no Winlogon). At logon
+it runs `7explorer-shell-switcher.exe --apply-ex7`, which performs the runtime
+switch silently in the background. Uncheck the box (or delete the link) to
+remove it. The Windhawk `ex7-userinit-shell` mod remains available as the
+(earlier, pre-userinit) login-time alternative.
+
+## Command line
+
+```
+7explorer-shell-switcher.exe              # GUI
+--apply-ex7        # switch to Explorer7, no confirm dialog (exit code 0/2)
+--apply-native     # switch back to the native shell
+--install-login    # create the Startup-folder link
+--uninstall-login  # remove it
 
 ## Relationship with the Windhawk mods
 

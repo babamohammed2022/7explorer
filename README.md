@@ -25,17 +25,24 @@ explorer7 is a **wrapper library** that allows Windows 7's explorer.exe to run p
 > process is stopped (graceful `WM_QUIT`, terminate after timeout). Build:
 > `msbuild switcher\shell_switcher.vcxproj`.
 
-### Quick test with the runtime switcher
+### Quick test (all-in-one ZIP, recommended)
 
-1. Run the existing `ex7selfcontained.exe` (from the test release).
-2. Ensure the generated Explorer7 files exist (default `C:\ex7test\explorer.exe`;
-   otherwise set `EX7_EXPLORER_PATH` before starting the switcher).
-3. Start `7explorer-shell-switcher.exe`.
-4. Select **Windows 7 Explorer**.
-5. Press **Switch** (a restart warning is shown — Explorer will be restarted).
-6. The Windows 7 taskbar should replace the Windows 11 taskbar immediately.
-7. Select **Native Windows Explorer** → **Switch** to return to the
-   Windows 11 shell. No logout, ever.
+1. Download **`ex7-test-bundle.zip`** from the test release and extract it
+   into a single folder, e.g. `C:\ex7test`.
+2. Run `ex7selfcontained.exe` from that folder → it produces the patched +
+   localized `explorer.exe` right there (side-by-side with the switcher).
+3. Start `7explorer-shell-switcher.exe` — it finds the private explorer
+   automatically (own folder first; `EX7_EXPLORER_PATH` honored; Browse…
+   available).
+4. Select **Windows 7 Explorer** → **Switch** → the Windows 7 taskbar
+   replaces the Windows 11 taskbar immediately. Since test4 the
+   `%SystemRoot%\explorer.exe` path-spoof is **built into `wrp64.dll`** —
+   no Windhawk install needed for the runtime switch (Windhawk mods kept as
+   source/optional, `windhawk/`).
+5. Select **Native Windows Explorer** → **Switch** → back to the Win11 shell.
+   No logout, no registry. Optional: the checkbox "Start Windows 7 Explorer
+   automatically at logon" uses a plain link in the user Startup folder
+   (file-based, non invasivo, rimovibile).
 
 <details>
   <summary>Screenshots</summary>

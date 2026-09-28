@@ -95,6 +95,37 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
     `C:\Windows\explorer.exe` né il registry.
 
 
+
+## Update 2026-09-28 (v0.0.3-test4)
+
+- **Tutto in uno ZIP**: nuovo asset `ex7-test-bundle.zip` (binari +
+  windhawk sorgenti + README); hash incluso in `SHA256SUMS.txt`.
+- **Fake-path integrato in `wrp64.dll`** (nessun Windhawk richiesto per il
+  runtime): hook MinHook di `GetModuleFileNameW` con **filtro call-site** —
+  solo il codice di `explorer.exe` riceve `%SystemRoot%\explorer.exe`;
+  wrp64.dll stesso e gli altri moduli vedono il path reale (più preciso del
+  mod Windhawk, che spoofava tutto il processo). I sorgenti dei mod
+  Windhawk restano in `windhawk/` come alternativa/documentazione.
+- **Switcher**: niente più hardcode — path Explorer7 = ① env
+  `EX7_EXPLORER_PATH` → ② `explorer.exe` nella STESSA cartella dello
+  switcher → ③ fallback `C:\ex7test`; pulsante **Browse…**; opzione login
+  **file-based** (link nella cartella Esecuzione automatica UTENTE, nessun
+  registry/Winlogon) con checkbox; modalità a riga di comando
+  (`--apply-ex7`, `--apply-native`, `--install-login`, `--uninstall-login`).
+- **Nota trasparenza upstream**: `world-windows-federation/explorer7` ha
+  chiuso il supporto a Windows 11 ("End of support for Windows 11",
+  ultimi commit; il nostro base = upstream tip `5885b80`). Su Win11 24H2
+  alcuni componenti della shell di Win7 (apertura Start Menu, flyout
+  orologio, "Cambia data e ora") dipendono dal wrapper e NON sono coperti
+  upstream: sono limitazioni note del base explorer7 su 24H2, non del
+  bootstrap. Funzionalità completa prevista su Windows 10 22H2.
+- Verificato: nessun file mancante rispetto al repository originale
+  (diff completo: solo le nostre aggiunte). Menu/dialog internationalized
+  via MUI standard: con sistema en-US i testi restano en-US; it-IT appare
+  con Windows in italiano. Stringa 857 ("Almost there") del catalogo: dato
+  di struttura a bassa confidenza (v. BOZZE_CONFIDENZA), marcata per
+  revisione — non è testo Microsoft.
+
 ## Update 2026-09-28 (v0.0.3-test3)
 
 - **Nuovo tool**: `7explorer-shell-switcher.exe` — shell switcher runtime GUI

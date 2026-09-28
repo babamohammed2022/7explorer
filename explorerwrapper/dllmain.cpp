@@ -8,6 +8,7 @@
 
 #include "util.h"
 #include "common.h"
+#include <intrin.h>
 #include "forwards.h"
 #include "StartMenuResolver.h"
 #include "TrayObject.h"
@@ -297,6 +298,86 @@ void ModifyDesktopHwnd()
 	}
 }
 
+// ---------------------------------------------------------------------
+// 7explorer fork: self-contained "fake explorer path".
+//
+// The original setup relies on the Windhawk mod "ex7-fake-explorer-path"
+// so that explorer.exe's own GetModuleFileNameW(NULL, ...) calls report
+// %SystemRoot%\explorer.exe (several code paths assume that). Since
+// wrp64.dll is already loaded inside the explorer process by the import
+// patch, we apply the same spoof here — no Windhawk required.
+//
+// Precision guard: only call sites INSIDE the main executable image
+// (explorer.exe itself) receive the fake path. Calls from this DLL or
+// other modules keep the real answer, so wrapper code that resolves
+// orb/theme paths from the real exe location is not confused (the
+// Windhawk mod spoofed the answer for the whole process).
+// ---------------------------------------------------------------------
+typedef DWORD (WINAPI *GetModuleFileNameW_t)(HMODULE, LPWSTR, DWORD);
+static GetModuleFileNameW_t GMFN_SpoofOrig = NULL;
+static WCHAR g_fakeExePath[MAX_PATH * 2] = { 0 };
+static DWORD g_fakeExePathLen = 0;
+
+static __declspec(noinline) DWORD WINAPI GetModuleFileNameW_Spoof(
+	HMODULE hModule, LPWSTR lpFilename, DWORD nSize)
+{
+	if (hModule == NULL && g_fakeExePathLen)
+	{
+		HMODULE caller = NULL;
+		if (GetModuleHandleExW(
+				GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+				GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+				(LPCWSTR)_ReturnAddress(), &caller) &&
+			caller == GetModuleHandleW(NULL))
+		{
+			if (!lpFilename || nSize == 0)
+			{
+				SetLastError(ERROR_INSUFFICIENT_BUFFER);
+				return 0;
+			}
+			if (nSize > g_fakeExePathLen)
+			{
+				memcpy(lpFilename, g_fakeExePath,
+				       (g_fakeExePathLen + 1) * sizeof(WCHAR));
+				return g_fakeExePathLen;
+			}
+			memcpy(lpFilename, g_fakeExePath,
+			       (nSize - 1) * sizeof(WCHAR));
+			lpFilename[nSize - 1] = L'\0';
+			SetLastError(ERROR_INSUFFICIENT_BUFFER);
+			return nSize;
+		}
+	}
+	return GMFN_SpoofOrig(hModule, lpFilename, nSize);
+}
+
+static void HookModuleFileNameSpoof(void)
+{
+	// Only inside an explorer.exe process.
+	WCHAR realPath[MAX_PATH * 2] = { 0 };
+	DWORD n = GetModuleFileNameW(NULL, realPath, MAX_PATH * 2);
+	if (n == 0) return;
+	const WCHAR suffix[] = L"\\explorer.exe";
+	size_t rl = wcslen(realPath), sl = _countof(suffix) - 1;
+	if (rl <= sl || _wcsicmp(realPath + (rl - sl), suffix) != 0) return;
+
+	// Fake path: %SystemRoot%\explorer.exe. Already there -> nothing to do.
+	WCHAR sysroot[MAX_PATH];
+	DWORD got = GetEnvironmentVariableW(L"SystemRoot", sysroot, MAX_PATH);
+	if (got == 0 || got >= MAX_PATH)
+		GetWindowsDirectoryW(sysroot, MAX_PATH);
+	wsprintfW(g_fakeExePath, L"%s\\explorer.exe", sysroot);
+	if (_wcsicmp(realPath, g_fakeExePath) == 0) return;
+	g_fakeExePathLen = (DWORD)wcslen(g_fakeExePath);
+
+	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
+	if (!kb) return;
+	FARPROC fp = GetProcAddress(kb, "GetModuleFileNameW");
+	if (!fp) return;
+	MH_CreateHook((void*)fp, (void*)GetModuleFileNameW_Spoof,
+	              (void**)&GMFN_SpoofOrig);
+}
+
 void HookShell32();
 void HookAPIs() // largely a legacy function now
 {
@@ -334,6 +415,9 @@ void HookAPIs() // largely a legacy function now
 
 	// Handle custom start orb feature
 	HookLoadImageForSizeAndFont();
+
+	// 7explorer fork: self-contained fake path (replaces the Windhawk mod)
+	HookModuleFileNameSpoof();
 
 	// Enable MinHook hooks at the end
 	MH_EnableHook(MH_ALL_HOOKS);

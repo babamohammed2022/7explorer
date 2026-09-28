@@ -1,4 +1,12 @@
-# windhawk/ — PoC shell Explorer7 su Windows 10/11
+# windhawk/ — PoC shell Explorer7 (mod OPZIONALI da v0.0.3-test4)
+
+> **Aggiornamento test4**: la funzione `ex7-fake-explorer-path` (spoof di
+> `GetModuleFileNameW`) è ora **integrata in `wrp64.dll`** — non serve più
+> Windhawk per il runtime. Il mod `ex7-userinit-shell` (redirect Shell al
+> login) resta disponibile come alternativa login-time, insieme alla nuova
+> opzione file-based (Startup folder) dello switcher. Questi sorgenti restano
+> per trasparenza/ispezione e per chi preferisce Windhawk.
+
 
 Due mod Windhawk **sorgente** (Windhawk compila localmente quando li abiliti)
 che rendono l'explorer privato di 7explorer la **shell attiva**, usando le

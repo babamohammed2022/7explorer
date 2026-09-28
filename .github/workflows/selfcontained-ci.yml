@@ -140,10 +140,25 @@ jobs:
           python tools\check_pe_resources.py e2e\explorer.exe
           if errorlevel 1 exit /b 1
 
+      - name: Create test bundle zip (all-in-one, no extra downloads)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bundle | Out-Null
+          Copy-Item Release\wrp64.dll bundle\
+          Copy-Item installer\ex7selfcontained\bin\ex7selfcontained.exe bundle\
+          Copy-Item switcher\bin\7explorer-shell-switcher.exe bundle\
+          New-Item -ItemType Directory -Force bundle\windhawk | Out-Null
+          Copy-Item windhawk\*.cpp bundle\windhawk\
+          Copy-Item installer\ex7selfcontained\README.md bundle\BOOTSTRAP-README.md
+          Copy-Item windhawk\README.md bundle\WINDHAWK-README.md
+          Copy-Item switcher\README.md bundle\SWITCHER-README.md
+          Compress-Archive -Path bundle\* -DestinationPath ex7-test-bundle.zip -Force
+          Get-Item ex7-test-bundle.zip | Select-Object Name,Length
+
       - name: Produce SHA256SUMS for the CI-built binaries
         shell: pwsh
         run: |
-          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe", "switcher\bin\7explorer-shell-switcher.exe")
+          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe", "switcher\bin\7explorer-shell-switcher.exe", "ex7-test-bundle.zip")
           $lines = foreach ($i in $items) { $h=(Get-FileHash -Algorithm SHA256 $i).Hash.ToLower(); "$h  $(Split-Path $i -Leaf)" }
           $lines | Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
@@ -172,6 +187,7 @@ jobs:
             Release/wrp64.dll
             installer/ex7selfcontained/bin/ex7selfcontained.exe
             switcher/bin/7explorer-shell-switcher.exe
+            ex7-test-bundle.zip
             SHA256SUMS.txt
             msbuild-wrp64.log
             msbuild-ex7selfcontained.log
@@ -203,6 +219,7 @@ jobs:
             "Release/wrp64.dll#wrp64.dll" `
             "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
             "switcher/bin/7explorer-shell-switcher.exe#7explorer-shell-switcher.exe" `
+            "ex7-test-bundle.zip#ex7-test-bundle.zip" `
             "windhawk/ex7-userinit-shell.cpp#ex7-userinit-shell.wh.cpp" `
             "windhawk/ex7-fake-explorer-path.cpp#ex7-fake-explorer-path.wh.cpp" `
             "windhawk/README.md#windhawk-POC-README.md" `

@@ -31,11 +31,16 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <shlobj.h>
+#include <objbase.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
 #pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "shell32.lib")
 
 // ---------------------------------------------------------------- data ---
 
@@ -55,12 +60,16 @@ static HFONT g_hFont;
 #define IDC_RADIO_EX7     102
 #define IDC_BTN_SWITCH    201
 #define IDC_BTN_CANCEL    202
+#define IDC_BTN_BROWSE    203
+#define IDC_CHK_LOGIN     204
 #define IDC_ST_NATPATH    301
 #define IDC_ST_EX7PATH    302
 #define IDC_ST_CURRENT    303
 #define IDC_ST_TARGET     304
 
 #define REFRESH_TIMER_MS  1500
+
+#define STARTUP_LINK_NAME L"7explorer-shell.lnk"
 
 // ------------------------------------------------------------ helpers ---
 
@@ -69,7 +78,11 @@ static BOOL FileExists(LPCWSTR path) {
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-// Resolve the two shell paths once (environment + defaults).
+// Resolve the two shell paths once. Private path priority (no hardcode):
+//   1. EX7_EXPLORER_PATH environment variable (expands %VAR%);
+//   2. explorer.exe located NEXT TO this switcher executable (the zip bundle
+//      layout: everything extracted into the same folder);
+//   3. C:\ex7test\explorer.exe (legacy default/fallback of the bootstrap).
 static void ResolveShellPaths(void) {
     WCHAR tmp[1024];
 
@@ -81,17 +94,35 @@ static void ResolveShellPaths(void) {
     _snwprintf_s(g_nativePath, _countof(g_nativePath), _TRUNCATE,
                  L"%s\\explorer.exe", tmp);
 
-    // Private: EX7_EXPLORER_PATH (expands %VAR%), default C:\ex7test.
-    const WCHAR* raw = L"C:\\ex7test\\explorer.exe";
+    // Private, 1) environment override.
     got = GetEnvironmentVariableW(L"EX7_EXPLORER_PATH", tmp,
                                   (DWORD)_countof(tmp));
-    if (got > 0 && got < _countof(tmp))
-        raw = tmp;
-    DWORD c = ExpandEnvironmentStringsW(raw, g_ex7Path,
-                                        (DWORD)_countof(g_ex7Path));
-    if (c == 0 || c >= _countof(g_ex7Path))
-        wcsncpy_s(g_ex7Path, _countof(g_ex7Path), L"C:\\ex7test\\explorer.exe",
-                  _TRUNCATE);
+    if (got > 0 && got < _countof(tmp)) {
+        DWORD c = ExpandEnvironmentStringsW(tmp, g_ex7Path,
+                                            (DWORD)_countof(g_ex7Path));
+        if (c > 0 && c < _countof(g_ex7Path))
+            return;
+    }
+
+    // Private, 2) side-by-side with this executable.
+    WCHAR own[1024];
+    DWORD n = GetModuleFileNameW(NULL, own, (DWORD)_countof(own));
+    if (n > 0 && n < _countof(own)) {
+        WCHAR* bs = wcsrchr(own, L'\\');
+        if (bs) {
+            *bs = L'\0';
+            _snwprintf_s(tmp, _countof(tmp), _TRUNCATE,
+                         L"%s\\explorer.exe", own);
+            if (FileExists(tmp)) {
+                wcsncpy_s(g_ex7Path, _countof(g_ex7Path), tmp, _TRUNCATE);
+                return;
+            }
+        }
+    }
+
+    // Private, 3) legacy fallback.
+    wcsncpy_s(g_ex7Path, _countof(g_ex7Path), L"C:\\ex7test\\explorer.exe",
+              _TRUNCATE);
 }
 
 // PID of the process that owns the shell desktop window (the actual shell).
@@ -237,7 +268,10 @@ static BOOL LaunchExe(LPCWSTR path, DWORD* pErr) {
 
 // ---------------------------------------------------------- switching ---
 
-static void DoSwitch(HWND hwnd, ShellKind target) {
+// headless: TRUE when invoked from the command line (--apply-*); suppresses
+// informational popups, keeps error popups (message boxes work with hwnd
+// NULL). Returns 0 on success, 2 on failure (used as process exit code).
+static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
     const WCHAR* targetPath = (target == SHELL_EX7) ? g_ex7Path
                                                     : g_nativePath;
 
@@ -248,8 +282,9 @@ static void DoSwitch(HWND hwnd, ShellKind target) {
                      L"Target executable not found:\r\n%s\r\n\r\n"
                      L"Nothing was switched.", targetPath);
         MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                    MB_OK | MB_ICONERROR);
-        return;
+                    MB_OK | MB_ICONERROR |
+                    (headless ? MB_SYSTEMMODAL : 0));
+        return 2;
     }
 
     // 2. Identify the CURRENT shell owner before stopping anything.
@@ -266,15 +301,18 @@ static void DoSwitch(HWND hwnd, ShellKind target) {
                      L"is not a recognized explorer:\r\n%s\r\n\r\n"
                      L"Nothing was switched.", curPath);
         MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                    MB_OK | MB_ICONERROR);
-        return;
+                    MB_OK | MB_ICONERROR |
+                    (headless ? MB_SYSTEMMODAL : 0));
+        return 2;
     }
 
     if (curKind == target && pid != 0) {
-        MessageBoxW(hwnd, L"The selected shell is already running.",
-                    L"7explorer Shell Switcher", MB_OK | MB_ICONINFORMATION);
-        RefreshStatus(hwnd);
-        return;
+        if (!headless)
+            MessageBoxW(hwnd, L"The selected shell is already running.",
+                        L"7explorer Shell Switcher",
+                        MB_OK | MB_ICONINFORMATION);
+        if (hwnd) RefreshStatus(hwnd);
+        return 0;
     }
 
     // 3. Stop the current shell (graceful, then terminate after timeout).
@@ -285,9 +323,12 @@ static void DoSwitch(HWND hwnd, ShellKind target) {
 
     // 4. Start the target shell. On failure: restore the native shell and
     //    report; never intentionally leave the user without a shell.
+    UINT mbExtra = headless ? MB_SYSTEMMODAL : 0;
     DWORD err = 0;
+    int failed = 0;
     if (!LaunchExe(targetPath, &err)) {
         WCHAR msg[1500];
+        failed = 1;
         if (target != SHELL_NATIVE && FileExists(g_nativePath)) {
             _snwprintf_s(msg, _countof(msg), _TRUNCATE,
                          L"Failed to start Windows 7 Explorer:\r\n%s\r\n"
@@ -295,7 +336,7 @@ static void DoSwitch(HWND hwnd, ShellKind target) {
                          L"Attempting to restore the native shell\u2026",
                          targetPath, (unsigned long)err);
             MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                        MB_OK | MB_ICONERROR);
+                        MB_OK | MB_ICONERROR | mbExtra);
             DWORD err2 = 0;
             if (!LaunchExe(g_nativePath, &err2)) {
                 _snwprintf_s(msg, _countof(msg), _TRUNCATE,
@@ -305,7 +346,9 @@ static void DoSwitch(HWND hwnd, ShellKind target) {
                              L"Manager \u2192 Run new task \u2192 "
                              L"%s", (unsigned long)err2, g_nativePath);
                 MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                            MB_OK | MB_ICONSTOP);
+                            MB_OK | MB_ICONSTOP | mbExtra);
+            } else {
+                failed = 2;  // native restored, but the requested switch failed
             }
         } else {
             int r;
@@ -316,19 +359,114 @@ static void DoSwitch(HWND hwnd, ShellKind target) {
                              L"Retry starting %s?",
                              targetPath, (unsigned long)err, targetPath);
                 r = MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                                MB_RETRYCANCEL | MB_ICONERROR);
-                if (r == IDRETRY && LaunchExe(targetPath, &err))
+                                (headless ? MB_OK : MB_RETRYCANCEL) |
+                                MB_ICONERROR | mbExtra);
+                if (r == IDRETRY && LaunchExe(targetPath, &err)) {
+                    failed = 0;
                     break;
-            } while (r == IDRETRY);
+                }
+            } while (!headless && r == IDRETRY);
         }
     }
 
-    // 5. Reflect the new state.
+    // 5. Reflect the new state (GUI only; headless just returns).
     Sleep(800);
-    RefreshStatus(hwnd);
-    SetRadioForKind(hwnd, DetectCurrentShell(curPath, (DWORD)_countof(curPath),
-                                             &pid));
-    UpdateTargetLabel(hwnd);
+    if (hwnd) {
+        RefreshStatus(hwnd);
+        SetRadioForKind(hwnd, DetectCurrentShell(curPath,
+                                                 (DWORD)_countof(curPath),
+                                                 &pid));
+        UpdateTargetLabel(hwnd);
+    }
+    return failed ? 2 : 0;
+}
+
+// --------------------------------------------------- startup folder ----
+// Optional login-time auto-switch: a link in the per-user Startup folder.
+// File-based only (C:\Users\<user>\...\Startup\7explorer-shell.lnk), no
+// registry, trivially removable. Requires CoInitialize by the caller path.
+
+static BOOL StartupLinkPath(LPWSTR outPath, DWORD outChars) {
+    WCHAR startup[MAX_PATH];
+    if (!SHGetSpecialFolderPathW(NULL, startup, CSIDL_STARTUP, FALSE))
+        return FALSE;
+    _snwprintf_s(outPath, outChars, _TRUNCATE, L"%s\\%s", startup,
+                 STARTUP_LINK_NAME);
+    return TRUE;
+}
+
+static HRESULT StartupSetPresence(BOOL present, DWORD* pWin32Err) {
+    WCHAR linkPath[MAX_PATH];
+    if (!StartupLinkPath(linkPath, (DWORD)_countof(linkPath))) {
+        if (pWin32Err) *pWin32Err = GetLastError();
+        return E_FAIL;
+    }
+    if (!present) {
+        if (FileExists(linkPath) && !DeleteFileW(linkPath)) {
+            if (pWin32Err) *pWin32Err = GetLastError();
+            return E_FAIL;
+        }
+        if (pWin32Err) *pWin32Err = ERROR_SUCCESS;
+        return S_OK;
+    }
+    // present: create <Startup>\7explorer-shell.lnk ->
+    //          "<own exe>" --apply-ex7
+    WCHAR own[1024];
+    if (!GetModuleFileNameW(NULL, own, (DWORD)_countof(own))) {
+        if (pWin32Err) *pWin32Err = GetLastError();
+        return E_FAIL;
+    }
+    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    BOOL uninit = SUCCEEDED(hr);
+    if (uninit || hr == RPC_E_CHANGED_MODE) {
+        IShellLinkW* sl = NULL;
+        hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
+                              IID_IShellLinkW, (void**)&sl);
+        if (SUCCEEDED(hr)) {
+            sl->lpVtbl->SetPath(sl, own);
+            sl->lpVtbl->SetArguments(sl, L"--apply-ex7");
+            sl->lpVtbl->SetDescription(sl, L"7explorer shell at logon");
+            IPersistFile* pf = NULL;
+            hr = sl->lpVtbl->QueryInterface(sl, IID_IPersistFile,
+                                            (void**)&pf);
+            if (SUCCEEDED(hr)) {
+                hr = pf->lpVtbl->Save(pf, linkPath, TRUE);
+                pf->lpVtbl->Release(pf);
+            }
+            sl->lpVtbl->Release(sl);
+        }
+        if (uninit)
+            CoUninitialize();
+    }
+    if (pWin32Err) *pWin32Err = (DWORD)hr;
+    return hr;
+}
+
+static BOOL StartupIsPresent(void) {
+    WCHAR linkPath[MAX_PATH];
+    return StartupLinkPath(linkPath, (DWORD)_countof(linkPath)) &&
+           FileExists(linkPath);
+}
+
+// ------------------------------------------------------------- browse ---
+
+static void BrowseForExplorer7(HWND hwnd) {
+    WCHAR file[1024];
+    wcsncpy_s(file, _countof(file), g_ex7Path, _TRUNCATE);
+    OPENFILENAMEW ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = (DWORD)_countof(file);
+    ofn.lpstrFilter = L"explorer.exe\0explorer.exe\0All files\0*.*\0";
+    ofn.lpstrTitle = L"Select the private Explorer7 (explorer.exe)";
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_PATHMUSTEXIST;
+    if (GetOpenFileNameW(&ofn)) {
+        wcsncpy_s(g_ex7Path, _countof(g_ex7Path), file, _TRUNCATE);
+        SetDlgItemTextW(hwnd, IDC_ST_EX7PATH, g_ex7Path);
+        UpdateTargetLabel(hwnd);
+    }
 }
 
 // ------------------------------------------------------------ window ----
@@ -367,7 +505,14 @@ static void OnCreate(HWND hwnd) {
               BS_AUTORADIOBUTTON | WS_TABSTOP,
               26, 122, 240, 20, IDC_RADIO_EX7);
     MakeChild(hwnd, WC_STATICW, g_ex7Path,
-              SS_LEFT, 44, 143, 490, 16, IDC_ST_EX7PATH);
+              SS_LEFT, 44, 143, 420, 16, IDC_ST_EX7PATH);
+    MakeChild(hwnd, WC_BUTTONW, L"Browse\u2026",
+              BS_PUSHBUTTON | WS_TABSTOP,
+              470, 140, 82, 22, IDC_BTN_BROWSE);
+    MakeChild(hwnd, WC_BUTTONW,
+              L"Start Windows 7 Explorer automatically at logon (user Startup folder)",
+              BS_AUTOCHECKBOX | WS_TABSTOP,
+              26, 176, 524, 20, IDC_CHK_LOGIN);
 
     MakeChild(hwnd, WC_STATICW, L"Current shell: \u2026",
               SS_LEFT, 26, 196, 524, 34, IDC_ST_CURRENT);
@@ -389,6 +534,8 @@ static void OnCreate(HWND hwnd) {
     SetRadioForKind(hwnd, (cur == SHELL_EX7) ? SHELL_NATIVE : SHELL_EX7);
     RefreshStatus(hwnd);
     UpdateTargetLabel(hwnd);
+    CheckDlgButton(hwnd, IDC_CHK_LOGIN,
+                   StartupIsPresent() ? BST_CHECKED : BST_UNCHECKED);
 
     SetTimer(hwnd, 1, REFRESH_TIMER_MS, NULL);
 }
@@ -419,9 +566,46 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
                     L"7explorer Shell Switcher",
                     MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES)
                 return 0;
-            DoSwitch(hwnd, SelectedTarget(hwnd));
+            (void)DoSwitch(hwnd, SelectedTarget(hwnd), FALSE);
             return 0;
         }
+
+        case IDC_BTN_BROWSE:
+            if (HIWORD(wParam) == BN_CLICKED)
+                BrowseForExplorer7(hwnd);
+            return 0;
+
+        case IDC_CHK_LOGIN:
+            if (HIWORD(wParam) == BN_CLICKED) {
+                BOOL want = (IsDlgButtonChecked(hwnd, IDC_CHK_LOGIN) ==
+                             BST_CHECKED);
+                DWORD e = 0;
+                HRESULT hr = StartupSetPresence(want, &e);
+                if (FAILED(hr)) {
+                    WCHAR m[700];
+                    _snwprintf_s(m, _countof(m), _TRUNCATE,
+                                 L"Could not %ls the Startup-folder link "
+                                 L"(error %lu).",
+                                 want ? L"create" : L"remove",
+                                 (unsigned long)e);
+                    MessageBoxW(hwnd, m, L"7explorer Shell Switcher",
+                                MB_OK | MB_ICONERROR);
+                    CheckDlgButton(hwnd, IDC_CHK_LOGIN,
+                                   StartupIsPresent() ? BST_CHECKED
+                                                      : BST_UNCHECKED);
+                } else if (want) {
+                    MessageBoxW(hwnd,
+                        L"A link was created in your Startup folder:\r\n"
+                        L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\"
+                        L"Programs\\Startup\\7explorer-shell.lnk\r\n\r\n"
+                        L"At each logon this tool will switch to Explorer7 "
+                        L"in the background. Uncheck the box (or delete the "
+                        L"link) to remove it.",
+                        L"7explorer Shell Switcher",
+                        MB_OK | MB_ICONINFORMATION);
+                }
+            }
+            return 0;
 
         case IDC_BTN_CANCEL:
             DestroyWindow(hwnd);
@@ -443,10 +627,47 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     LPWSTR lpCmdLine, int nCmdShow) {
-    (void)hPrevInstance; (void)lpCmdLine; (void)nCmdShow;
+    (void)hPrevInstance; (void)nCmdShow;
     g_hInst = hInstance;
 
     ResolveShellPaths();
+
+    // Command-line modes (used by the Startup-folder link / scripts):
+    //   --apply-ex7        apply Explorer7 as shell, no confirm dialog
+    //   --apply-native     apply the native shell, no confirm dialog
+    //   --install-login    create the Startup-folder link
+    //   --uninstall-login  remove the Startup-folder link
+    {
+        int argc = 0;
+        LPWSTR* argv =
+            lpCmdLine && *lpCmdLine ? CommandLineToArgvW(GetCommandLineW(), &argc)
+                                    : NULL;
+        int mode = 0;  // 0=GUI, 1=ex7, 2=native, 3=install, 4=uninstall
+        for (int i = 1; i < argc; i++) {
+            if (!lstrcmpiW(argv[i], L"--apply-ex7"))        mode = 1;
+            else if (!lstrcmpiW(argv[i], L"--apply-native"))   mode = 2;
+            else if (!lstrcmpiW(argv[i], L"--install-login"))  mode = 3;
+            else if (!lstrcmpiW(argv[i], L"--uninstall-login"))mode = 4;
+        }
+        if (argv) LocalFree(argv);
+
+        if (mode == 1 || mode == 2)
+            return DoSwitch(NULL, mode == 1 ? SHELL_EX7 : SHELL_NATIVE, TRUE);
+        if (mode == 3 || mode == 4) {
+            DWORD e = 0;
+            HRESULT hr = StartupSetPresence(mode == 3, &e);
+            if (FAILED(hr)) {
+                WCHAR m[512];
+                _snwprintf_s(m, _countof(m), _TRUNCATE,
+                             L"Startup-folder link operation failed "
+                             L"(error %lu).", (unsigned long)e);
+                MessageBoxW(NULL, m, L"7explorer Shell Switcher",
+                            MB_OK | MB_ICONERROR | MB_SYSTEMMODAL);
+                return 2;
+            }
+            return 0;
+        }
+    }
 
     WNDCLASSEXW wc;
     ZeroMemory(&wc, sizeof(wc));
