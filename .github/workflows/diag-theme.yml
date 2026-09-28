@@ -1,0 +1,63 @@
+name: diag-theme
+# Diagnostic CI for the self-authored facsimile theme pipeline (v0 probe):
+# builds our probe .msstyles variants 100% offline (Python), compiles
+# ThemeProbe (uxtheme ordinal loader, mirroring the wrapper's ThemeManager),
+# runs it against our themes AND the runner's OWN system aero.msstyles as a
+# known-good control, then commits the logs to a ci-logs/* branch so the
+# results are readable from the dev sandbox.  Nothing touches user machines.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["arena/**"]
+    paths:
+      - "tools/theme/**"
+      - ".github/workflows/diag-theme.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  themeprobe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+
+      - name: Build probe themes (offline, self-authored content)
+        shell: cmd
+        run: |
+          mkdir work ci-logs
+          python tools\theme\build_theme.py --out work\probe-nosig.msstyles --sig none
+          python tools\theme\build_theme.py --out work\probe-dummysig.msstyles --sig dummy
+
+      - name: Compile ThemeProbe
+        shell: cmd
+        run: cl /nologo /MT /W4 /O2 tools\theme\probe\ThemeProbe.cpp /Fe:work\ThemeProbe.exe
+
+      - name: Run probe (own unsigned themes + system aero as control)
+        shell: cmd
+        run: |
+          (echo == control: system aero.msstyles & work\ThemeProbe.exe "%SystemRoot%\Resources\Themes\aero\aero.msstyles" & echo == probe: unsigned, no trailer & work\ThemeProbe.exe work\probe-nosig.msstyles & echo == probe: unsigned, dummy-trailer & work\ThemeProbe.exe work\probe-dummysig.msstyles) | tee ci-logs\theme-probe.txt
+
+      - name: Upload probe logs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: theme-probe-logs
+          path: ci-logs/
+
+      - name: Commit logs to ci-logs branch (sandbox-readable channel)
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "ci@localhost"
+          git config user.name "ci-log-bot"
+          $br = "ci-logs/theme-" + $env:GITHUB_RUN_ID
+          git checkout -b $br 2>$null
+          git add -f ci-logs
+          git commit -m "theme probe logs for run $env:GITHUB_RUN_ID" -m "(auto)"
+          git push -f origin $br
