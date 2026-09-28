@@ -3,179 +3,556 @@
   "source_sha256": "4cc514a7d9afae763cdd21932ee722ae4a787c968bab971c3b1d30044151cfe3",
   "source_file_size": 22016,
   "time_date_stamp": "0x4a5bc954",
-  "note": "Solo struttura (ID, lunghezze, acceleratori, segnaposto, classi controllo): MAI testo Microsoft. Generato a mano dall'utente con analyze_mui locale sul file 3072-rundll di riferimento IT/en-US 0409.",
+  "note": "Solo struttura (ID, lunghezze, acceleratori, segnaposto, classi controllo): MAI testo Microsoft. Generato a mano dall'utente con analyze_mui locale sul file 3072-rundll di riferimento IT/en-US 0409. require_fallback_coverage=true dal 2026-09-28: en.json copre tutti i 161 ID.",
   "strings": {
-    "300": { "len": 61 },
-    "301": { "len": 47 },
-    "302": { "len": 33 },
-    "303": { "len": 35 },
-    "304": { "len": 66 },
-    "305": { "len": 70 },
-    "307": { "len": 65 },
-    "312": { "len": 39 },
-    "316": { "len": 86 },
-    "317": { "len": 26 },
-    "318": { "len": 90 },
-    "319": { "len": 40 },
-    "320": { "len": 6 },
-    "321": { "len": 24 },
-    "322": { "len": 93 },
-    "323": { "len": 6, "placeholders": ["%s"] },
-    "324": { "len": 8, "placeholders": ["%s"] },
-    "325": { "len": 87 },
-    "326": { "len": 6 },
-    "327": { "len": 6 },
-    "328": { "len": 8 },
-    "329": { "len": 5 },
-    "330": { "len": 20, "accel": "U" },
-    "331": { "len": 16, "accel": "i" },
-    "332": { "len": 21 },
-    "333": { "len": 17 },
-    "334": { "len": 35, "placeholders": ["%s"] },
-    "335": { "len": 29 },
-    "336": { "len": 35, "placeholders": ["%s"] },
-    "337": { "len": 29 },
-    "338": { "len": 27 },
-    "339": { "len": 31 },
-    "340": { "len": 17, "placeholders": ["%s", "%s"] },
-    "341": { "len": 4 },
-    "342": { "len": 144 },
-    "343": { "len": 14 },
-    "344": { "len": 16, "placeholders": ["%s"] },
-    "349": { "len": 55 },
-    "350": { "len": 44 },
-    "351": { "len": 43 },
-    "352": { "len": 12 },
-    "353": { "len": 17 },
-    "510": { "len": 10 },
-    "511": { "len": 9, "placeholders": ["%1"] },
-    "512": { "len": 9 },
-    "518": { "len": 7 },
-    "530": { "len": 56, "placeholders": ["%1"] },
-    "533": { "len": 5 },
-    "534": { "len": 7, "accel": "U", "placeholders": ["%s"] },
-    "535": { "len": 7 },
-    "536": { "len": 17 },
-    "537": { "len": 12 },
-    "538": { "len": 12 },
-    "542": { "len": 4 },
-    "543": { "len": 17 },
-    "580": { "len": 12 },
-    "581": { "len": 123 },
-    "590": { "len": 33 },
-    "591": { "len": 26 },
-    "593": { "len": 31 },
-    "594": { "len": 20 },
-    "595": { "len": 5 },
-    "596": { "len": 42 },
-    "597": { "len": 137 },
-    "598": { "len": 54 },
-    "610": { "len": 43, "placeholders": ["%s"] },
-    "611": { "len": 76 },
-    "705": { "len": 106 },
-    "711": { "len": 220 },
-    "718": { "len": 14, "accel": "p" },
-    "719": { "len": 21, "accel": "p" },
-    "720": { "len": 10, "accel": "r" },
-    "722": { "len": 3 },
-    "731": { "len": 23 },
-    "733": { "len": 10 },
-    "810": { "len": 33 },
-    "850": { "len": 17, "accel": "S" },
-    "851": { "len": 5 },
-    "852": { "len": 5 },
-    "853": { "len": 4 },
-    "854": { "len": 19 },
-    "855": { "len": 20 },
-    "856": { "len": 12 },
-    "857": { "len": 12 },
-    "858": { "len": 12 },
-    "1000": { "len": 4 },
-    "1001": { "len": 8 },
-    "1002": { "len": 18 },
-    "1003": { "len": 4 },
-    "1004": { "len": 4 },
-    "1403": { "len": 13 },
-    "1404": { "len": 10 },
-    "1410": { "len": 27 },
-    "1411": { "len": 28 },
-    "1412": { "len": 13 },
-    "1420": { "len": 6 },
-    "1421": { "len": 4 },
-    "1422": { "len": 5 },
-    "1423": { "len": 3 },
-    "6010": { "len": 23 },
-    "6011": { "len": 23 },
-    "6012": { "len": 101 },
-    "6500": { "len": 41 },
-    "6501": { "len": 107 },
-    "6502": { "len": 24 },
-    "7000": { "len": 54 },
-    "7001": { "len": 73 },
-    "7003": { "len": 47 },
-    "7004": { "len": 46 },
-    "7005": { "len": 32 },
-    "7020": { "len": 6 },
-    "7021": { "len": 16 },
-    "7022": { "len": 16 },
-    "7023": { "len": 6 },
-    "7024": { "len": 8 },
-    "7025": { "len": 6 },
-    "7028": { "len": 27 },
-    "7050": { "len": 28 },
-    "8224": { "len": 126 },
-    "8225": { "len": 21, "accel": "f" },
-    "8226": { "len": 12 },
-    "8227": { "len": 30 },
-    "8230": { "len": 175 },
-    "8233": { "len": 7 },
-    "8234": { "len": 13 },
-    "8235": { "len": 9 },
-    "8236": { "len": 12 },
-    "8241": { "len": 4 },
-    "8242": { "len": 16 },
-    "8243": { "len": 17 },
-    "8244": { "len": 19 },
-    "8245": { "len": 24 },
-    "8246": { "len": 26 },
-    "8258": { "len": 2 },
-    "8259": { "len": 2 },
-    "8260": { "len": 2 },
-    "8261": { "len": 2 },
-    "8262": { "len": 3 },
-    "8263": { "len": 3 },
-    "8264": { "len": 3 },
-    "8265": { "len": 3 },
-    "8266": { "len": 3 },
-    "8267": { "len": 2 },
-    "8268": { "len": 2 },
-    "8269": { "len": 1 },
-    "8270": { "len": 2 },
-    "8271": { "len": 1 },
-    "8272": { "len": 15, "accel": "S" },
-    "11100": { "len": 13 },
-    "11101": { "len": 6 },
-    "11102": { "len": 5 },
-    "11103": { "len": 4 },
-    "11104": { "len": 7 },
-    "11105": { "len": 20 },
-    "11106": { "len": 79 },
-    "11107": { "len": 5 },
-    "11108": { "len": 17 },
-    "19650": { "len": 42 },
-    "19651": { "len": 131 },
-    "19652": { "len": 41 },
-    "19653": { "len": 176 }
+    "300": {
+      "len": 61
+    },
+    "301": {
+      "len": 47
+    },
+    "302": {
+      "len": 33
+    },
+    "303": {
+      "len": 35
+    },
+    "304": {
+      "len": 66
+    },
+    "305": {
+      "len": 70
+    },
+    "307": {
+      "len": 65
+    },
+    "312": {
+      "len": 39
+    },
+    "316": {
+      "len": 86
+    },
+    "317": {
+      "len": 26
+    },
+    "318": {
+      "len": 90
+    },
+    "319": {
+      "len": 40
+    },
+    "320": {
+      "len": 6
+    },
+    "321": {
+      "len": 24
+    },
+    "322": {
+      "len": 93
+    },
+    "323": {
+      "len": 6,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "324": {
+      "len": 8,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "325": {
+      "len": 87
+    },
+    "326": {
+      "len": 6
+    },
+    "327": {
+      "len": 6
+    },
+    "328": {
+      "len": 8
+    },
+    "329": {
+      "len": 5
+    },
+    "330": {
+      "len": 20,
+      "accel": "U"
+    },
+    "331": {
+      "len": 16,
+      "accel": "i"
+    },
+    "332": {
+      "len": 21
+    },
+    "333": {
+      "len": 17
+    },
+    "334": {
+      "len": 35,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "335": {
+      "len": 29
+    },
+    "336": {
+      "len": 35,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "337": {
+      "len": 29
+    },
+    "338": {
+      "len": 27
+    },
+    "339": {
+      "len": 31
+    },
+    "340": {
+      "len": 17,
+      "placeholders": [
+        "%s",
+        "%s"
+      ]
+    },
+    "341": {
+      "len": 4
+    },
+    "342": {
+      "len": 144
+    },
+    "343": {
+      "len": 14
+    },
+    "344": {
+      "len": 16,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "349": {
+      "len": 55
+    },
+    "350": {
+      "len": 44
+    },
+    "351": {
+      "len": 43
+    },
+    "352": {
+      "len": 12
+    },
+    "353": {
+      "len": 17
+    },
+    "510": {
+      "len": 10
+    },
+    "511": {
+      "len": 9,
+      "placeholders": [
+        "%1"
+      ]
+    },
+    "512": {
+      "len": 9
+    },
+    "518": {
+      "len": 7
+    },
+    "530": {
+      "len": 56,
+      "placeholders": [
+        "%1"
+      ]
+    },
+    "533": {
+      "len": 5
+    },
+    "534": {
+      "len": 7,
+      "accel": "U",
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "535": {
+      "len": 7
+    },
+    "536": {
+      "len": 17
+    },
+    "537": {
+      "len": 12
+    },
+    "538": {
+      "len": 12
+    },
+    "542": {
+      "len": 4
+    },
+    "543": {
+      "len": 17
+    },
+    "580": {
+      "len": 12
+    },
+    "581": {
+      "len": 123
+    },
+    "590": {
+      "len": 33
+    },
+    "591": {
+      "len": 26
+    },
+    "593": {
+      "len": 31
+    },
+    "594": {
+      "len": 20
+    },
+    "595": {
+      "len": 5
+    },
+    "596": {
+      "len": 42
+    },
+    "597": {
+      "len": 137
+    },
+    "598": {
+      "len": 54
+    },
+    "610": {
+      "len": 43,
+      "placeholders": [
+        "%s"
+      ]
+    },
+    "611": {
+      "len": 76
+    },
+    "705": {
+      "len": 106
+    },
+    "711": {
+      "len": 220
+    },
+    "718": {
+      "len": 14,
+      "accel": "p"
+    },
+    "719": {
+      "len": 21,
+      "accel": "p"
+    },
+    "720": {
+      "len": 10,
+      "accel": "r"
+    },
+    "722": {
+      "len": 3
+    },
+    "731": {
+      "len": 23
+    },
+    "733": {
+      "len": 10
+    },
+    "810": {
+      "len": 33
+    },
+    "850": {
+      "len": 17,
+      "accel": "S"
+    },
+    "851": {
+      "len": 5
+    },
+    "852": {
+      "len": 5
+    },
+    "853": {
+      "len": 4
+    },
+    "854": {
+      "len": 19
+    },
+    "855": {
+      "len": 20
+    },
+    "856": {
+      "len": 12
+    },
+    "857": {
+      "len": 12
+    },
+    "858": {
+      "len": 12
+    },
+    "1000": {
+      "len": 4
+    },
+    "1001": {
+      "len": 8
+    },
+    "1002": {
+      "len": 18
+    },
+    "1003": {
+      "len": 4
+    },
+    "1004": {
+      "len": 4
+    },
+    "1403": {
+      "len": 13
+    },
+    "1404": {
+      "len": 10
+    },
+    "1410": {
+      "len": 27
+    },
+    "1411": {
+      "len": 28
+    },
+    "1412": {
+      "len": 13
+    },
+    "1420": {
+      "len": 6
+    },
+    "1421": {
+      "len": 4
+    },
+    "1422": {
+      "len": 5
+    },
+    "1423": {
+      "len": 3
+    },
+    "6010": {
+      "len": 23
+    },
+    "6011": {
+      "len": 23
+    },
+    "6012": {
+      "len": 101
+    },
+    "6500": {
+      "len": 41
+    },
+    "6501": {
+      "len": 107
+    },
+    "6502": {
+      "len": 24
+    },
+    "7000": {
+      "len": 54
+    },
+    "7001": {
+      "len": 73
+    },
+    "7003": {
+      "len": 47
+    },
+    "7004": {
+      "len": 46
+    },
+    "7005": {
+      "len": 32
+    },
+    "7020": {
+      "len": 6
+    },
+    "7021": {
+      "len": 16
+    },
+    "7022": {
+      "len": 16
+    },
+    "7023": {
+      "len": 6
+    },
+    "7024": {
+      "len": 8
+    },
+    "7025": {
+      "len": 6
+    },
+    "7028": {
+      "len": 27
+    },
+    "7050": {
+      "len": 28
+    },
+    "8224": {
+      "len": 126
+    },
+    "8225": {
+      "len": 21,
+      "accel": "f"
+    },
+    "8226": {
+      "len": 12
+    },
+    "8227": {
+      "len": 30
+    },
+    "8230": {
+      "len": 175
+    },
+    "8233": {
+      "len": 7
+    },
+    "8234": {
+      "len": 13
+    },
+    "8235": {
+      "len": 9
+    },
+    "8236": {
+      "len": 12
+    },
+    "8241": {
+      "len": 4
+    },
+    "8242": {
+      "len": 16
+    },
+    "8243": {
+      "len": 17
+    },
+    "8244": {
+      "len": 19
+    },
+    "8245": {
+      "len": 24
+    },
+    "8246": {
+      "len": 26
+    },
+    "8258": {
+      "len": 2
+    },
+    "8259": {
+      "len": 2
+    },
+    "8260": {
+      "len": 2
+    },
+    "8261": {
+      "len": 2
+    },
+    "8262": {
+      "len": 3
+    },
+    "8263": {
+      "len": 3
+    },
+    "8264": {
+      "len": 3
+    },
+    "8265": {
+      "len": 3
+    },
+    "8266": {
+      "len": 3
+    },
+    "8267": {
+      "len": 2
+    },
+    "8268": {
+      "len": 2
+    },
+    "8269": {
+      "len": 1
+    },
+    "8270": {
+      "len": 2
+    },
+    "8271": {
+      "len": 1
+    },
+    "8272": {
+      "len": 15,
+      "accel": "S"
+    },
+    "11100": {
+      "len": 13
+    },
+    "11101": {
+      "len": 6
+    },
+    "11102": {
+      "len": 5
+    },
+    "11103": {
+      "len": 4
+    },
+    "11104": {
+      "len": 7
+    },
+    "11105": {
+      "len": 20
+    },
+    "11106": {
+      "len": 79
+    },
+    "11107": {
+      "len": 5
+    },
+    "11108": {
+      "len": 17
+    },
+    "19650": {
+      "len": 42
+    },
+    "19651": {
+      "len": 131
+    },
+    "19652": {
+      "len": 41
+    },
+    "19653": {
+      "len": 176
+    }
   },
   "contexts": {},
   "menus": {
     "205/lang:0409": {
       "version": 0,
       "levels": [
-        [ { "popup": true, "popup_level": 1 } ],
         [
-          { "popup": false, "len": 17, "accel": "A", "cmd": 0 },
-          { "popup": false, "len": 28, "accel": "C", "cmd": 0 }
+          {
+            "popup": true,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "len": 17,
+            "accel": "A",
+            "cmd": 0
+          },
+          {
+            "popup": false,
+            "len": 28,
+            "accel": "C",
+            "cmd": 0
+          }
         ]
       ]
     },
@@ -183,10 +560,26 @@
       "version": 1,
       "extended": true,
       "levels": [
-        [ { "popup": true, "cmd": null, "popup_level": 1 } ],
         [
-          { "popup": false, "cmd": 32755, "len": 10, "accel": "r" },
-          { "popup": false, "cmd": 32756, "len": 13, "accel": "x" }
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 32755,
+            "len": 10,
+            "accel": "r"
+          },
+          {
+            "popup": false,
+            "cmd": 32756,
+            "len": 13,
+            "accel": "x"
+          }
         ]
       ]
     },
@@ -194,35 +587,101 @@
       "version": 1,
       "extended": true,
       "levels": [
-        [ { "popup": true, "cmd": null, "popup_level": 1 } ],
         [
-          { "popup": false, "cmd": 6601, "len": 39, "accel": "S" },
-          { "popup": true, "cmd": null, "len": 19, "accel": "R", "popup_level": 2 },
-          { "popup": false, "cmd": 6603, "len": 9, "accel": "h" },
-          { "popup": false, "cmd": 4294967295 },
-          { "popup": false, "cmd": 6604, "len": 4, "accel": "x" }
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
         ],
-        [ { "popup": false, "cmd": 4294967295 } ]
+        [
+          {
+            "popup": false,
+            "cmd": 6601,
+            "len": 39,
+            "accel": "S"
+          },
+          {
+            "popup": true,
+            "cmd": null,
+            "len": 19,
+            "accel": "R",
+            "popup_level": 2
+          },
+          {
+            "popup": false,
+            "cmd": 6603,
+            "len": 9,
+            "accel": "h"
+          },
+          {
+            "popup": false,
+            "cmd": 4294967295
+          },
+          {
+            "popup": false,
+            "cmd": 6604,
+            "len": 4,
+            "accel": "x"
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 4294967295
+          }
+        ]
       ]
     },
     "213/lang:0409": {
       "version": 1,
       "extended": true,
       "levels": [
-        [ { "popup": true, "cmd": null, "popup_level": 1 } ],
         [
-          { "popup": false, "cmd": 6701, "len": 12, "accel": "S" },
-          { "popup": false, "cmd": 6702, "len": 15, "accel": "P" }
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 6701,
+            "len": 12,
+            "accel": "S"
+          },
+          {
+            "popup": false,
+            "cmd": 6702,
+            "len": 15,
+            "accel": "P"
+          }
         ]
       ]
     },
     "6003/lang:0409": {
       "version": 0,
       "levels": [
-        [ { "popup": true, "popup_level": 1 } ],
         [
-          { "popup": false, "len": 17, "accel": "n", "cmd": 128 },
-          { "popup": false, "len": 19, "accel": "I", "forced_end_of_buffer": true }
+          {
+            "popup": true,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "len": 17,
+            "accel": "n",
+            "cmd": 128
+          },
+          {
+            "popup": false,
+            "len": 19,
+            "accel": "I",
+            "forced_end_of_buffer": true
+          }
         ]
       ]
     },
@@ -230,15 +689,54 @@
       "version": 1,
       "extended": true,
       "levels": [
-        [ { "popup": true, "cmd": null, "popup_level": 1 } ],
         [
-          { "popup": false, "cmd": 403, "len": 7, "accel": "s" },
-          { "popup": false, "cmd": 405, "len": 20, "accel": "t" },
-          { "popup": false, "cmd": 404, "len": 25, "accel": "i" },
-          { "popup": false, "cmd": 65493, "len": 19, "accel": "R" },
-          { "popup": false, "cmd": 65492, "len": 20, "accel": "M" },
-          { "popup": false, "cmd": 4294967295 },
-          { "popup": false, "cmd": 65491, "len": 17, "accel": "C" }
+          {
+            "popup": true,
+            "cmd": null,
+            "popup_level": 1
+          }
+        ],
+        [
+          {
+            "popup": false,
+            "cmd": 403,
+            "len": 7,
+            "accel": "s"
+          },
+          {
+            "popup": false,
+            "cmd": 405,
+            "len": 20,
+            "accel": "t"
+          },
+          {
+            "popup": false,
+            "cmd": 404,
+            "len": 25,
+            "accel": "i"
+          },
+          {
+            "popup": false,
+            "cmd": 65493,
+            "len": 19,
+            "accel": "R"
+          },
+          {
+            "popup": false,
+            "cmd": 65492,
+            "len": 20,
+            "accel": "M"
+          },
+          {
+            "popup": false,
+            "cmd": 4294967295
+          },
+          {
+            "popup": false,
+            "cmd": 65491,
+            "len": 17,
+            "accel": "C"
+          }
         ]
       ]
     }
@@ -246,120 +744,719 @@
   "dialogs": {
     "6/lang:0409": {
       "ex": true,
-      "rect": [0, 0, 252, 218],
+      "rect": [
+        0,
+        0,
+        252,
+        218
+      ],
       "title_len": 7,
       "title_accel": null,
       "controls": [
-        { "id": 1105, "class": "BUTTON", "rect": [13, 18, 200, 10], "len": 16, "accel": "L" },
-        { "id": 1102, "class": "BUTTON", "rect": [13, 32, 200, 10], "len": 21, "accel": "u" },
-        { "id": 1139, "class": "BUTTON", "rect": [13, 46, 200, 10], "len": 15, "accel": "i" },
-        { "id": 65535, "class": "STATIC", "rect": [13, 63, 100, 10], "len": 27, "accel": "T" },
-        { "id": 1142, "class": "COMBOBOX", "rect": [117, 60, 110, 14] },
-        { "id": 65535, "class": "STATIC", "rect": [13, 81, 100, 10], "len": 16, "accel": "b" },
-        { "id": 1143, "class": "COMBOBOX", "rect": [117, 78, 110, 14] },
-        { "id": 65535, "class": "BUTTON", "rect": [7, 7, 238, 91], "len": 18 },
-        { "id": 65535, "class": "STATIC", "rect": [13, 113, 171, 16], "len": 72 },
-        { "id": 1140, "class": "BUTTON", "rect": [188, 113, 50, 14], "len": 12, "accel": "C" },
-        { "id": 65535, "class": "BUTTON", "rect": [7, 102, 238, 34], "len": 17 },
-        { "id": 1144, "class": "STATIC", "rect": [13, 151, 220, 16], "len": 103 },
-        { "id": 1141, "class": "BUTTON", "rect": [13, 171, 200, 10], "len": 36, "accel": "P" },
-        { "id": 1145, "class": "BUTTON", "rect": [7, 140, 238, 48], "len": 30 },
-        { "id": 1114, "class": "SysLink", "rect": [7, 200, 256, 8], "len": 38 }
+        {
+          "id": 1105,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            18,
+            200,
+            10
+          ],
+          "len": 16,
+          "accel": "L"
+        },
+        {
+          "id": 1102,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            32,
+            200,
+            10
+          ],
+          "len": 21,
+          "accel": "u"
+        },
+        {
+          "id": 1139,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            46,
+            200,
+            10
+          ],
+          "len": 15,
+          "accel": "i"
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            13,
+            63,
+            100,
+            10
+          ],
+          "len": 27,
+          "accel": "T"
+        },
+        {
+          "id": 1142,
+          "class": "COMBOBOX",
+          "rect": [
+            117,
+            60,
+            110,
+            14
+          ]
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            13,
+            81,
+            100,
+            10
+          ],
+          "len": 16,
+          "accel": "b"
+        },
+        {
+          "id": 1143,
+          "class": "COMBOBOX",
+          "rect": [
+            117,
+            78,
+            110,
+            14
+          ]
+        },
+        {
+          "id": 65535,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            7,
+            238,
+            91
+          ],
+          "len": 18
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            13,
+            113,
+            171,
+            16
+          ],
+          "len": 72
+        },
+        {
+          "id": 1140,
+          "class": "BUTTON",
+          "rect": [
+            188,
+            113,
+            50,
+            14
+          ],
+          "len": 12,
+          "accel": "C"
+        },
+        {
+          "id": 65535,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            102,
+            238,
+            34
+          ],
+          "len": 17
+        },
+        {
+          "id": 1144,
+          "class": "STATIC",
+          "rect": [
+            13,
+            151,
+            220,
+            16
+          ],
+          "len": 103
+        },
+        {
+          "id": 1141,
+          "class": "BUTTON",
+          "rect": [
+            13,
+            171,
+            200,
+            10
+          ],
+          "len": 36,
+          "accel": "P"
+        },
+        {
+          "id": 1145,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            140,
+            238,
+            48
+          ],
+          "len": 30
+        },
+        {
+          "id": 1114,
+          "class": "SysLink",
+          "rect": [
+            7,
+            200,
+            256,
+            8
+          ],
+          "len": 38
+        }
       ]
     },
     "10/lang:0409": {
       "ex": true,
-      "rect": [0, 0, 252, 218],
+      "rect": [
+        0,
+        0,
+        252,
+        218
+      ],
       "title_len": 8,
       "title_accel": null,
       "controls": [
-        { "id": 1106, "class": "STATIC", "rect": [7, 7, 223, 12], "len": 44 },
-        { "id": 1137, "class": "SysTreeView32", "rect": [7, 20, 236, 160], "len": 12 },
-        { "id": 1138, "class": "SysTreeView32", "rect": [0, 0, 0, 0], "len": 5 }
+        {
+          "id": 1106,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            223,
+            12
+          ],
+          "len": 44
+        },
+        {
+          "id": 1137,
+          "class": "SysTreeView32",
+          "rect": [
+            7,
+            20,
+            236,
+            160
+          ],
+          "len": 12
+        },
+        {
+          "id": 1138,
+          "class": "SysTreeView32",
+          "rect": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "len": 5
+        }
       ]
     },
     "20/lang:0409": {
       "ex": true,
-      "rect": [0, 0, 272, 81],
+      "rect": [
+        0,
+        0,
+        272,
+        81
+      ],
       "title_len": 17,
       "title_accel": null,
       "controls": [
-        { "id": 4610, "class": "BUTTON", "rect": [7, 62, 139, 10], "len": 35, "accel": "D" },
-        { "id": 1006, "class": "BUTTON", "rect": [159, 60, 50, 14], "len": 6, "accel": "R" },
-        { "id": 5, "class": "BUTTON", "rect": [215, 60, 50, 14], "len": 6, "accel": "I" },
-        { "id": 4294967295, "class": "STATIC", "rect": [7, 51, 258, 1] },
-        { "id": 4294967295, "class": "STATIC", "rect": [7, 7, 21, 20] },
-        { "id": 1007, "class": "STATIC", "rect": [34, 7, 224, 37], "len": 201 }
+        {
+          "id": 4610,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            62,
+            139,
+            10
+          ],
+          "len": 35,
+          "accel": "D"
+        },
+        {
+          "id": 1006,
+          "class": "BUTTON",
+          "rect": [
+            159,
+            60,
+            50,
+            14
+          ],
+          "len": 6,
+          "accel": "R"
+        },
+        {
+          "id": 5,
+          "class": "BUTTON",
+          "rect": [
+            215,
+            60,
+            50,
+            14
+          ],
+          "len": 6,
+          "accel": "I"
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            7,
+            51,
+            258,
+            1
+          ]
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            21,
+            20
+          ]
+        },
+        {
+          "id": 1007,
+          "class": "STATIC",
+          "rect": [
+            34,
+            7,
+            224,
+            37
+          ],
+          "len": 201
+        }
       ]
     },
     "23/lang:0409": {
       "ex": true,
-      "rect": [0, 0, 320, 137],
+      "rect": [
+        0,
+        0,
+        320,
+        137
+      ],
       "title_len": 17,
       "title_accel": null,
       "controls": [
-        { "id": 4294967295, "class": "STATIC", "rect": [48, 18, 256, 8], "len": 43 },
-        { "id": 4294967295, "class": "STATIC", "rect": [48, 37, 256, 18], "len": 99 },
-        { "id": 4294967295, "class": "STATIC", "rect": [14, 12, 20, 20] },
-        { "id": 1, "class": "BUTTON", "rect": [256, 112, 50, 16], "len": 5 },
-        { "id": 1009, "class": "SysLink", "rect": [48, 67, 256, 18], "len": 77 },
-        { "id": 1008, "class": "BUTTON", "rect": [48, 93, 256, 18], "len": 46, "accel": "N" }
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            48,
+            18,
+            256,
+            8
+          ],
+          "len": 43
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            48,
+            37,
+            256,
+            18
+          ],
+          "len": 99
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            14,
+            12,
+            20,
+            20
+          ]
+        },
+        {
+          "id": 1,
+          "class": "BUTTON",
+          "rect": [
+            256,
+            112,
+            50,
+            16
+          ],
+          "len": 5
+        },
+        {
+          "id": 1009,
+          "class": "SysLink",
+          "rect": [
+            48,
+            67,
+            256,
+            18
+          ],
+          "len": 77
+        },
+        {
+          "id": 1008,
+          "class": "BUTTON",
+          "rect": [
+            48,
+            93,
+            256,
+            18
+          ],
+          "len": 46,
+          "accel": "N"
+        }
       ]
     },
     "205/lang:0409": {
       "ex": true,
-      "rect": [0, 0, 252, 218],
+      "rect": [
+        0,
+        0,
+        252,
+        218
+      ],
       "title_len": 10,
       "title_accel": null,
       "controls": [
-        { "id": 1134, "class": "STATIC", "rect": [7, 7, 170, 16], "len": 92 },
-        { "id": 1131, "class": "BUTTON", "rect": [192, 4, 53, 14], "len": 12, "accel": "C" },
-        { "id": 65535, "class": "STATIC", "rect": [7, 35, 72, 8], "len": 20, "accel": "b" },
-        { "id": 1133, "class": "COMBOBOX", "rect": [83, 32, 100, 14] },
-        { "id": 1136, "class": "BUTTON", "rect": [14, 68, 224, 10], "len": 61, "accel": "p" },
-        { "id": 1135, "class": "BUTTON", "rect": [14, 82, 224, 20], "len": 73, "accel": "m" },
-        { "id": 300, "class": "BUTTON", "rect": [7, 55, 238, 50], "len": 7 },
-        { "id": 1116, "class": "SysLink", "rect": [7, 200, 256, 8], "len": 52 }
+        {
+          "id": 1134,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            170,
+            16
+          ],
+          "len": 92
+        },
+        {
+          "id": 1131,
+          "class": "BUTTON",
+          "rect": [
+            192,
+            4,
+            53,
+            14
+          ],
+          "len": 12,
+          "accel": "C"
+        },
+        {
+          "id": 65535,
+          "class": "STATIC",
+          "rect": [
+            7,
+            35,
+            72,
+            8
+          ],
+          "len": 20,
+          "accel": "b"
+        },
+        {
+          "id": 1133,
+          "class": "COMBOBOX",
+          "rect": [
+            83,
+            32,
+            100,
+            14
+          ]
+        },
+        {
+          "id": 1136,
+          "class": "BUTTON",
+          "rect": [
+            14,
+            68,
+            224,
+            10
+          ],
+          "len": 61,
+          "accel": "p"
+        },
+        {
+          "id": 1135,
+          "class": "BUTTON",
+          "rect": [
+            14,
+            82,
+            224,
+            20
+          ],
+          "len": 73,
+          "accel": "m"
+        },
+        {
+          "id": 300,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            55,
+            238,
+            50
+          ],
+          "len": 7
+        },
+        {
+          "id": 1116,
+          "class": "SysLink",
+          "rect": [
+            7,
+            200,
+            256,
+            8
+          ],
+          "len": 52
+        }
       ]
     },
     "1036/lang:0409": {
       "ex": true,
-      "rect": [0, 0, 251, 274],
+      "rect": [
+        0,
+        0,
+        251,
+        274
+      ],
       "title_len": 20,
       "title_accel": null,
       "controls": [
-        { "id": 4294967295, "class": "STATIC", "rect": [7, 7, 238, 16], "len": 80 },
-        { "id": 1123, "class": "SysTreeView32", "rect": [7, 26, 238, 169], "len": 17, "accel": "t" },
-        { "id": 4294967295, "class": "BUTTON", "rect": [7, 202, 238, 44], "len": 16 },
-        { "id": 4294967295, "class": "STATIC", "rect": [14, 214, 191, 8], "len": 37, "accel": "N" },
-        { "id": 1307, "class": "EDIT", "rect": [211, 212, 27, 12] },
-        { "id": 1305, "class": "msctls_updown32", "rect": [221, 212, 11, 12] },
-        { "id": 4294967295, "class": "STATIC", "rect": [14, 230, 191, 8], "len": 48, "accel": "J" },
-        { "id": 1309, "class": "EDIT", "rect": [211, 228, 27, 12] },
-        { "id": 1308, "class": "msctls_updown32", "rect": [221, 228, 11, 12] },
-        { "id": 1037, "class": "BUTTON", "rect": [7, 253, 80, 14], "len": 20, "accel": "D" },
-        { "id": 1, "class": "BUTTON", "rect": [140, 253, 50, 14], "len": 2 },
-        { "id": 2, "class": "BUTTON", "rect": [194, 253, 50, 14], "len": 6 }
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            7,
+            7,
+            238,
+            16
+          ],
+          "len": 80
+        },
+        {
+          "id": 1123,
+          "class": "SysTreeView32",
+          "rect": [
+            7,
+            26,
+            238,
+            169
+          ],
+          "len": 17,
+          "accel": "t"
+        },
+        {
+          "id": 4294967295,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            202,
+            238,
+            44
+          ],
+          "len": 16
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            14,
+            214,
+            191,
+            8
+          ],
+          "len": 37,
+          "accel": "N"
+        },
+        {
+          "id": 1307,
+          "class": "EDIT",
+          "rect": [
+            211,
+            212,
+            27,
+            12
+          ]
+        },
+        {
+          "id": 1305,
+          "class": "msctls_updown32",
+          "rect": [
+            221,
+            212,
+            11,
+            12
+          ]
+        },
+        {
+          "id": 4294967295,
+          "class": "STATIC",
+          "rect": [
+            14,
+            230,
+            191,
+            8
+          ],
+          "len": 48,
+          "accel": "J"
+        },
+        {
+          "id": 1309,
+          "class": "EDIT",
+          "rect": [
+            211,
+            228,
+            27,
+            12
+          ]
+        },
+        {
+          "id": 1308,
+          "class": "msctls_updown32",
+          "rect": [
+            221,
+            228,
+            11,
+            12
+          ]
+        },
+        {
+          "id": 1037,
+          "class": "BUTTON",
+          "rect": [
+            7,
+            253,
+            80,
+            14
+          ],
+          "len": 20,
+          "accel": "D"
+        },
+        {
+          "id": 1,
+          "class": "BUTTON",
+          "rect": [
+            140,
+            253,
+            50,
+            14
+          ],
+          "len": 2
+        },
+        {
+          "id": 2,
+          "class": "BUTTON",
+          "rect": [
+            194,
+            253,
+            50,
+            14
+          ],
+          "len": 6
+        }
       ]
     }
   },
   "accelerators": {
     "251/lang:0409": [
-      { "fVirt": 16, "key": 115, "cmd": 305, "last": false },
-      { "fVirt": 3, "key": 9, "cmd": 41008, "last": false },
-      { "fVirt": 7, "key": 9, "cmd": 41008, "last": false },
-      { "fVirt": 11, "key": 9, "cmd": 41008, "last": false },
-      { "fVirt": 15, "key": 9, "cmd": 41008, "last": false },
-      { "fVirt": 3, "key": 116, "cmd": 41061, "last": false },
-      { "fVirt": 3, "key": 117, "cmd": 41008, "last": false },
-      { "fVirt": 19, "key": 13, "cmd": 413, "last": false },
-      { "fVirt": 11, "key": 90, "cmd": 416, "last": false },
-      { "fVirt": 3, "key": 114, "cmd": 41093, "last": false },
-      { "fVirt": 19, "key": 77, "cmd": 419, "last": true }
+      {
+        "fVirt": 16,
+        "key": 115,
+        "cmd": 305,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 7,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 11,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 15,
+        "key": 9,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 116,
+        "cmd": 41061,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 117,
+        "cmd": 41008,
+        "last": false
+      },
+      {
+        "fVirt": 19,
+        "key": 13,
+        "cmd": 413,
+        "last": false
+      },
+      {
+        "fVirt": 11,
+        "key": 90,
+        "cmd": 416,
+        "last": false
+      },
+      {
+        "fVirt": 3,
+        "key": 114,
+        "cmd": 41093,
+        "last": false
+      },
+      {
+        "fVirt": 19,
+        "key": 77,
+        "cmd": 419,
+        "last": true
+      }
     ]
   },
   "other_resource_types": {
-    "MUI": ["1/lang:0409 (200 bytes)"],
-    "VERSION": ["1/lang:0409 (912 bytes)"]
-  }
+    "MUI": [
+      "1/lang:0409 (200 bytes)"
+    ],
+    "VERSION": [
+      "1/lang:0409 (912 bytes)"
+    ]
+  },
+  "require_fallback_coverage": true
 }

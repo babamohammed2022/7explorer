@@ -39,6 +39,22 @@ inline constexpr unsigned int kAcceptedSha256Count =
 
 // Host/path are pinned: HTTPS only, fixed host, path derived ONLY from the
 // two identity constants above (no user influence, no URL parsing).
+// ---------- reference explorer.exe.mui (Win7 RTM en-US, lang 0409) ----------
+// User-supplied at install time (offline reuse of a verified copy; the symbol
+// server does NOT serve .mui files: probe run 36406420970 proved 404 for
+// every candidate key). Identity: exact size + TimeDateStamp + allow-listed
+// SHA-256 (same documented-variant model as the .exe).
+inline constexpr unsigned __int64 kMuiSize = 22016ULL;
+inline constexpr unsigned int  kMuiTimeDateStamp = 0x4A5BC954;
+inline constexpr const wchar_t* kMuiAcceptedSha256[] = {
+    // [A] 2026-09-28 — copia caricata dall'utente (analisi strutturale locale)
+    L"4cc514a7d9afae763cdd21932ee722ae4a787c968bab971c3b1d30044151cfe3",
+};
+inline constexpr unsigned int kMuiAcceptedSha256Count =
+    sizeof(kMuiAcceptedSha256) / sizeof(kMuiAcceptedSha256[0]);
+// Expected file name at the configured candidate locations.
+inline constexpr wchar_t kMuiFileName[] = L"explorer.exe.mui";
+
 inline constexpr wchar_t kSymbolHost[] = L"msdl.microsoft.com";
 inline constexpr wchar_t kSymbolPathTemplate[] =
     L"/download/symbols/explorer.exe/%08X%x/explorer.exe";

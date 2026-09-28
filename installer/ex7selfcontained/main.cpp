@@ -324,8 +324,49 @@ int wmain(int argc, wchar_t** argv) {
         FileLog(L"FAILED: localization injection: %s", err.c_str());
         return 1;
     }
+
+    // Menus/dialogs come from the reference .mui the user supplies at
+    // install time (no download exists for it). Candidate locations:
+    //   %EX7_REFERENCE_MUI%           (explicit override)
+    //   <installer dir>\explorer.exe.mui
+    //   <installer dir>\reference\explorer.exe.mui
+    bool transplantOk = false;
+    {
+        std::wstring muiPath;
+        wchar_t buf[MAX_PATH * 2];
+        DWORD n = GetEnvironmentVariableW(L"EX7_REFERENCE_MUI", buf,
+                                          _countof(buf));
+        if (n > 0 && n < _countof(buf)) muiPath = buf;
+        if (muiPath.empty()) {
+            wchar_t exeDir[MAX_PATH];
+            GetModuleFileNameW(nullptr, exeDir, _countof(exeDir));
+            std::wstring dir(exeDir);
+            size_t slash = dir.find_last_of(L"\\/");
+            if (slash != std::wstring::npos) dir.erase(slash + 1);
+            std::wstring cand = dir + cfg::kMuiFileName;
+            if (GetFileAttributesW(cand.c_str()) != INVALID_FILE_ATTRIBUTES)
+                muiPath = cand;
+            cand = dir + L"reference\\" + cfg::kMuiFileName;
+            if (muiPath.empty() &&
+                GetFileAttributesW(cand.c_str()) != INVALID_FILE_ATTRIBUTES)
+                muiPath = cand;
+        }
+        if (muiPath.empty()) {
+            FileLog(L"localization note: reference %s not found next to the "
+                    L"installer (or EX7_REFERENCE_MUI); menus/dialogs stay "
+                    L"en-US for now", cfg::kMuiFileName);
+        } else if (!ex7::TransplantMuiResources(muiPath, workPath, err)) {
+            FileLog(L"FAILED: .mui transplant: %s", err.c_str());
+            return 1;
+        } else {
+            transplantOk = true;
+            FileLog(L"transplanted menus/dialogs from %s", muiPath.c_str());
+        }
+    }
+
     ex7::LocalizeOptions loc;
     loc.forceAllowPartial = allowPartial;
+    loc.fullExplorerTransplanted = transplantOk;
     if (!ex7::NeutralizeMuiResource(workPath, loc, err)) {
         // Not fatal in Phase 1: the gate refused, documented in the plan.
         FileLog(L"localization note: %s", err.c_str());

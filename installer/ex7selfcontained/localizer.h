@@ -29,10 +29,24 @@ struct Ex7LangStringEntry;
 namespace ex7 {
 
 struct LocalizeOptions {
-    // STRINGTABLE ids the catalog currently covers; when explorer-exe
-    // constraints land this list comes from lang_catalog.h generation.
+    // Set true when TransplantMuiResources() completed (menus/dialogs are
+    // present per catalog language) — required to neutralize safely,
+    // otherwise DialogBox/LoadMenu would find NO resources in the copy.
+    bool fullExplorerTransplanted = false;
     bool forceAllowPartial = false;  // explicit user override, logged loudly
 };
+
+// Verifies the reference .mui identity (size + TimeDateStamp + SHA-256
+// allow-list in config.h). No download path exists for it (see config.h).
+bool VerifyReferenceMui(const std::wstring& muiPath, std::wstring& error);
+
+// Splices every catalog language that fully covers explorer.exe.mui into
+// MENU/DIALOG/ACCELERATOR resources of the private explorer.exe copy,
+// using the user's reference .mui as template source. Atomic: on any
+// failure the update transaction is discarded and the copy is untouched.
+bool TransplantMuiResources(const std::wstring& muiPath,
+                            const std::wstring& exePath,
+                            std::wstring& error);
 
 // Builds the 16-entry STRINGTABLE block payload (length-prefixed UTF-16)
 // for block id `blockId` (covering ids blockId*16-16+1 .. blockId*16).
