@@ -119,3 +119,28 @@ memcmp(const void* str1, const void* str2, size_t count)
 	}
 	return 0;
 }
+
+#ifdef _WIN64
+// 7explorer fork: __try/__except on x64 needs __C_specific_handler, which
+// normally comes from vcruntime. The wrapper links without the CRT, so we
+// forward to the identical implementation exported by ntdll.dll (always
+// loaded, resolved lazily; safe to call during exception dispatch).
+typedef EXCEPTION_DISPOSITION(__cdecl* CSpecificHandler_t)(
+	struct _EXCEPTION_RECORD*, void*, struct _CONTEXT*, struct _DISPATCHER_CONTEXT*);
+
+extern "C" EXCEPTION_DISPOSITION __cdecl __C_specific_handler(
+	struct _EXCEPTION_RECORD* ExceptionRecord, void* EstablisherFrame,
+	struct _CONTEXT* ContextRecord, struct _DISPATCHER_CONTEXT* DispatcherContext)
+{
+	static CSpecificHandler_t s_real = nullptr;
+	CSpecificHandler_t real = s_real;
+	if (!real)
+	{
+		real = (CSpecificHandler_t)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "__C_specific_handler");
+		s_real = real;
+	}
+	if (!real)
+		return ExceptionContinueSearch;
+	return real(ExceptionRecord, EstablisherFrame, ContextRecord, DispatcherContext);
+}
+#endif
