@@ -423,17 +423,16 @@ static HRESULT StartupSetPresence(BOOL present, DWORD* pWin32Err) {
         hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
                               IID_IShellLinkW, (void**)&sl);
         if (SUCCEEDED(hr)) {
-            sl->lpVtbl->SetPath(sl, own);
-            sl->lpVtbl->SetArguments(sl, L"--apply-ex7");
-            sl->lpVtbl->SetDescription(sl, L"7explorer shell at logon");
+            sl->SetPath(own);
+            sl->SetArguments(L"--apply-ex7");
+            sl->SetDescription(L"7explorer shell at logon");
             IPersistFile* pf = NULL;
-            hr = sl->lpVtbl->QueryInterface(sl, IID_IPersistFile,
-                                            (void**)&pf);
+            hr = sl->QueryInterface(IID_IPersistFile, (void**)&pf);
             if (SUCCEEDED(hr)) {
-                hr = pf->lpVtbl->Save(pf, linkPath, TRUE);
-                pf->lpVtbl->Release(pf);
+                hr = pf->Save(linkPath, TRUE);
+                pf->Release();
             }
-            sl->lpVtbl->Release(sl);
+            sl->Release();
         }
         if (uninit)
             CoUninitialize();
