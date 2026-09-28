@@ -178,6 +178,31 @@ static int CarveOne(LPCWSTR in, LPCWSTR out, const WCHAR* keepCsv)
     wprintf(L"== carved %s (kept only: %s)\n", out, keepCsv);
     return 0;
 }
+
+// --swapres <base> <out> <type> <name> <lang> <payloadFile>
+static int SwapRes(LPCWSTR base, LPCWSTR out, LPCWSTR type, LPCWSTR name,
+                   WORD lang, LPCWSTR payloadPath)
+{
+    if (!CopyFileW(base, out, FALSE)) { wprintf(L"!! copy err %lu\n",
+        GetLastError()); return 1; }
+    HANDLE f = CreateFileW(payloadPath, GENERIC_READ, 0, NULL,
+                           OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) { wprintf(L"!! payload err\n");
+        return 1; }
+    DWORD len = GetFileSize(f, NULL);
+    BYTE* buf = new BYTE[len];
+    DWORD rd = 0; ReadFile(f, buf, len, &rd, NULL); CloseHandle(f);
+    HANDLE h = BeginUpdateResourceW(out, FALSE);
+    if (!h) { wprintf(L"!! beginupdate err %lu\n", GetLastError());
+        return 1; }
+    BOOL ok = UpdateResourceW(h, type, name, lang, buf, len);
+    if (!ok) wprintf(L"!! updateresource err %lu\n", GetLastError());
+    delete[] buf;
+    if (!EndUpdateResourceW(h, FALSE)) { wprintf(L"!! endupdate %lu\n",
+        GetLastError()); return 1; }
+    wprintf(L"== swapped %s/%s(lang=%u) into %s\n", type, name, lang, out);
+    return 0;
+}
 static void ProbeOne(LPCWSTR path)
 {
     wprintf(L"== %s\n", path);
@@ -459,6 +484,10 @@ int wmain(int argc, wchar_t** argv)
     if (argc > 3 && !lstrcmpiW(argv[1], L"--carve")) {
         // --carve <in> <out> <keepCsv>
         return CarveOne(argv[2], argv[3], argv[4]);
+    }
+    if (argc > 6 && !lstrcmpiW(argv[1], L"--swapres")) {
+        return SwapRes(argv[2], argv[3], argv[4], argv[5],
+                       (WORD)wcstoul(argv[6], NULL, 10), argv[7]);
     }
     if (argc > 3 && !lstrcmpiW(argv[1], L"--stripsig")) {
         StripSig(argv[2], argv[3]);

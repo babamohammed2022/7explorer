@@ -276,6 +276,8 @@ def main():
                     help="append a dummy 128-byte signature trailer")
     ap.add_argument("--batch", action="store_true",
                     help="write the CI candidate matrix into --out (a dir)")
+    ap.add_argument("--dump-res", default=None,
+                    help="with --batch: also dump raw resource payloads")
     args = ap.parse_args()
     sig = None
     if args.sig == "dummy":
@@ -293,6 +295,20 @@ def main():
              dict(rmap=rmap, vmap=vmap_exact(),
                   bcmap=bcmap_all_inherit(len(CLASSES)))),
         ]
+        dump_dir = getattr(args, "dump_res", None)
+        if dump_dir:
+            payloads = {
+                "cmap.bin": build_cmap(CLASSES),
+                "variant.bin": build_variant(make_records_probe()),
+                "rmap.bin": rmap_stream(),
+                "vmap.bin": vmap_exact(),
+                "packthem.bin": struct.pack("<H", 4),
+                "bcmap.bin": bcmap_all_inherit(len(CLASSES)),
+            }
+            for nm, blob in payloads.items():
+                with open(os.path.join(dump_dir, nm), "wb") as fh:
+                    fh.write(blob)
+            print(f"build_theme: dumped payloads to {dump_dir}")
         for name, kw in cases:
             blob, stats = build_theme(None, **kw)
             path = os.path.join(args.out, name)
