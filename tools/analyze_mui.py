@@ -37,8 +37,9 @@ import json
 import re
 import struct
 import sys
+from pathlib import Path
 
-sys.path.insert(0, __file__.rsplit("/tools/", 1)[0])
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tools.patch_imports import _PE, PEFormatError  # noqa: E402
 
 RT_CURSOR, RT_BITMAP, RT_ICON, RT_MENU, RT_DIALOG, RT_STRING, \
