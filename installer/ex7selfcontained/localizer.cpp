@@ -4,6 +4,7 @@
 
 #include <windows.h>
 
+#include <cstdio>
 #include <cstring>
 #include <map>
 
@@ -53,7 +54,11 @@ bool InjectCatalogStrings(const std::wstring& exePath, std::wstring& error) {
     // replace the exact (RT_STRING, block, lcid) entries we write.
     HANDLE h = BeginUpdateResourceW(exePath.c_str(), FALSE);
     if (!h) {
-        error = L"BeginUpdateResource failed";
+        wchar_t buf[128];
+        _snwprintf_s(buf, _countof(buf), _TRUNCATE,
+                     L"BeginUpdateResource failed, GetLastError=%u",
+                     GetLastError());
+        error = buf;
         return false;
     }
     bool ok = true;
@@ -71,7 +76,13 @@ bool InjectCatalogStrings(const std::wstring& exePath, std::wstring& error) {
                                  (WORD)tab.lcid,
                                  (LPVOID)payload.data(),
                                  (DWORD)payload.size())) {
-                error = L"UpdateResource failed for a string block";
+                wchar_t buf[192];
+                _snwprintf_s(buf, _countof(buf), _TRUNCATE,
+                             L"UpdateResource failed for string block %u "
+                             L"(lcid 0x%04X, %u bytes), GetLastError=%u",
+                             blockId, tab.lcid, (unsigned)payload.size(),
+                             GetLastError());
+                error = buf;
                 ok = false;
                 break;
             }
