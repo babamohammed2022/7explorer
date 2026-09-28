@@ -97,6 +97,40 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
 
 
 
+## Update 2026-09-28 (v0.0.3-test6)
+
+- **Switcher bilingue**: UI in inglese di default, italiano se il sistema è
+  italiano (override env `EX7_LANG=it|en` o `--lang it|en`).
+
+## Update 2026-09-28 (v0.0.3-test7)
+
+- **Fix tema "classico"**: trovata la causa — il ThemeManager del wrapper
+  cercava SOLO `<cartella-exe>\theme\aero.msstyles`, assente nel bundle, e in
+  fallback restava il tema classico (menu contestuali, tray, start in stile
+  Windows 95). Ora, se il file `theme\aero.msstyles` manca, il wrapper tenta
+  `%WinDir%\Resources\Themes\aero\aero.msstyles` del sistema in esecuzione
+  (file locale dell'utente: niente asset Microsoft ridistribuiti).
+  Risultato atteso su Win10/11: taskbar/start/menu con resa **aero moderna**
+  invece del classico. Nota: gli `.msstyles` di 8.1+ non contengono le classi
+  start-menu di Win7, quindi lo start menu resterà stilato "moderno".
+  **Per l'aspetto Win7 completo**: copiare da un proprio Windows 7 il file
+  `aero.msstyles` e la sua cartella `en-US` in `theme\` accanto a
+  `explorer.exe` (layout identico a upstream explorer7) — non possiamo
+  includerlo noi (asset Microsoft non ridistribuibile).
+- **Switcher: nuova diagnostica "Menu dump"** (bottone in basso, o
+  `7explorer-shell-switcher.exe --dump-menus`): apre per un istante il menu
+  contestuale **reale** della taskbar della shell attiva, ne legge voci/ID/
+  sottomenu e li scrive in `7explorer-menudump.txt` (accanto allo switcher),
+  poi lo richiude. Non tocca registry né file di sistema.
+  **Richiesta di test**: con shell **Explorer7** attiva fare "Menu dump" e
+  mandarci il file `7explorer-menudump.txt`; ripetere opzionale anche con la
+  shell **nativa** (per confronto). Ci serve la struttura vera (di sola
+  lettura, dal vivo) per completare le voci del menu taskbar mancanti
+  ("Cascade windows", "Show the desktop", "Task Manager", ...).
+- CI: sonda strutturale del binario di riferimento (solo forme, nessun
+  testo estratto) — ha confermato che `explorer.exe` di Win7 non contiene
+  menu/stringhe nel binario principale: tutto vive nella MUI-chain.
+
 ## Update 2026-09-28 (v0.0.3-test5)
 
 - **Catalog stringhe rifatto su fonte autorevole** (estratto MUI reale
