@@ -588,13 +588,40 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			InitPinnedListHack();
 		}*/
 
+		ApplyPerProcessUILanguage(); // 7explorer fork: EX7_UI_LANG override
+
 		CreateShellFolder(); // Fix shell folder for 1607+...
 		EnsureWindowColorization(); // Correct colorization enablement setting for Win10/11
 		FirstRunCompatibilityWarning(); // Warn users on Windows 11 24H2+ and Server 2022 of potential problems
 		FirstRunPrereleaseWarning(); // Warn users if this is a pre-release build that this is the case on first run ONLY
 		ThemeHandlesInit(); // Basically start the inactive theme management process
 
-		dbgprintf(L"Dll Attach\n");
+	
+// ---------------------------------------------------------------------
+// 7explorer fork: per-process UI language override for the private
+// explorer, selected by the shell switcher at launch time through the
+// EX7_UI_LANG environment variable (e.g. "it-IT" / "en-US"). Registry-
+// free and fully reversible (only this process's environment). Without
+// the variable, normal system MUI resolution applies.
+// ---------------------------------------------------------------------
+static void ApplyPerProcessUILanguage()
+{
+	WCHAR lang[32];
+	DWORD n = GetEnvironmentVariableW(L"EX7_UI_LANG", lang, 31);
+	if (n == 0 || n >= 31)
+		return;
+	// pcszzList double-NUL terminated: "<lang>;en-US "
+	WCHAR list[64];
+	ZeroMemory(list, sizeof(list));
+	lstrcpyW(list, lang);
+	size_t rl = wcslen(list);
+	list[rl] = L';';
+	lstrcpyW(list + rl + 1, L"en-US");
+	ULONG num = 2;
+	SetProcessPreferredUILanguages(MUI_LANGUAGE_NAME, list, &num);
+}
+
+	dbgprintf(L"Dll Attach\n");
 
 		// Ittr: Load user configuration from the registry, important that we do this first before applying API hooks
 		InitializeConfiguration();

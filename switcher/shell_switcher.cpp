@@ -58,12 +58,101 @@ static WCHAR g_ex7Path[1024];     // private Explorer7 path
 static HINSTANCE g_hInst;
 static HFONT g_hFont;
 
+// ---- bilingual UI (English default; Italian for Italian systems, or
+// EX7_LANG/--lang override). The switcher itself must also work in English.
+typedef enum {
+    TR_SUBTITLE, TR_GROUPBOX, TR_NATIVE_NAME, TR_EX7_NAME, TR_NONE_NAME,
+    TR_UNKNOWN_NAME, TR_BTN_SWITCH, TR_BTN_CANCEL, TR_BTN_BROWSE,
+    TR_CHK_LOGIN, TR_STATUS_CURRENT_FMT, TR_STATUS_TARGET_FMT,
+    TR_WARN_CONFIRM, TR_ERR_NF_TARGET_FMT, TR_ERR_REFUSED_FMT,
+    TR_INFO_ALREADY, TR_ERR_START_EX7_FMT, TR_ERR_CRITICAL_FMT,
+    TR_ERR_START_NATIVE_FMT, TR_ERR_STARTUPLINK_FMT, TR_INFO_STARTUP_OK,
+    TR_BROWSE_TITLE, TR_BROWSE_FILTER, TR_ERR_STARTUP_OP_FMT,
+    TR_CBO_SYS, TR_CBO_EN, TR_CBO_IT,
+    TR_COUNT
+} TRID;
+static const WCHAR* TR_EN[TR_COUNT] = {
+    L"Switches the running Explorer shell at runtime. No registry, no logout.",
+    L"Select Explorer shell",
+    L"Native Windows Explorer",
+    L"Windows 7 Explorer",
+    L"(none detected)",
+    L"Unknown explorer (see path)",
+    L"Switch", L"Cancel", L"Browse\u2026",
+    L"Start Windows 7 Explorer automatically at logon (user Startup folder)",
+    L"Current shell: %s\r\nPID %lu \u2014 %s",
+    L"Target: %s\r\n%s",
+    L"Explorer will be restarted.\r\nUnsaved work may be affected.\r\n\r\nContinue?",
+    L"Target executable not found:\r\n%s\r\n\r\nNothing was switched.",
+    L"Refusing to stop the current shell: its executable\r\n"
+    L"is not a recognized explorer:\r\n%s\r\n\r\nNothing was switched.",
+    L"The selected shell is already running.",
+    L"Failed to start Windows 7 Explorer:\r\n%s\r\n"
+    L"CreateProcess error %lu.\r\n\r\nAttempting to restore the native shell\u2026",
+    L"CRITICAL: could not start ANY shell.\r\n"
+    L"Native restore failed too (error %lu).\r\n\r\n"
+    L"Recovery: press Ctrl+Shift+Esc \u2192 Task Manager \u2192 Run new task \u2192 %s",
+    L"Failed to start the native shell:\r\n%s\r\n"
+    L"CreateProcess error %lu.\r\n\r\nRetry starting %s?",
+    L"Could not %ls the Startup-folder link (error %lu).",
+    L"A link was created in your Startup folder:\r\n"
+    L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"
+    L"7explorer-shell.lnk\r\n\r\nAt each logon this tool will switch to "
+    L"Explorer7 in the background. Uncheck the box (or delete the link) to "
+    L"remove it.",
+    L"Select the private Explorer7 (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0All files\0*.*\0",
+    L"Startup-folder link operation failed (error %lu).",
+    L"Explorer7 UI language: System default",
+    L"Explorer7 UI language: English",
+    L"Explorer7 UI language: Italiano",
+};
+static const WCHAR* TR_IT[TR_COUNT] = {
+    L"Scambia al volo la shell Explorer attiva. Nessun registry, nessun logout.",
+    L"Seleziona la shell Explorer",
+    L"Esplora risorse Windows nativo",
+    L"Explorer7 (Windows 7)",
+    L"(nessuna rilevata)",
+    L"Explorer sconosciuto (vedi path)",
+    L"Cambia", L"Annulla", L"Sfoglia\u2026",
+    L"Avvia Explorer7 automaticamente al logon (cartella Esecuzione automatica utente)",
+    L"Shell attuale: %s\r\nPID %lu \u2014 %s",
+    L"Destinazione: %s\r\n%s",
+    L"Explorer verr\u00e0 riavviato.\r\nIl lavoro non salvato potrebbe essere perso.\r\n\r\nContinuare?",
+    L"Eseguibile di destinazione non trovato:\r\n%s\r\n\r\nNessuna modifica applicata.",
+    L"Arresto della shell attuale rifiutato: l'eseguibile\r\n"
+    L"non \u00e8 un explorer riconosciuto:\r\n%s\r\n\r\nNessuna modifica applicata.",
+    L"La shell selezionata \u00e8 gi\u00e0 in esecuzione.",
+    L"Impossibile avviare Explorer 7:\r\n%s\r\n"
+    L"CreateProcess errore %lu.\r\n\r\nTentativo di ripristino della shell nativa\u2026",
+    L"CRITICO: impossibile avviare QUALSIASI shell.\r\n"
+    L"Anche il ripristino nativo \u00e8 fallito (errore %lu).\r\n\r\n"
+    L"Ripristino: premi Ctrl+Shift+Esc \u2192 Gestione attivit\u00e0 \u2192 Esegui nuova attivit\u00e0 \u2192 %s",
+    L"Impossibile avviare la shell nativa:\r\n%s\r\n"
+    L"CreateProcess errore %lu.\r\n\r\nRipetere l'avvio di %s?",
+    L"Impossibile %ls il collegamento in Esecuzione automatica (errore %lu).",
+    L"Collegamento creato nella cartella Esecuzione automatica:\r\n"
+    L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"
+    L"7explorer-shell.lnk\r\n\r\nA ogni logon questo strumento passer\u00e0 a "
+    L"Explorer7 in background. Deseleziona la casella (o elimina il collegamento) "
+    L"per rimuoverlo.",
+    L"Seleziona l'Explorer7 privato (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0Tutti i file\0*.*\0",
+    L"Operazione sul collegamento in Esecuzione automatica non riuscita (errore %lu).",
+    L"Lingua UI di Explorer7: di sistema",
+    L"Lingua UI di Explorer7: English",
+    L"Lingua UI di Explorer7: Italiano",
+};
+static BOOL g_uiItalian;   // FALSE = English UI (default)
+static const WCHAR* TR(TRID id) { return (g_uiItalian ? TR_IT : TR_EN)[id]; }
+
 #define IDC_RADIO_NATIVE  101
 #define IDC_RADIO_EX7     102
 #define IDC_BTN_SWITCH    201
 #define IDC_BTN_CANCEL    202
 #define IDC_BTN_BROWSE    203
 #define IDC_CHK_LOGIN     204
+#define IDC_CBO_SHLANG    205
 #define IDC_ST_NATPATH    301
 #define IDC_ST_EX7PATH    302
 #define IDC_ST_CURRENT    303
@@ -170,10 +259,10 @@ static ShellKind ClassifyPath(LPCWSTR path) {
 
 static LPCWSTR KindName(ShellKind k) {
     switch (k) {
-    case SHELL_NATIVE: return L"Native Windows Explorer";
-    case SHELL_EX7:    return L"Windows 7 Explorer";
-    case SHELL_NONE:   return L"(none detected)";
-    default:           return L"Unknown explorer (see path)";
+    case SHELL_NATIVE: return TR(TR_NATIVE_NAME);
+    case SHELL_EX7:    return TR(TR_EX7_NAME);
+    case SHELL_NONE:   return TR(TR_NONE_NAME);
+    default:           return TR(TR_UNKNOWN_NAME);
     }
 }
 
@@ -199,10 +288,12 @@ static void RefreshStatus(HWND hwnd) {
 
     WCHAR line[1200];
     if (k == SHELL_NONE) {
-        wcscpy_s(line, _countof(line), L"Current shell: (none detected)");
+        _snwprintf_s(line, _countof(line), _TRUNCATE,
+                     TR(TR_STATUS_CURRENT_FMT), KindName(k),
+                     (unsigned long)0, L"-");
     } else {
         _snwprintf_s(line, _countof(line), _TRUNCATE,
-                     L"Current shell: %s\r\nPID %lu \u2014 %s",
+                     TR(TR_STATUS_CURRENT_FMT),
                      KindName(k), (unsigned long)pid, path);
     }
     SetDlgItemTextW(hwnd, IDC_ST_CURRENT, line);
@@ -219,7 +310,7 @@ static void UpdateTargetLabel(HWND hwnd) {
     ShellKind t = SelectedTarget(hwnd);
     WCHAR line[1100];
     _snwprintf_s(line, _countof(line), _TRUNCATE,
-                 L"Target: %s\r\n%s", KindName(t),
+                 TR(TR_STATUS_TARGET_FMT), KindName(t),
                  (t == SHELL_EX7) ? g_ex7Path : g_nativePath);
     SetDlgItemTextW(hwnd, IDC_ST_TARGET, line);
 }
@@ -247,9 +338,10 @@ static void StopShellProcess(DWORD pid, HWND shellWnd) {
     CloseHandle(h);
 }
 
-// Start an executable as a detached new process. Returns FALSE+error on
-// immediate launch failure.
-static BOOL LaunchExe(LPCWSTR path, DWORD* pErr) {
+// Start an executable as a detached new process. envLang (may be NULL) sets
+// EX7_UI_LANG in the child's inherited environment (per-process UI language
+// override, honored by wrp64.dll). Returns FALSE+error on immediate failure.
+static BOOL LaunchExe(LPCWSTR path, DWORD* pErr, LPCWSTR envLang) {
     WCHAR cmd[1200];
     wcsncpy_s(cmd, _countof(cmd), path, _TRUNCATE);
     STARTUPINFOW si;
@@ -257,8 +349,21 @@ static BOOL LaunchExe(LPCWSTR path, DWORD* pErr) {
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi;
     ZeroMemory(&pi, sizeof(pi));
-    if (!CreateProcessW(path, cmd, NULL, NULL, FALSE,
-                        CREATE_NEW_PROCESS_GROUP, NULL, NULL, &si, &pi)) {
+    // Temporarily export EX7_UI_LANG for the child, then restore. The child
+    // receives a COPY of the environment at CreateProcess time.
+    WCHAR prev[32];
+    DWORD had = GetEnvironmentVariableW(L"EX7_UI_LANG", prev, 30);
+    if (envLang)
+        SetEnvironmentVariableW(L"EX7_UI_LANG", envLang);
+    BOOL ok = CreateProcessW(path, cmd, NULL, NULL, FALSE,
+                             CREATE_NEW_PROCESS_GROUP, NULL, NULL, &si, &pi);
+    if (envLang) {
+        if (had > 0 && had < 30)
+            SetEnvironmentVariableW(L"EX7_UI_LANG", prev);
+        else
+            SetEnvironmentVariableW(L"EX7_UI_LANG", NULL);
+    }
+    if (!ok) {
         if (pErr) *pErr = GetLastError();
         return FALSE;
     }
@@ -266,6 +371,21 @@ static BOOL LaunchExe(LPCWSTR path, DWORD* pErr) {
     CloseHandle(pi.hProcess);
     if (pErr) *pErr = 0;
     return TRUE;
+}
+
+// UI-language selection for the EX7 launch: from the GUI combo (0/1/2) or
+// from the caller environment (headless CLI inherits EX7_UI_LANG as-is).
+static LPCWSTR SelectedShellUILang(HWND hwnd) {
+    if (!hwnd) {
+        WCHAR cur[32];
+        DWORD n = GetEnvironmentVariableW(L"EX7_UI_LANG", cur, 31);
+        return (n > 0 && n < 31) ? L"ENV" : NULL;  // handled inside LaunchExe
+    }
+    int sel = (int)SendMessageW(GetDlgItem(hwnd, IDC_CBO_SHLANG),
+                                CB_GETCURSEL, 0, 0);
+    if (sel == 1) return L"en-US";
+    if (sel == 2) return L"it-IT";
+    return NULL;  // system default
 }
 
 // ---------------------------------------------------------- switching ---
@@ -281,8 +401,7 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
     if (!FileExists(targetPath)) {
         WCHAR msg[1300];
         _snwprintf_s(msg, _countof(msg), _TRUNCATE,
-                     L"Target executable not found:\r\n%s\r\n\r\n"
-                     L"Nothing was switched.", targetPath);
+                     TR(TR_ERR_NF_TARGET_FMT), targetPath);
         MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
                     MB_OK | MB_ICONERROR |
                     (headless ? MB_SYSTEMMODAL : 0));
@@ -299,9 +418,7 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
         // Safety: refuse to stop an unrecognized shell.
         WCHAR msg[1400];
         _snwprintf_s(msg, _countof(msg), _TRUNCATE,
-                     L"Refusing to stop the current shell: its executable\r\n"
-                     L"is not a recognized explorer:\r\n%s\r\n\r\n"
-                     L"Nothing was switched.", curPath);
+                     TR(TR_ERR_REFUSED_FMT), curPath);
         MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
                     MB_OK | MB_ICONERROR |
                     (headless ? MB_SYSTEMMODAL : 0));
@@ -310,7 +427,7 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
 
     if (curKind == target && pid != 0) {
         if (!headless)
-            MessageBoxW(hwnd, L"The selected shell is already running.",
+            MessageBoxW(hwnd, TR(TR_INFO_ALREADY),
                         L"7explorer Shell Switcher",
                         MB_OK | MB_ICONINFORMATION);
         if (hwnd) RefreshStatus(hwnd);
@@ -328,25 +445,23 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
     UINT mbExtra = headless ? MB_SYSTEMMODAL : 0;
     DWORD err = 0;
     int failed = 0;
-    if (!LaunchExe(targetPath, &err)) {
+    LPCWSTR envLang = (target == SHELL_EX7) ? SelectedShellUILang(hwnd) : NULL;
+    if (envLang && lstrcmpiW(envLang, L"ENV") == 0)
+        envLang = NULL;  // headless: keep caller environment as-is
+    if (!LaunchExe(targetPath, &err, envLang)) {
         WCHAR msg[1500];
         failed = 1;
         if (target != SHELL_NATIVE && FileExists(g_nativePath)) {
             _snwprintf_s(msg, _countof(msg), _TRUNCATE,
-                         L"Failed to start Windows 7 Explorer:\r\n%s\r\n"
-                         L"CreateProcess error %lu.\r\n\r\n"
-                         L"Attempting to restore the native shell\u2026",
+                         TR(TR_ERR_START_EX7_FMT),
                          targetPath, (unsigned long)err);
             MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
                         MB_OK | MB_ICONERROR | mbExtra);
             DWORD err2 = 0;
-            if (!LaunchExe(g_nativePath, &err2)) {
+            if (!LaunchExe(g_nativePath, &err2, NULL)) {
                 _snwprintf_s(msg, _countof(msg), _TRUNCATE,
-                             L"CRITICAL: could not start ANY shell.\r\n"
-                             L"Native restore failed too (error %lu).\r\n\r\n"
-                             L"Recovery: press Ctrl+Shift+Esc \u2192 Task "
-                             L"Manager \u2192 Run new task \u2192 "
-                             L"%s", (unsigned long)err2, g_nativePath);
+                             TR(TR_ERR_CRITICAL_FMT),
+                             (unsigned long)err2, g_nativePath);
                 MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
                             MB_OK | MB_ICONSTOP | mbExtra);
             } else {
@@ -356,14 +471,12 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
             int r;
             do {
                 _snwprintf_s(msg, _countof(msg), _TRUNCATE,
-                             L"Failed to start the native shell:\r\n%s\r\n"
-                             L"CreateProcess error %lu.\r\n\r\n"
-                             L"Retry starting %s?",
+                             TR(TR_ERR_START_NATIVE_FMT),
                              targetPath, (unsigned long)err, targetPath);
                 r = MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
                                 (headless ? MB_OK : MB_RETRYCANCEL) |
                                 MB_ICONERROR | mbExtra);
-                if (r == IDRETRY && LaunchExe(targetPath, &err)) {
+                if (r == IDRETRY && LaunchExe(targetPath, &err, NULL)) {
                     failed = 0;
                     break;
                 }
@@ -460,8 +573,8 @@ static void BrowseForExplorer7(HWND hwnd) {
     ofn.hwndOwner = hwnd;
     ofn.lpstrFile = file;
     ofn.nMaxFile = (DWORD)_countof(file);
-    ofn.lpstrFilter = L"explorer.exe\0explorer.exe\0All files\0*.*\0";
-    ofn.lpstrTitle = L"Select the private Explorer7 (explorer.exe)";
+    ofn.lpstrFilter = TR(TR_BROWSE_FILTER);
+    ofn.lpstrTitle = TR(TR_BROWSE_TITLE);
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_PATHMUSTEXIST;
     if (GetOpenFileNameW(&ofn)) {
         wcsncpy_s(g_ex7Path, _countof(g_ex7Path), file, _TRUNCATE);
@@ -488,44 +601,49 @@ static void OnCreate(HWND hwnd) {
 
     MakeChild(hwnd, WC_STATICW, L"7explorer Shell Switcher",
               SS_CENTER, 10, 10, 540, 22, 0);
-    MakeChild(hwnd, WC_STATICW,
-              L"Switches the running Explorer shell at runtime. "
-              L"No registry, no logout.",
+    MakeChild(hwnd, WC_STATICW, TR(TR_SUBTITLE),
               SS_CENTER, 10, 32, 540, 16, 0);
 
-    MakeChild(hwnd, WC_BUTTONW, L"Select Explorer shell",
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_GROUPBOX),
               BS_GROUPBOX, 10, 54, 540, 132, 0);
 
-    MakeChild(hwnd, WC_BUTTONW, L"Native Windows Explorer",
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_NATIVE_NAME),
               BS_AUTORADIOBUTTON | WS_TABSTOP,
               26, 76, 240, 20, IDC_RADIO_NATIVE);
     MakeChild(hwnd, WC_STATICW, g_nativePath,
               SS_LEFT, 44, 97, 490, 16, IDC_ST_NATPATH);
 
-    MakeChild(hwnd, WC_BUTTONW, L"Windows 7 Explorer",
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_EX7_NAME),
               BS_AUTORADIOBUTTON | WS_TABSTOP,
               26, 122, 240, 20, IDC_RADIO_EX7);
     MakeChild(hwnd, WC_STATICW, g_ex7Path,
               SS_LEFT, 44, 143, 420, 16, IDC_ST_EX7PATH);
-    MakeChild(hwnd, WC_BUTTONW, L"Browse\u2026",
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_BROWSE),
               BS_PUSHBUTTON | WS_TABSTOP,
               470, 140, 82, 22, IDC_BTN_BROWSE);
-    MakeChild(hwnd, WC_BUTTONW,
-              L"Start Windows 7 Explorer automatically at logon (user Startup folder)",
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_CHK_LOGIN),
               BS_AUTOCHECKBOX | WS_TABSTOP,
               26, 176, 524, 20, IDC_CHK_LOGIN);
 
-    MakeChild(hwnd, WC_STATICW, L"Current shell: \u2026",
-              SS_LEFT, 26, 196, 524, 34, IDC_ST_CURRENT);
-    MakeChild(hwnd, WC_STATICW, L"Target: \u2026",
-              SS_LEFT, 26, 236, 524, 34, IDC_ST_TARGET);
+    MakeChild(hwnd, WC_STATICW, L"\u2026",
+              SS_LEFT, 26, 202, 524, 34, IDC_ST_CURRENT);
+    MakeChild(hwnd, WC_STATICW, L"\u2026",
+              SS_LEFT, 26, 242, 524, 34, IDC_ST_TARGET);
 
-    MakeChild(hwnd, WC_BUTTONW, L"Switch",
+    HWND cbo = MakeChild(hwnd, WC_COMBOBOXW, NULL,
+                         CBS_DROPDOWNLIST | WS_VSCROLL,
+                         26, 286, 280, 140, IDC_CBO_SHLANG);
+    SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_SYS));
+    SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_EN));
+    SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_IT));
+    SendMessageW(cbo, CB_SETCURSEL, 0, 0);
+
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_SWITCH),
               BS_DEFPUSHBUTTON | WS_TABSTOP,
-              330, 286, 100, 28, IDC_BTN_SWITCH);
-    MakeChild(hwnd, WC_BUTTONW, L"Cancel",
+              330, 316, 100, 28, IDC_BTN_SWITCH);
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_CANCEL),
               BS_PUSHBUTTON | WS_TABSTOP,
-              440, 286, 100, 28, IDC_BTN_CANCEL);
+              440, 316, 100, 28, IDC_BTN_CANCEL);
 
     // Initial state: select the OTHER shell as the target, so a first
     // "Switch" actually changes something.
@@ -561,9 +679,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
             return 0;
 
         case IDC_BTN_SWITCH: {
-            if (MessageBoxW(hwnd,
-                    L"Explorer will be restarted.\r\n"
-                    L"Unsaved work may be affected.\r\n\r\nContinue?",
+            if (MessageBoxW(hwnd, TR(TR_WARN_CONFIRM),
                     L"7explorer Shell Switcher",
                     MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES)
                 return 0;
@@ -585,9 +701,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
                 if (FAILED(hr)) {
                     WCHAR m[700];
                     _snwprintf_s(m, _countof(m), _TRUNCATE,
-                                 L"Could not %ls the Startup-folder link "
-                                 L"(error %lu).",
-                                 want ? L"create" : L"remove",
+                                 TR(TR_ERR_STARTUPLINK_FMT),
+                                 want ? (g_uiItalian ? L"creare" : L"create")
+                                      : (g_uiItalian ? L"rimuovere" : L"remove"),
                                  (unsigned long)e);
                     MessageBoxW(hwnd, m, L"7explorer Shell Switcher",
                                 MB_OK | MB_ICONERROR);
@@ -595,13 +711,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
                                    StartupIsPresent() ? BST_CHECKED
                                                       : BST_UNCHECKED);
                 } else if (want) {
-                    MessageBoxW(hwnd,
-                        L"A link was created in your Startup folder:\r\n"
-                        L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\"
-                        L"Programs\\Startup\\7explorer-shell.lnk\r\n\r\n"
-                        L"At each logon this tool will switch to Explorer7 "
-                        L"in the background. Uncheck the box (or delete the "
-                        L"link) to remove it.",
+                    MessageBoxW(hwnd, TR(TR_INFO_STARTUP_OK),
                         L"7explorer Shell Switcher",
                         MB_OK | MB_ICONINFORMATION);
                 }
@@ -631,6 +741,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     (void)hPrevInstance; (void)nCmdShow;
     g_hInst = hInstance;
 
+    // UI language: EX7_LANG=it|en > primary system UI language (English
+    // default; the tool always works in English).
+    {
+        WCHAR l[8];
+        DWORD n = GetEnvironmentVariableW(L"EX7_LANG", l, 7);
+        if (n > 0 && n < 7 && (l[0] == L'i' || l[0] == L'I'))
+            g_uiItalian = TRUE;
+        else if (n > 0 && n < 7 && (l[0] == L'e' || l[0] == L'E'))
+            g_uiItalian = FALSE;
+        else
+            g_uiItalian = (PRIMARYLANGID(GetUserDefaultUILanguage()) ==
+                           LANG_ITALIAN);
+    }
+
     ResolveShellPaths();
 
     // Command-line modes (used by the Startup-folder link / scripts):
@@ -649,6 +773,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             else if (!lstrcmpiW(argv[i], L"--apply-native"))   mode = 2;
             else if (!lstrcmpiW(argv[i], L"--install-login"))  mode = 3;
             else if (!lstrcmpiW(argv[i], L"--uninstall-login"))mode = 4;
+            else if (!lstrcmpiW(argv[i], L"--lang=it"))        g_uiItalian = TRUE;
+            else if (!lstrcmpiW(argv[i], L"--lang=en"))        g_uiItalian = FALSE;
         }
         if (argv) LocalFree(argv);
 
@@ -688,7 +814,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         L"Ex7ShellSwitcher",
         L"7explorer Shell Switcher",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 576, 370,
+        CW_USEDEFAULT, CW_USEDEFAULT, 576, 400,
         NULL, NULL, hInstance, NULL);
     if (!hwnd)
         return 1;
