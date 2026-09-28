@@ -75,6 +75,25 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
   non tronchi a video). Il CI prova tutto ciò che è verificabile statico/
   programmatico, ma non *lancia* la shell.
 
+
+## Update 2026-09-28 (v0.0.3-test2)
+
+- **Fix portabilità binari**: CRT statico (`/MT`) per `ex7selfcontained.exe`
+  e `wrp64.dll` — la v0.0.3-test1 su una VM pulita Win11 24H2 falliva con
+  «MSVCP140.dll was not found». Ora nessuna dipendenza dal Visual C++
+  Redistributable.
+- **Conferma utente (hardware reale Win10 19044)**: bootstrap completo OK,
+  3 run idempotenti, hash finale stabile `92291e61…`. Pipeline v0.0.3
+  validata su macchina reale.
+- **PoC shell via Windhawk** (nuovo, cartella `windhawk/`, anche in asset):
+  - `ex7-userinit-shell.wh.cpp` (`userinit.exe`, hook `RegQueryValueExW`,
+    redirect query `Shell` → `C:\ex7test\explorer.exe`, fail-safe se manca);
+  - `ex7-fake-explorer-path.wh.cpp` (`explorer.exe`, hook
+    `GetModuleFileNameW` per `hModule==NULL` → `%SystemRoot%\explorer.exe`);
+  - procedura test + reversibilità in `windhawk-POC-README.md`. Obiettivo:
+    la **taskbar Windows 7** come shell attiva al login, senza toccare
+    `C:\Windows\explorer.exe` né il registry.
+
 ## Uso
 
 1. scaricare `ex7selfcontained.exe` e `wrp64.dll` nella stessa cartella

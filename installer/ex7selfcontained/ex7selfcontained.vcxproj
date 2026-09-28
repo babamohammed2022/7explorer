@@ -34,6 +34,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <!-- Static CRT: the bootstrap must run on machines without the Visual
+           C++ Redistributable (reported 2026-09-28 on a clean Win11 VM:
+           "MSVCP140.dll was not found"). -->
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <!-- lang_catalog.h is UTF-8 (BOM); /utf-8 keeps the non-Latin strings correct -->
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>

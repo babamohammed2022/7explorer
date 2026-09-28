@@ -196,6 +196,9 @@ jobs:
             --notes-file docs/RELEASE_NOTES_test.md `
             "Release/wrp64.dll#wrp64.dll" `
             "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
+            "windhawk/ex7-userinit-shell.cpp#ex7-userinit-shell.wh.cpp" `
+            "windhawk/ex7-fake-explorer-path.cpp#ex7-fake-explorer-path.wh.cpp" `
+            "windhawk/README.md#windhawk-POC-README.md" `
             "SHA256SUMS.txt" *>&1 |
             Out-File ci-logs\release.txt -Append
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
