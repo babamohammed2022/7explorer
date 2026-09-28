@@ -25,10 +25,9 @@
 #define _WIN32_WINNT 0x0600  // Vista+ (QueryFullProcessImageNameW)
 
 // Themed standard controls (comctl32 v6); no external framework.
-#pragma comment(linker, "/manifestdependency:type='win32' " \
-    "name='Microsoft.Windows.Common-Controls' version='6.0.0.0' " \
-    "processorArchitecture='*' publicKeyToken='6595b64144ccf1df' " \
-    "language='*'")
+// (single line: line-continuation inside #pragma comment(linker,...) is not
+//  reliable — LNK1276)
+#pragma comment(linker, "/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'")
 
 #include <windows.h>
 #include <commctrl.h>
