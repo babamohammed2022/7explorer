@@ -109,6 +109,33 @@ jobs:
       - name: Inspect the C++-patched imports once more (log evidence)
         run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers
 
+      # ---- v0.0.3: generated-resource pipeline, END-TO-END on real Windows
+      - name: E2E run: installer download->patch->localize (no .mui anywhere)
+        shell: cmd
+        run: |
+          mkdir e2e
+          copy /Y installer\ex7selfcontained\bin\ex7selfcontained.exe e2e\
+          cd e2e
+          ex7selfcontained.exe > run.out 2>&1
+          if errorlevel 1 (type run.out & exit /b 1)
+          type run.out
+      - name: E2E proof: generated resources verified in the REAL PE
+        shell: cmd
+        run: |
+          python tools\check_pe_resources.py e2e\explorer.exe ^
+            > ci-logs\check-pe-resources.txt 2>&1
+          if errorlevel 1 (type ci-logs\check-pe-resources.txt & exit /b 1)
+          type ci-logs\check-pe-resources.txt
+      - name: E2E rerun: idempotency (second run rewrites identically)
+        shell: cmd
+        run: |
+          cd e2e
+          ex7selfcontained.exe --offline > run2.out 2>&1
+          if errorlevel 1 (type run2.out & exit /b 1)
+          cd ..
+          python tools\check_pe_resources.py e2e\explorer.exe
+          if errorlevel 1 exit /b 1
+
       - name: Produce SHA256SUMS for the CI-built binaries
         shell: pwsh
         run: |
