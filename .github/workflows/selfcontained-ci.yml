@@ -95,6 +95,12 @@ jobs:
           python tools\analyze_mui.py work\explorer-ref.exe --dump-headers >> ci-logs\run-verify.txt 2>&1
           if errorlevel 1 exit /b 1
 
+      - name: Structure probe of the reference menus (NO text extracted)
+        shell: cmd
+        run: |
+          python tools\structure_probe.py work\explorer-ref.exe --out ci-logs\structure-ref.json
+          if errorlevel 1 exit /b 1
+
       - name: Patch imports on the REAL file with the Python reference
         run: python tools\patch_imports.py work\explorer-ref.exe work\explorer-py.exe
 
@@ -164,7 +170,7 @@ jobs:
           Get-Content SHA256SUMS.txt
 
       - name: Commit build logs on failure (readable from the dev sandbox)
-        if: failure()
+        if: always()
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
