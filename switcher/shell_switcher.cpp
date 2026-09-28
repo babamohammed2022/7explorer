@@ -153,6 +153,7 @@ static const WCHAR* TR(TRID id) { return (g_uiItalian ? TR_IT : TR_EN)[id]; }
 #define IDC_BTN_BROWSE    203
 #define IDC_CHK_LOGIN     204
 #define IDC_CBO_SHLANG    205
+#define IDC_BTN_MENUDUMP  206
 #define IDC_ST_NATPATH    301
 #define IDC_ST_EX7PATH    302
 #define IDC_ST_CURRENT    303
@@ -562,6 +563,144 @@ static BOOL StartupIsPresent(void) {
            FileExists(linkPath);
 }
 
+
+// ------------------------------------------------------- menu probe ----
+// Dev diagnostic: opens the REAL taskbar context menu of the RUNNING shell,
+// then reads the live menu items (ids, captions, submenus) and writes them
+// to 7explorer-menudump.txt next to the switcher exe. It does not open any
+// binary, it reads only what the shell itself displays (user-authorized,
+// one click). The menu flashes briefly and is closed afterwards. Registry,
+// files and the shell are untouched.
+
+typedef struct _MenuDumpCtx {
+    DWORD shellPid;
+    HWND  menuWnd;      // found #32768 top-level menu window
+} MENUDUMPCTX;
+
+static BOOL CALLBACK FindMenuWindow(HWND h, LPARAM lp) {
+    MENUDUMPCTX* ctx = (MENUDUMPCTX*)lp;
+    WCHAR cls[16];
+    GetClassNameW(h, cls, 15);
+    if (wcscmp(cls, L"#32768") == 0) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(h, &pid);
+        if (pid == ctx->shellPid && IsWindowVisible(h)) {
+            ctx->menuWnd = h;
+            return FALSE;  // stop
+        }
+    }
+    return TRUE;
+}
+
+static void DumpMenuRecursive(HMENU hm, FILE* f, int depth) {
+    int n = GetMenuItemCount(hm);
+    for (int i = 0; i < n; i++) {
+        MENUITEMINFOW mi;
+        WCHAR cap[260];
+        cap[0] = 0;
+        ZeroMemory(&mi, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        mi.fMask = MIIM_TYPE | MIIM_ID | MIIM_SUBMENU | MIIM_STATE;
+        mi.dwTypeData = cap;
+        mi.cch = 259;
+        if (!GetMenuItemInfoW(hm, i, TRUE, &mi))
+            continue;
+        for (int d = 0; d < depth; d++)
+            fwprintf(f, L"  ");
+        UINT id = mi.wID;
+        UINT state = mi.fState;
+        if (mi.hSubMenu) {
+            fwprintf(f, L"submenu[%d] id=%u state=0x%x : %s\n",
+                     i, id, state, cap[0] ? cap : L"(no text)");
+            DumpMenuRecursive(mi.hSubMenu, f, depth + 1);
+        } else if (mi.fType & MFT_SEPARATOR) {
+            fwprintf(f, L"[%d] separator\n", i);
+        } else {
+            fwprintf(f, L"[%d] cmd=%u state=0x%x : %s\n",
+                     i, id, state, cap[0] ? cap : L"(no text)");
+        }
+    }
+}
+
+// Dumps BOTH menu contexts when activeProbe is 0 (taskbar) — one file only.
+static void MenuProbe(HWND hwnd, BOOL headless) {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", NULL);
+    if (!tray) {
+        MessageBoxW(hwnd, L"Shell_TrayWnd not found (is a shell running?)",
+                    L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+        return;
+    }
+    RECT rc;
+    GetWindowRect(tray, &rc);
+    int cx = rc.left + 60, cy = (rc.top + rc.bottom) / 2;
+    DWORD shellPid = 0;
+    GetWindowThreadProcessId(tray, &shellPid);
+
+    // Open the tray context menu (async: trackpopup is modal in the shell).
+    SendMessageW(tray, WM_CONTEXTMENU, (WPARAM)tray, MAKELPARAM(cx, cy));
+
+    // Find the top-level menu window of the shell's thread.
+    MENUDUMPCTX ctx;
+    ctx.shellPid = shellPid;
+    ctx.menuWnd = NULL;
+    for (int tryN = 0; tryN < 40 && !ctx.menuWnd; tryN++) {
+        Sleep(50);
+        EnumWindows(FindMenuWindow, (LPARAM)&ctx);
+    }
+    if (!ctx.menuWnd) {
+        MessageBoxW(hwnd, L"Context menu window not found (timeout).",
+                    L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    // MN_GETHMENU returns the HMENU tracked by a #32768 menu window.
+    HMENU hm = (HMENU)SendMessageW(ctx.menuWnd, 0x01E1 /* MN_GETHMENU */,
+                                   0, 0);
+    if (hm)
+        SendMessageW(ctx.menuWnd, 0x01E1, 0, (LPARAM)&hm);  /* safety no-op */
+
+    // Compose the output file next to this executable.
+    WCHAR out[1024];
+    DWORD nb = GetModuleFileNameW(NULL, out, (DWORD)_countof(out));
+    if (nb > 0 && nb < _countof(out)) {
+        WCHAR* bs = wcsrchr(out, L'\\');
+        if (bs) *bs = L'\0';
+        lstrcatW(out, L"\\7explorer-menudump.txt");
+    } else {
+        lstrcpyW(out, L"7explorer-menudump.txt");
+    }
+
+    FILE* f = _wfopen(out, L"w, ccs=UTF-8");
+    if (f) {
+        WCHAR own[MAX_PATH * 2];
+        DWORD pid = 0;
+        DetectCurrentShell(own, (DWORD)_countof(own), &pid);
+        fwprintf(f, L"7explorer menu dump (taskbar context menu)\n");
+        fwprintf(f, L"shell PID: %lu | exe: %s\n\n",
+                 (unsigned long)pid, own);
+        if (hm)
+            DumpMenuRecursive(hm, f, 0);
+        else
+            fwprintf(f, L"MN_GETHMENU returned NULL\n");
+        fclose(f);
+    }
+
+    // Close the menu politely.
+    PostMessageW(ctx.menuWnd, WM_KEYDOWN, VK_ESCAPE, 0);
+    PostMessageW(ctx.menuWnd, WM_KEYUP, VK_ESCAPE, 0);
+
+    WCHAR m[1150];
+    if (f)
+        _snwprintf_s(m, _countof(m), _TRUNCATE,
+                     L"Menu dump written to:\r\n%s", out);
+    else
+        _snwprintf_s(m, _countof(m), _TRUNCATE,
+                     L"Could not write: %s", out);
+    MessageBoxW(hwnd, m, L"7explorer Shell Switcher",
+                MB_OK | (f ? MB_ICONINFORMATION : MB_ICONERROR) |
+                (headless ? MB_SYSTEMMODAL : 0));
+}
+
 // ------------------------------------------------------------- browse ---
 
 static void BrowseForExplorer7(HWND hwnd) {
@@ -621,6 +760,9 @@ static void OnCreate(HWND hwnd) {
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_BROWSE),
               BS_PUSHBUTTON | WS_TABSTOP,
               470, 140, 82, 22, IDC_BTN_BROWSE);
+    MakeChild(hwnd, WC_BUTTONW, L"Menu dump",
+              BS_PUSHBUTTON | WS_TABSTOP,
+              330, 286, 96, 22, IDC_BTN_MENUDUMP);
     MakeChild(hwnd, WC_BUTTONW, TR(TR_CHK_LOGIN),
               BS_AUTOCHECKBOX | WS_TABSTOP,
               26, 176, 524, 20, IDC_CHK_LOGIN);
@@ -690,6 +832,11 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
         case IDC_BTN_BROWSE:
             if (HIWORD(wParam) == BN_CLICKED)
                 BrowseForExplorer7(hwnd);
+            return 0;
+
+        case IDC_BTN_MENUDUMP:
+            if (HIWORD(wParam) == BN_CLICKED)
+                MenuProbe(hwnd, FALSE);
             return 0;
 
         case IDC_CHK_LOGIN:
@@ -773,10 +920,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             else if (!lstrcmpiW(argv[i], L"--apply-native"))   mode = 2;
             else if (!lstrcmpiW(argv[i], L"--install-login"))  mode = 3;
             else if (!lstrcmpiW(argv[i], L"--uninstall-login"))mode = 4;
+            else if (!lstrcmpiW(argv[i], L"--dump-menus"))    mode = 5;
             else if (!lstrcmpiW(argv[i], L"--lang=it"))        g_uiItalian = TRUE;
             else if (!lstrcmpiW(argv[i], L"--lang=en"))        g_uiItalian = FALSE;
         }
         if (argv) LocalFree(argv);
+        if (mode == 5) {
+            MenuProbe(NULL, TRUE);
+            return 0;
+        }
 
         if (mode == 1 || mode == 2)
             return DoSwitch(NULL, mode == 1 ? SHELL_EX7 : SHELL_NATIVE, TRUE);
