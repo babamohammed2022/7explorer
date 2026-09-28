@@ -59,11 +59,23 @@ TBP_BACKGROUNDRIGHT = 2
 TBP_BACKGROUNDTOP = 3
 TBP_BACKGROUNDLEFT = 4
 
-# Class indices = position in CMAP. Order is OUR choice (indices are
-# opaque); names must match what the shell asks uxtheme for.
-CLASSES = ["GLOBALS", "TASKBAR", "TASKBAND", "REBAR", "STARTPANEL",
-           "TRAYNOTIFY", "CLOCK", "MENU", "MENUBAND"]
-CID_GLOBALS, CID_TASKBAR = 0, 1
+# Class indices = position in CMAP. The first N indices are RESERVED by
+# the loader: GetThemeDefaults resolves the size/color variant names by
+# looking up "sizevariant.<Size>" / "colorvariant.<Color>" in CMAP, and
+# the global classes "globals"/"sysmetrics"/"documentation" occupy fixed
+# slots. Layout below mirrors the observed reserved region (observed
+# structurally via the CI theme probe; these are functional identifiers,
+# not creative content). Our authored classes follow at index 13+.
+RESERVED = ["documentation", "", "", "sizevariant.NormalSize", "",
+            "sizevariant.Default", "colorvariant.NormalColor", "", "",
+            "", "globals", "sysmetrics", ""]
+CLASSES = RESERVED + ["GLOBALS", "TASKBAR", "TASKBAND", "REBAR",
+                      "STARTPANEL", "TRAYNOTIFY", "CLOCK", "MENU",
+                      "MENUBAND"]
+CID_RESERVED = len(RESERVED)
+CID_GLOBALS = CID_RESERVED + 0
+CID_TASKBAR = CID_RESERVED + 1
+CID_GLOBALCLASS, CID_SYSMETRICS = 10, 11
 
 
 def rgb(r, g, b):
@@ -213,7 +225,7 @@ def build_theme(sig128: bytes | None, rmap=None, vmap=None,
 
 
 def _globals_stream():
-    recs = [r for r in make_records_probe() if r.cid == CID_GLOBALS]
+    recs = [Rec(TMT_NAME, T_STRING, CID_GLOBALCLASS, 0, 0, "7explorer Aero")]
     return b"".join(r.bytes() for r in recs)
 
 
