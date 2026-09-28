@@ -38,6 +38,8 @@ T_BOOL = 203
 T_COLOR = 204
 T_MARGINS = 205
 T_FILENAME = 206
+T_ENUM = 207
+T_FONT = 210
 
 # nameID constants we use (public Windows SDK vsstyle.h vs. historical
 # tmschema.h; numeric values are a functional interface, not content):
@@ -107,7 +109,19 @@ class Rec:
 
     def bytes(self):
         """32-byte header + payload, padded so rec len % 8 == 0."""
-        if self.type in (T_INT, T_BOOL, T_COLOR):
+        if self.type == T_FONT:
+            # FONT: font-table id in shortFlag, full LOGFONTW (92 bytes)
+            # payload (real theme records: shrt=501.. size=92, advance
+            # 32+92 padded to 8 => 128 total).
+            fontid, logfont = self.value
+            data = logfont
+            assert len(data) == 92
+            data += b"\0" * ((-len(data)) % 8)  # total record % 8 == 0
+            assert (32 + len(data)) % 8 == 0
+            rec = struct.pack("<8i", self.name, self.type, self.cid,
+                              self.part, self.state, fontid, 0, 92)
+            return rec + data
+        if self.type in (T_INT, T_BOOL, T_COLOR, T_ENUM):
             data = struct.pack("<i", self.value) + b"\0" * 4
             size = 4
         elif self.type == T_COLOR:
@@ -132,7 +146,19 @@ class Rec:
             raise ValueError(f"type {self.type} unsupported")
         # scalar: 32+4+4 = 40 (mult of 8) OK; margins: 32+16=48 OK;
         # string already aligned.  For int/color/bool we fixed 8 bytes data.
-        if self.type in (T_INT, T_BOOL, T_COLOR):
+        if self.type == T_FONT:
+            # FONT: font-table id in shortFlag, full LOGFONTW (92 bytes)
+            # payload (real theme records: shrt=501.. size=92, advance
+            # 32+92 padded to 8 => 128 total).
+            fontid, logfont = self.value
+            data = logfont
+            assert len(data) == 92
+            data += b"\0" * ((-len(data)) % 8)  # total record % 8 == 0
+            assert (32 + len(data)) % 8 == 0
+            rec = struct.pack("<8i", self.name, self.type, self.cid,
+                              self.part, self.state, fontid, 0, 92)
+            return rec + data
+        if self.type in (T_INT, T_BOOL, T_COLOR, T_ENUM):
             assert (32 + len(data)) % 8 == 0
         else:
             assert (32 + len(data)) % 8 == 0, len(data)
