@@ -38,6 +38,64 @@ static GetThemeDefaults_t pGetThemeDefaults;
 static FARPROC pLoaderLoadTheme;
 static OpenThemeDataFromFile_t pOpenThemeDataFromFile;
 
+// ---- structural enumeration (names/ids ONLY, no content bytes) -----------
+// Lists the resource type/name/lang triples of a PE (--enum mode). Used to
+// learn the resource LAYOUT of themes (which custom types/names exist and
+// their payload sizes), never to read their content.
+
+static LPCWSTR g_enumPath;
+
+static void PrintName(LPCWSTR label, LPWSTR v)
+{
+    if (IS_INTRESOURCE(v))
+        wprintf(L"      %s: #%lu\n", label, (unsigned long)(UINT_PTR)v);
+    else
+        wprintf(L"      %s: '%s'\n", label, v);
+}
+
+static BOOL CALLBACK EnumLangCB(HMODULE hModule, LPCWSTR lpType,
+                                LPWSTR lpName, WORD wLang, LONG_PTR lParam)
+{
+    HRSRC h = FindResourceExW(hModule, lpType, lpName, wLang);
+    DWORD sz = h ? SizeofResource(hModule, h) : 0;
+    wprintf(L"        lang 0x%04x  size %lu\n", (unsigned)wLang,
+            (unsigned long)sz);
+    return TRUE;
+}
+
+static BOOL CALLBACK EnumNameCB(HMODULE hModule, LPCWSTR lpType,
+                                LPWSTR lpName, LONG_PTR lParam)
+{
+    PrintName(L"name", lpName);
+    EnumResourceLanguagesW(hModule, lpType, lpName, EnumLangCB, 0);
+    return TRUE;
+}
+
+static BOOL CALLBACK EnumTypeCB(HMODULE hModule, LPWSTR lpType,
+                                LONG_PTR lParam)
+{
+    if (IS_INTRESOURCE(lpType))
+        wprintf(L"   TYPE #%lu\n", (unsigned long)(UINT_PTR)lpType);
+    else
+        wprintf(L"   TYPE '%s'\n", lpType);
+    EnumResourceNamesW(hModule, lpType, EnumNameCB, 0);
+    return TRUE;
+}
+
+static void EnumResources(LPCWSTR path)
+{
+    wprintf(L"== enum %s\n", path);
+    HMODULE m = LoadLibraryExW(path, NULL,
+                               LOAD_LIBRARY_AS_DATAFILE |
+                               LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+    if (!m) {
+        wprintf(L"   !! LoadLibraryEx failed (err %lu)\n", GetLastError());
+        return;
+    }
+    EnumResourceTypesW(m, EnumTypeCB, 0);
+    FreeLibrary(m);
+}
+
 static void ProbeOne(LPCWSTR path)
 {
     wprintf(L"== %s\n", path);
@@ -113,6 +171,12 @@ static void ProbeOne(LPCWSTR path)
 
 int wmain(int argc, wchar_t** argv)
 {
+    // unbuffered: a crash in the loader must not swallow output
+    setvbuf(stdout, NULL, _IONBF, 0);
+    if (argc > 2 && !lstrcmpiW(argv[1], L"--enum")) {
+        EnumResources(argv[2]);
+        return 0;
+    }
     HMODULE hUx = LoadLibraryW(L"uxtheme.dll");
     if (!hUx) { wprintf(L"no uxtheme (err %lu)\n", GetLastError()); return 2; }
     pGetThemeDefaults = (GetThemeDefaults_t)GetProcAddress(hUx, (LPCSTR)7);
