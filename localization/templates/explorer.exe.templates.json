@@ -312,11 +312,38 @@
      {
       "dwType": 0,
       "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 1,
+      "help_id": 0,
+      "text_meta": {
+       "len": 8,
+       "accel": "T",
+       "used": true
+      },
+      "popup": true,
+      "popup_level": 2
+     },
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
       "cmd": 403,
       "bResInfo": 0,
       "help_id": 0,
       "text_meta": {
-       "len": 7,
+       "len": 15,
        "accel": "s",
        "used": true
       },
@@ -325,12 +352,12 @@
      {
       "dwType": 0,
       "dwState": 0,
-      "cmd": 405,
+      "cmd": 404,
       "bResInfo": 0,
       "help_id": 0,
       "text_meta": {
        "len": 20,
-       "accel": "t",
+       "accel": "k",
        "used": true
       },
       "popup": false
@@ -338,7 +365,7 @@
      {
       "dwType": 0,
       "dwState": 0,
-      "cmd": 404,
+      "cmd": 405,
       "bResInfo": 0,
       "help_id": 0,
       "text_meta": {
@@ -351,24 +378,37 @@
      {
       "dwType": 0,
       "dwState": 0,
-      "cmd": 65493,
+      "cmd": 407,
       "bResInfo": 0,
       "help_id": 0,
       "text_meta": {
-       "len": 19,
-       "accel": "R",
+       "len": 16,
+       "accel": "d",
        "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
       },
       "popup": false
      },
      {
       "dwType": 0,
       "dwState": 0,
-      "cmd": 65492,
+      "cmd": 420,
       "bResInfo": 0,
       "help_id": 0,
       "text_meta": {
-       "len": 20,
+       "len": 18,
        "accel": "M",
        "used": true
       },
@@ -390,13 +430,41 @@
      {
       "dwType": 0,
       "dwState": 0,
-      "cmd": 65491,
+      "cmd": 424,
+      "bResInfo": 0,
+      "help_id": 0,
+      "text_meta": {
+       "len": 16,
+       "accel": "L",
+       "used": true
+      },
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 413,
       "bResInfo": 128,
       "help_id": 0,
       "text_meta": {
-       "len": 17,
-       "accel": "C",
+       "len": 10,
+       "accel": "r",
        "used": true
+      },
+      "popup": false
+     }
+    ],
+    [
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 128,
+      "help_id": 0,
+      "text_meta": {
+       "len": 0,
+       "accel": null,
+       "used": false
       },
       "popup": false
      }

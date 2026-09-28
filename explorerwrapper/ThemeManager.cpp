@@ -76,28 +76,7 @@ void ThemeManagerInitialize()
 
 	auto hr = LoadThemeFile(szThemePath);
 	if (hr != S_OK)
-	{
 		dbgprintf(L"LOADTHEMEFILE FAILED %x\n", hr);
-
-		// 7explorer fork: fallback to the *running OS* theme file when no
-		// theme was placed in <exedir>\theme\ (the file stays on the
-		// user's machine; we never ship it). On Windows 8.1+ some
-		// Win7-specific classes are missing (upstream README), but this is
-		// still far closer to the expected look than the old-classic
-		// fallback. To get the full Windows 7 look, place a Win7
-		// aero.msstyles (+ its en-US folder) under <exedir>\theme\.
-		WCHAR szSysTheme[MAX_PATH];
-		if (GetWindowsDirectoryW(szSysTheme, MAX_PATH))
-		{
-			lstrcatW(szSysTheme, L"\\Resources\\Themes\\aero\\aero.msstyles");
-			if (GetFileAttributesW(szSysTheme) != INVALID_FILE_ATTRIBUTES)
-			{
-				dbgprintf(L"trying system theme fallback: %s", szSysTheme);
-				hr = LoadThemeFile(szSysTheme);
-				dbgprintf(L"system theme fallback result: %x\n", hr);
-			}
-		}
-	}
 }
 
 HRESULT LoadThemeFile(wchar_t *Path)

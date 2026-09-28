@@ -102,6 +102,40 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
 - **Switcher bilingue**: UI in inglese di default, italiano se il sistema è
   italiano (override env `EX7_LANG=it|en` o `--lang it|en`).
 
+## Update 2026-09-28 (v0.0.3-test8)
+
+- **REGRESSIONE RIMOSSA — tema**: il fallback automatico di test7 verso
+  l'`aero.msstyles` di Windows 10/11 è stato **completamente eliminato**
+  (mescolava classi di tema moderne sulla shell Win7: ilegibile). Il wrapper
+  torna al comportamento upstream: cerca SOLO `<cartella>\theme\<nome>.msstyles`
+  (default `aero`) — se non c'è, tema classico leggibile.
+- **Pulsante "Tema…" / "Theme…" nello switcher** (sostituisce il defunto
+  "Menu dump"): selezioni **il TUO** `aero.msstyles` di Windows 7 (es.
+  estratto dal tuo `aero.rar` o da un tuo disco di Windows 7) e lo switcher
+  lo copia in `<cartella-explorer7>\theme\aero.msstyles`; se accanto al file
+  c'è anche `<lingua>\aero.msstyles.mui` (en-US e/o it-IT) copia pure quella.
+  **Copia 100% locale del TUO file**: il progetto non scarica, non include e
+  non ridistribuisce asset di terzi; il copyright del tema resta tuo sul tuo
+  PC (è lo stesso meccanismo documentato upstream). Dopo la copia: Cambia →
+  Explorer7 (o passa a nativa e torna a Explorer7) per vedere il tema Win7.
+- **Menu contestuale taskbar RISCRITTO (menu 12000) con struttura Windows 7
+  reale e command ID documentati pubblicamente** (Code Project / AutoHotkey /
+  documentazione Shell.Application: 403 Cascade, 404 stacked, 405 side by
+  side, 407 desktop, 420 Task Manager, 424 Lock, 413 Properties):
+  &Toolbars ▸ / Ca&scade windows / Show windows stac&ked / Show windows
+  s&ide by side / Show the &desktop / Start Task &Manager /
+  &Lock the taskbar / P&roperties — testi EN+IT (nostra composizione).
+  La struttura precedente era sbagliata (voci annidate dentro "Toolbars" e
+  ID comando errati) — causa del menu "solo Toolbars".
+- **"Help and Support"**: la stringa 7021 ("Guida e supporto" IT) è presente
+  e verificata nel payload IT; ritestare con questa build.
+- **Voce "Personalizza…" del flyout area di notifica**: NON è controllabile
+  da noi — quel flyout lo disegna la shell32 **di Windows 10** in esecuzione
+  (testi dell'OS), non il binario Win7. Cambiarlo richiederebbe patchare
+  file di sistema: fuori scope per scelta del progetto.
+- Rimosso il probe "Menu dump" (non funzionante; non più necessario ora che
+  il menu è hardcoded nella forma corretta).
+
 ## Update 2026-09-28 (v0.0.3-test7)
 
 - **Fix tema "classico"**: trovata la causa — il ThemeManager del wrapper
