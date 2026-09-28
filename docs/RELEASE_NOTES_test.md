@@ -50,3 +50,20 @@ ex7selfcontained.exe --offline
 
 Mai puntare `--app-dir` dentro `C:\Windows`: l'installer non tocca i file di
 sistema per costruzione.
+
+## Novita' v0.0.2-test1 — localizzazione COMPLETA (strings + menus + dialogs)
+
+- Catalogo explorer.exe.mui completo: **161 stringhe, 6 menu, 6 dialog** in
+  inglese (fallback) e **italiano**, testi nostri verificati dal checker
+  (segnaposto/acceleratori/lunghezze) in CI. Mappa di confidenza:
+  `localization/BOZZE_CONFIDENZA.md`.
+- L'installer ora **trapianta** menu/dialog/acceleratori dal file di
+  riferimento `explorer.exe.mui` (Win7 RTM en-US) dentro la copia privata,
+  sostituendo solo i testi con il catalogo. Identita' del .mui pinnata
+  (dimensione 22016, TimeDateStamp 0x4A5BC954, SHA-256 in allow-list).
+- **Per la prova serve il .mui**: metti `explorer.exe.mui` accanto
+  all'installer (o in `reference\`, o `set EX7_REFERENCE_MUI=percorso`).
+  Senza il file: solo stringhe, menu/dialog restano en-US e la
+  neutralizzazione viene rifiutata (log chiaro).
+- Sonda documentata: il symbol server Microsoft NON serve .mui (404 su
+  ogni chiave provata) — il file resta offline/verified-reuse by design.
