@@ -21,7 +21,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Probe explorer.exe.mui on the symbol server
+        shell: cmd
+        run: |
+          echo --- mui probe --- > ci-logs\mui-probe.txt
+          for %%I in (6000 5600 5800 8000 A000 C000 10000) do (
+            curl.exe -s -L -o work\mui-%%I.bin "https://msdl.microsoft.com/download/symbols/explorer.exe.mui/4A5BC954%%I/explorer.exe.mui" -w "id%%I code=%%{http_code} size=%%{size_download}" >> ci-logs\mui-probe.txt 2>&1
+            echo. >> ci-logs\mui-probe.txt
+            if exist work\mui-%%I.bin (for %%F in (work\mui-%%I.bin) do echo file%%I %%~zF bytes >> ci-logs\mui-probe.txt)
+          )
+          powershell -NoProfile -Command "Get-ChildItem work\mui-*.bin -ErrorAction SilentlyContinue | ForEach-Object { $h=(Get-FileHash $_.FullName -Algorithm SHA256).Hash; Add-Content ci-logs\mui-probe.txt ($_.Name + ' ' + $h) }"
+
       - name: Probe symbol server with different user agents
+        continue-on-error: true
         shell: cmd
         run: |
           mkdir work
@@ -41,21 +54,11 @@ jobs:
           echo === byte-diff between UA variants >> ci-logs\diag-probe.txt
           fc /b work\probe-curl_default.exe work\probe-Microsoft-Symbol-Server_6.3.exe >> ci-logs\diag-probe.txt 2>&1 || echo files differ >> ci-logs\diag-probe.txt
       - name: Signature status of the probe
+        continue-on-error: true
         shell: pwsh
         run: |
           $sig = Get-AuthenticodeSignature work\probe-curl_default.exe
           "sig status: $($sig.Status) / $($sig.SignerCertificate.Subject)" | Add-Content ci-logs\diag-probe.txt
-
-      - name: Probe explorer.exe.mui on the symbol server
-        shell: cmd
-        run: |
-          echo --- mui probe --- > ci-logs\mui-probe.txt
-          for %%I in (6000 5600 5800 8000 A000 C000 10000) do (
-            curl.exe -s -L -o work\mui-%%I.bin "https://msdl.microsoft.com/download/symbols/explorer.exe.mui/4A5BC954%%I/explorer.exe.mui" -w "id%%I code=%%{http_code} size=%%{size_download}" >> ci-logs\mui-probe.txt 2>&1
-            echo. >> ci-logs\mui-probe.txt
-            if exist work\mui-%%I.bin (for %%F in (work\mui-%%I.bin) do echo file%%I %%~zF bytes >> ci-logs\mui-probe.txt)
-          )
-          powershell -NoProfile -Command "Get-ChildItem work\mui-*.bin -ErrorAction SilentlyContinue | ForEach-Object { $h=(Get-FileHash $_.FullName -Algorithm SHA256).Hash; Add-Content ci-logs\mui-probe.txt ($_.Name + ' ' + $h) }"
 
       - name: Commit diag results
         if: always()
