@@ -224,10 +224,11 @@ def _res_menu_classic(items, header=True):
     out = bytearray(struct.pack("<HH", 0, 0)) if header else bytearray()
     for i, (opt, text, cid) in enumerate(items):
         last = (i == len(items) - 1)
+        # Win32 MENUITEMTEMPLATE order: mtOption, [mtID unless popup], text
         out += struct.pack("<H", opt | (0x80 if last else 0))
-        out += text.encode("utf-16-le") + b"\0\0"
         if cid is not None:
             out += struct.pack("<H", cid)
+        out += text.encode("utf-16-le") + b"\0\0"
     return bytes(out)
 
 

@@ -195,7 +195,7 @@ def parse_string_table(block: bytes, block_id: int):
         raw = block[off: off + 2 * ln]
         off += 2 * ln
         if ln:
-            out[base + i + 1] = raw.decode("utf-16-le", "replace")
+            out[base + i] = raw.decode("utf-16-le", "replace")
     return out
 
 
@@ -211,63 +211,55 @@ def parse_menu(raw: bytes):
     levels = []
 
     def classic_full(off):
-        """Properly recursive; returns (level_index, new_off)."""
+        """Win32 MENUITEMTEMPLATE: flags, [id unless MF_POPUP], text.
+        A popup's children follow it immediately (depth-first)."""
         items = []
-        pending = []
+        lvl = len(levels)
+        levels.append(items)
         while True:
             (flags,) = struct.unpack_from("<H", raw, off)
             off += 2
+            is_popup = bool(flags & 0x10)
+            cmd = None
+            if not is_popup:
+                (cmd,) = struct.unpack_from("<H", raw, off)
+                off += 2
             end = u16_cstr_end(raw, off)
             text = raw[off:end].decode("utf-16-le", "replace")
             off = end + 2
-            is_popup = bool(flags & 0x10)
+            item = {"text": text, "accel": extract_accel(text),
+                    "cmd": cmd, "popup": None, "flags": flags}
+            items.append(item)
             if is_popup:
-                pending.append(len(items))
-                items.append({"text": text, "accel": extract_accel(text),
-                              "cmd": None, "popup": "PENDING", "flags": flags})
-            else:
-                (cmd,) = struct.unpack_from("<H", raw, off)
-                off += 2
-                items.append({"text": text, "accel": extract_accel(text),
-                              "cmd": cmd, "popup": None, "flags": flags})
+                item["popup"], off = classic_full(off)
             if flags & 0x80:
                 break
-        lvl = len(levels)
-        levels.append(items)
-        for idx in pending:
-            sub_lvl, off = classic_full(off)
-            items[idx]["popup"] = sub_lvl
         return lvl, off
 
     def extended(off):
+        """MENUEX_TEMPLATE_ITEM: dwType, dwState, uId (DWORD), wFlags (WORD),
+        text, DWORD align, dwHelpId only for popups; children depth-first."""
         items = []
-        pending = []
+        lvl = len(levels)
+        levels.append(items)
         while True:
-            dwType, dwState, uId, bResInfo = struct.unpack_from("<IIIB",
-                                                                raw, off)
-            off += 13
+            dwType, dwState, uId, wFlags = struct.unpack_from("<IIIH",
+                                                              raw, off)
+            off += 14
             end = u16_cstr_end(raw, off)
             text = raw[off:end].decode("utf-16-le", "replace")
             off = end + 2
             off = (off + 3) & ~3
-            is_popup = bool(bResInfo & 0x01)
+            is_popup = bool(wFlags & 0x01)
+            item = {"text": text, "accel": extract_accel(text),
+                    "cmd": None if is_popup else uId, "popup": None,
+                    "type": dwType, "state": dwState}
+            items.append(item)
             if is_popup:
-                pending.append(len(items))
-                items.append({"text": text, "accel": extract_accel(text),
-                              "cmd": None, "popup": "PENDING",
-                              "type": dwType, "state": dwState})
                 off += 4  # dwHelpId
-            else:
-                items.append({"text": text, "accel": extract_accel(text),
-                              "cmd": uId, "popup": None,
-                              "type": dwType, "state": dwState})
-            if bResInfo & 0x80:
+                item["popup"], off = extended(off)
+            if wFlags & 0x80:
                 break
-        lvl = len(levels)
-        levels.append(items)
-        for idx in pending:
-            sub_lvl, off = extended(off)
-            items[idx]["popup"] = sub_lvl
         return lvl, off
 
     if version == 0:
@@ -413,65 +405,60 @@ def parse_menu_full(raw: bytes):
     def classic_store(off, lvl):
         items_by_level.setdefault(lvl, [])
         items = items_by_level[lvl]
-        pending = []
         while True:
             (flags,) = struct.unpack_from("<H", raw, off)
             off += 2
-            end = u16_cstr_end(raw, off)
-            text = raw[off:end].decode("utf-16-le", "replace")
-            off = end + 2
             entry = {"flags": flags, "popup": bool(flags & 0x10)}
-            if text:
-                entry["text"] = {"len": len(text),
-                                 "accel": extract_accel(text)}
             if entry["popup"]:
                 entry["cmd"] = None
-                pending.append((len(items), entry))
             else:
                 (cmd,) = struct.unpack_from("<H", raw, off)
                 off += 2
                 entry["cmd"] = cmd
+            end = u16_cstr_end(raw, off)
+            text = raw[off:end].decode("utf-16-le", "replace")
+            off = end + 2
+            if text:
+                entry["text"] = {"len": len(text),
+                                 "accel": extract_accel(text)}
             items.append(entry)
+            if entry["popup"]:
+                child = level_counter[0]
+                level_counter[0] += 1
+                entry["popup_level"] = child
+                off = classic_store(off, child)
             if flags & 0x80:
                 break
-        for idx, entry in pending:
-            child = level_counter[0]
-            level_counter[0] += 1
-            entry["popup_level"] = child
-            off = classic_store(off, child)
         return off
 
     def extended_store(off, lvl):
         items_by_level.setdefault(lvl, [])
         items = items_by_level[lvl]
-        pending = []
         while True:
-            dwType, dwState, uId, bResInfo = struct.unpack_from("<IIIB",
-                                                                raw, off)
-            off += 13
+            dwType, dwState, uId, wFlags = struct.unpack_from("<IIIH",
+                                                              raw, off)
+            off += 14
             end = u16_cstr_end(raw, off)
             text = raw[off:end].decode("utf-16-le", "replace")
             off = end + 2
             off = (off + 3) & ~3
             entry = {"dwType": dwType, "dwState": dwState, "cmd": uId,
-                     "bResInfo": bResInfo,
-                     "popup": bool(bResInfo & 0x01)}
+                     "bResInfo": wFlags,
+                     "popup": bool(wFlags & 0x01)}
             if text:
                 entry["text"] = {"len": len(text),
                                  "accel": extract_accel(text)}
+            items.append(entry)
             if entry["popup"]:
                 (help_id,) = struct.unpack_from("<I", raw, off)
                 off += 4
                 entry["help_id"] = help_id
-                pending.append((len(items), entry))
-            items.append(entry)
-            if bResInfo & 0x80:
+                child = level_counter[0]
+                level_counter[0] += 1
+                entry["popup_level"] = child
+                off = extended_store(off, child)
+            if wFlags & 0x80:
                 break
-        for idx, entry in pending:
-            child = level_counter[0]
-            level_counter[0] += 1
-            entry["popup_level"] = child
-            off = extended_store(off, child)
         return off
 
     if version == 0:

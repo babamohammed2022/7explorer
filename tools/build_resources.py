@@ -69,7 +69,7 @@ def build_string_block(block_id: int, texts: dict) -> bytes:
     base = (block_id - 1) * 16
     out = bytearray()
     for i in range(16):
-        s = texts.get(base + 1 + i, "")
+        s = texts.get(base + i, "")
         out += struct.pack("<H", len(s))
         out += s.encode("utf-16-le")
     return bytes(out)
@@ -83,21 +83,17 @@ def build_menu(template: dict, texts: dict) -> bytes:
         out = bytearray(struct.pack("<HH", 0, 0))
 
         def emit(level_items, li):
-            pops = []
+            # MENUITEMTEMPLATE: flags, [id unless MF_POPUP], text;
+            # a popup's children follow it immediately (depth-first).
             for ii, it in enumerate(level_items):
                 flags = it["flags"]
                 text = texts.get(f"{li}/{ii}")
                 out.extend(struct.pack("<H", flags))
-                if text is not None:
-                    out.extend(_wstrz(text))
-                else:
-                    out.extend(b"\0\0")
-                if it["popup"]:
-                    pops.append(it["popup_level"])
-                else:
+                if not it["popup"]:
                     out.extend(struct.pack("<H", it["cmd"] & 0xFFFF))
-            for sub in pops:  # children stored AFTER all level siblings
-                emit(levels[sub], sub)
+                out.extend(_wstrz(text) if text is not None else b"\0\0")
+                if it["popup"]:
+                    emit(levels[it["popup_level"]], it["popup_level"])
 
         emit(levels[0], 0)
         return bytes(out)
@@ -105,19 +101,18 @@ def build_menu(template: dict, texts: dict) -> bytes:
         out = bytearray(struct.pack("<HHI", 1, 4, 0))
 
         def emit_ex(level_items, li):
-            pops = []
+            # MENUEX_TEMPLATE_ITEM: dwType, dwState, uId (DWORD),
+            # wFlags (WORD), text, DWORD align, dwHelpId only for popups.
             for ii, it in enumerate(level_items):
                 text = texts.get(f"{li}/{ii}")
-                out.extend(struct.pack("<IIIB", it["dwType"], it["dwState"],
+                out.extend(struct.pack("<IIIH", it["dwType"], it["dwState"],
                                        it["cmd"] & 0xFFFFFFFF,
-                                       it["bResInfo"] & 0xFF))
+                                       it["bResInfo"] & 0xFFFF))
                 out.extend(_wstrz(text) if text is not None else b"\0\0")
                 _pad4(out)
                 if it["popup"]:
                     out.extend(struct.pack("<I", it.get("help_id", 0)))
-                    pops.append(it["popup_level"])
-            for sub in pops:  # children stored AFTER all level siblings
-                emit_ex(levels[sub], sub)
+                    emit_ex(levels[it["popup_level"]], it["popup_level"])
 
         emit_ex(levels[0], 0)
         return bytes(out)
@@ -246,10 +241,10 @@ def build_all(catalogs: dict, templates: dict,
             continue  # no explorer blocks for partial languages
         payloads = []
         # STRING blocks touched by explorer ids
-        blocks = sorted({(sid - 1) // 16 + 1 for sid in explorer_string_ids})
+        blocks = sorted({sid // 16 + 1 for sid in explorer_string_ids})
         for bid in blocks:
             texts = {sid: strings[sid] for sid in explorer_string_ids
-                     if (sid - 1) // 16 + 1 == bid}
+                     if sid // 16 + 1 == bid}
             payload = build_string_block(bid, texts)
             back = parse_string_table(payload, bid)
             for sid, want in texts.items():
