@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import struct
 import sys
@@ -282,7 +283,7 @@ def parse_dialog(raw: bytes):
     if len(raw) < 4:
         return None
     sig, sig2 = struct.unpack_from("<HH", raw, 0)
-    is_ex = (sig == 0xFFFF and sig2 == 0xFFFF)
+    is_ex = (sig == 1 and sig2 == 0xFFFF)  # DLGTEMPLATEEX: dlgVer=1, signature=0xFFFF
 
     def sz_or_ord(off):
         (w,) = struct.unpack_from("<H", raw, off)
@@ -470,7 +471,7 @@ def parse_menu_full(raw: bytes):
     if version == 1 and header == 4:
         level_counter[0] = 1
         extended_store(8, 0)
-        return {"version": 4,
+        return {"version": 1,  # MENUEX (wVersion=1, wOffset=4)
                 "levels": [items_by_level.get(i, [])
                            for i in range(level_counter[0])]}
     return {"version": version, "levels": None,
@@ -483,7 +484,7 @@ def parse_dialog_full(raw: bytes):
     if len(raw) < 4:
         return None
     sig, sig2 = struct.unpack_from("<HH", raw, 0)
-    is_ex = (sig == 0xFFFF and sig2 == 0xFFFF)
+    is_ex = (sig == 1 and sig2 == 0xFFFF)  # DLGTEMPLATEEX: dlgVer=1, signature=0xFFFF
 
     def sz_or_ord2(off):
         (w,) = struct.unpack_from("<H", raw, off)
@@ -552,7 +553,12 @@ def parse_dialog_full(raw: bytes):
         tmeta = None
         if c_txt.get("kind") == "string":
             tmeta = {"len": len(c_txt["value"]),
-                     "accel": extract_accel(c_txt["value"])}
+                     "accel": extract_accel(c_txt["value"]),
+                     "placeholders": [norm_token(tk) for tk in
+                                      extract_placeholders(c_txt["value"])]}
+        elif c_txt.get("kind") == "atom":
+            # resource ordinal (e.g. icon 32515 = IDI_WARNING): structural
+            tmeta = {"ordinal": c_txt["value"]}
         (extra,) = struct.unpack_from("<H", raw, off)
         off += 2
         extra_hex = raw[off:off + extra].hex()
@@ -662,38 +668,68 @@ def build_report(path: str, with_strings: bool) -> dict:
     return rep
 
 
-def build_constraints(rep: dict) -> dict:
-    """Structure-only constraints for tools/verify_catalog.py."""
+def build_constraints(rep: dict, templates: dict | None = None) -> dict:
+    """Structure-only constraints for tools/verify_catalog.py.
+
+    Format consumed by verify_catalog: strings {len, accel, placeholders};
+    menus {version, levels:[[{popup, cmd, popup_level?, len?, accel?}]]};
+    dialogs {ex, rect, title_len, title_accel,
+             controls:[{id, class, rect, len?, accel?, placeholders?}]}.
+    Lengths count every character (the '&' included), as for strings.
+    """
     con = {
-        "source": rep["file"],
+        "source": os.path.basename(rep["file"]),
         "source_sha256": rep["sha256"],
+        "source_file_size": rep.get("size"),
+        "time_date_stamp": rep.get("time_date_stamp"),
         "strings": {},
         "menus": {},
         "dialogs": {},
+        "accelerators": rep.get("accelerators") or {},
     }
-    for sid, e in rep["strings"].items():
+    for sid, e in sorted(rep["strings"].items(), key=lambda kv: int(kv[0])):
         con["strings"][sid] = {
             "len": e["len"],
             "accel": e["accel"],
             "placeholders": e["placeholders"],
         }
-    for key, m in (rep.get("menus") or {}).items():
-        if not m or m.get("levels") is None:
-            continue
-        con["menus"][key] = {
-            "levels": [[{"cmd": it["cmd"], "accel": it["accel"],
-                         "popup": it["popup"],
-                         "flags": it.get("flags")} for it in lvl]
-                       for lvl in m["levels"]]}
-    for key, d in (rep.get("dialogs") or {}).items():
-        if not d:
-            continue
-        con["dialogs"][key] = {
-            "title_len": d["rect"], "title_accel": d["title_accel"],
-            "rect": d["rect"], "has_title": d["title"] is not None,
-            "controls": [{"id": c["id"], "class": c["class"],
-                          "rect": c["rect"], "has_text": c["text"] is not None,
-                          "accel": c["accel"]} for c in d["controls"]]}
+    if templates is None:
+        templates = build_templates(rep["file"])
+    for key, m in (templates.get("menus") or {}).items():
+        levels = []
+        for lvl in m["levels"]:
+            row = []
+            for it in lvl:
+                e = {"popup": bool(it.get("popup")),
+                     "cmd": None if it.get("popup") and m["version"] == 0
+                     else it.get("cmd")}
+                if it.get("popup"):
+                    e["popup_level"] = it["popup_level"]
+                if it.get("text"):
+                    e["len"] = it["text"]["len"]
+                    e["accel"] = it["text"]["accel"]
+                row.append(e)
+            levels.append(row)
+        con["menus"][key] = {"version": m["version"], "levels": levels}
+    for key, d in (templates.get("dialogs") or {}).items():
+        ctrls = []
+        for c in d["controls"]:
+            cls = c["class"]
+            e = {"id": c["id"],
+                 "class": cls.get("name") or cls.get("value"),
+                 "rect": c["rect"]}
+            t = c.get("text") or {}
+            if "len" in t:
+                e["len"] = t["len"]
+                e["accel"] = t["accel"]
+                if t.get("placeholders"):
+                    e["placeholders"] = t["placeholders"]
+            ctrls.append(e)
+        title = d.get("title") or {}
+        con["dialogs"][key] = {"ex": d["ex"], "rect": d["rect"],
+                               "title_len": title.get("len", 0),
+                               "title_accel": title.get("accel"),
+                               "controls": ctrls}
     return con
 
 

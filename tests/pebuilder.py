@@ -245,7 +245,7 @@ def _res_dialogex(caption, controls, pointsize=9, typeface="MS Shell Dlg",
     """Minimal DIALOGEX template (DS_SETFONT|DS_SHELLFONT|WS_VISIBLE...)."""
     style |= 0x00000040  # DS_SETFONT
     out = bytearray()
-    out += struct.pack("<HHIIIH", 0xFFFF, 0xFFFF, 0, 0, style, len(controls))
+    out += struct.pack("<HHIIIH", 1, 0xFFFF, 0, 0, style, len(controls))  # DLGTEMPLATEEX: dlgVer=1, signature=0xFFFF
     out += struct.pack("<hhhh", 0, 0, 220, 140)
     out += _se_word_or_ord(None)      # menu
     out += _se_word_or_ord(None)      # class

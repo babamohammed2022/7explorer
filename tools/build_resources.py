@@ -124,7 +124,7 @@ def build_dialog(template: dict, title: str | None, ctl_texts: dict) -> bytes:
     if not template.get("ex"):
         raise BuildError("only DIALOGEX supported (reference is all-ex)")
     out = bytearray()
-    out += struct.pack("<HH", 0xFFFF, 0xFFFF)
+    out += struct.pack("<HH", 1, 0xFFFF)  # dlgVer=1, signature=0xFFFF
     out += struct.pack("<I", template.get("help_id") or 0)
     out += struct.pack("<I", template.get("ex_style", 0))
     out += struct.pack("<I", template["style"])
@@ -137,7 +137,7 @@ def build_dialog(template: dict, title: str | None, ctl_texts: dict) -> bytes:
     if template["style"] & 0x40:  # DS_SETFONT / DS_SHELLFONT
         font = template.get("font") or {}
         out += struct.pack("<HHBB", font.get("points", 8),
-                           font.get("weight") or 400,
+                           font.get("weight") or 0,
                            font.get("italic") or 0,
                            font.get("charset") or 0)
         face = font.get("face") or {"kind": "string",
@@ -162,14 +162,21 @@ def build_dialog(template: dict, title: str | None, ctl_texts: dict) -> bytes:
                 atom = name2atom.get(cls.get("name", ""), 0x0082)
             out += struct.pack("<HH", 0xFFFF, atom)
         else:
-            out += _wstrz(cls.get("name", ""))
+            out += _wstrz(cls.get("value") or cls.get("name", ""))
         cid = c["id"] & 0xFFFFFFFF
         text = None
-        if c.get("text"):
+        tmeta = c.get("text") or {}
+        if "ordinal" in tmeta:  # e.g. icon resource 32515 (IDI_WARNING)
+            out += struct.pack("<HH", 0xFFFF, tmeta["ordinal"] & 0xFFFF)
+            extra = bytes.fromhex(c.get("extra_hex", "") or "")
+            out += struct.pack("<H", len(extra))
+            out += extra
+            continue
+        if tmeta:
             seen[cid] = seen.get(cid, 0) + 1
             occ = seen[cid]
             dup = sum(1 for x in ctls if (x["id"] & 0xFFFFFFFF) == cid
-                      and x.get("text"))
+                      and x.get("text") and "ordinal" not in x["text"])
             key = f"{cid}#{occ}" if dup > 1 else str(cid)
             text = ctl_texts.get(key)
         out += _wstrz(text if text is not None else "")
