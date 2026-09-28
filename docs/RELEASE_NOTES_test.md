@@ -94,6 +94,23 @@ corrispondenti sono slittati **+1** ai veri ID Win32. I vincoli shell32
     la **taskbar Windows 7** come shell attiva al login, senza toccare
     `C:\Windows\explorer.exe` né il registry.
 
+
+## Update 2026-09-28 (v0.0.3-test3)
+
+- **Nuovo tool**: `7explorer-shell-switcher.exe` — shell switcher runtime GUI
+  nativa Win32 (nessun framework, CRT statico `/MT`). Scambia la shell in
+  pochi secondi fra `%SystemRoot%\explorer.exe` e l'Explorer7 privato
+  (`C:\ex7test\explorer.exe`, override via variabile `EX7_EXPLORER_PATH`),
+  **senza logout/reboot** e senza mai toccare registry/Winlogon/system files.
+  - Identifica la shell dall'owner di `GetShellWindow()` e il path con
+    `QueryFullProcessImageNameW` → immune allo spoof Windhawk; ferma SOLO
+    quel processo (WM_QUIT, poi terminate dopo timeout).
+  - Safety: target verificato prima di fermare nulla; se Explorer7 non parte,
+    ripristina automaticamente la shell nativa; messaggio critico con recovery
+    manuale se fallisce anche quella; warning pre-applicazione.
+  - Uso: vedi sezione nel README radice / `switcher/README.md`.
+- Bootstrap, pipeline risorse, wrapper e mod Windhawk **immodificati**.
+
 ## Uso
 
 1. scaricare `ex7selfcontained.exe` e `wrp64.dll` nella stessa cartella

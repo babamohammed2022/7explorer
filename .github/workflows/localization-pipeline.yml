@@ -49,6 +49,8 @@ jobs:
           if not exist ci-run mkdir ci-run
           msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m > ci-run\msbuild.log 2>&1
           if errorlevel 1 (type ci-run\msbuild.log & exit /b 1)
+          msbuild switcher\shell_switcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m > ci-run\msbuild-switcher.log 2>&1
+          if errorlevel 1 (type ci-run\msbuild-switcher.log & exit /b 1)
       - name: Full run against the real Microsoft binary (download->verify->patch->rewrite)
         shell: cmd
         run: |

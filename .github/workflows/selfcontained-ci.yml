@@ -57,6 +57,10 @@ jobs:
         shell: cmd
         run: msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-ex7selfcontained.log
 
+      - name: Build 7explorer-shell-switcher.exe (Release x64, static CRT)
+        shell: cmd
+        run: msbuild switcher\shell_switcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-switcher.log
+
       - name: Download reference explorer.exe and re-verify pinned identity
         shell: cmd
         run: |
@@ -139,7 +143,7 @@ jobs:
       - name: Produce SHA256SUMS for the CI-built binaries
         shell: pwsh
         run: |
-          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe")
+          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe", "switcher\bin\7explorer-shell-switcher.exe")
           $lines = foreach ($i in $items) { $h=(Get-FileHash -Algorithm SHA256 $i).Hash.ToLower(); "$h  $(Split-Path $i -Leaf)" }
           $lines | Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
@@ -167,9 +171,11 @@ jobs:
           path: |
             Release/wrp64.dll
             installer/ex7selfcontained/bin/ex7selfcontained.exe
+            switcher/bin/7explorer-shell-switcher.exe
             SHA256SUMS.txt
             msbuild-wrp64.log
             msbuild-ex7selfcontained.log
+            msbuild-switcher.log
             msbuild-minhook.log
           retention-days: 30
 
@@ -196,6 +202,7 @@ jobs:
             --notes-file docs/RELEASE_NOTES_test.md `
             "Release/wrp64.dll#wrp64.dll" `
             "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
+            "switcher/bin/7explorer-shell-switcher.exe#7explorer-shell-switcher.exe" `
             "windhawk/ex7-userinit-shell.cpp#ex7-userinit-shell.wh.cpp" `
             "windhawk/ex7-fake-explorer-path.cpp#ex7-fake-explorer-path.wh.cpp" `
             "windhawk/README.md#windhawk-POC-README.md" `

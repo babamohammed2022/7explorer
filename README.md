@@ -16,6 +16,27 @@ explorer7 is a **wrapper library** that allows Windows 7's explorer.exe to run p
 > alcun altro file Microsoft oltre al singolo `explorer.exe` scaricato dal
 > symbol server. Dettagli: `installer/ex7selfcontained/README.md`.
 
+> **Runtime shell switcher (test tool) — `switcher/`**
+> Small native Win32 GUI (`CreateWindowExW` + standard controls, static CRT)
+> to swap the **running** shell at runtime between `%SystemRoot%\explorer.exe`
+> and the private Explorer7 — no logout/reboot, no registry, no Winlogon.
+> Identifies the shell via the owner of `GetShellWindow()` +
+> `QueryFullProcessImageNameW` (immune to the Windhawk path spoof): only that
+> process is stopped (graceful `WM_QUIT`, terminate after timeout). Build:
+> `msbuild switcher\shell_switcher.vcxproj`.
+
+### Quick test with the runtime switcher
+
+1. Run the existing `ex7selfcontained.exe` (from the test release).
+2. Ensure the generated Explorer7 files exist (default `C:\ex7test\explorer.exe`;
+   otherwise set `EX7_EXPLORER_PATH` before starting the switcher).
+3. Start `7explorer-shell-switcher.exe`.
+4. Select **Windows 7 Explorer**.
+5. Press **Switch** (a restart warning is shown — Explorer will be restarted).
+6. The Windows 7 taskbar should replace the Windows 11 taskbar immediately.
+7. Select **Native Windows Explorer** → **Switch** to return to the
+   Windows 11 shell. No logout, ever.
+
 <details>
   <summary>Screenshots</summary>
 
