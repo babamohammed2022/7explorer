@@ -5,5 +5,59 @@
     "5382": "Remove from the Start &menu",
     "5384": "Puts a shortcut to this item on the Start menu",
     "5385": "Takes the shortcut for this item off the Start menu"
-  }
+  },
+  "dialogs": {
+    "6/lang:0409": {
+      "title": "Taskbar",
+      "controls": {
+        "1105": "&Lock the taskbar",
+        "1102": "Auto-&hide the taskbar",
+        "1139": "Use small &icons",
+        "65535#1": "Tas&kbar position on screen:",
+        "65535#2": "Taskbar &buttons:",
+        "65535#3": "Taskbar appearance",
+        "65535#4": "Choose which icons and notifications show up in the notification area.",
+        "1140": "&Customize...",
+        "65535#5": "Notification area",
+        "1144": "Point to the Show Desktop button at the far end of the taskbar to peek at the desktop.",
+        "1141": "Use Aero &Peek to preview the desktop",
+        "1145": "Preview desktop with Aero Peek",
+        "1114": "How do I personalize the taskbar?"
+      }
+    },
+    "10/lang:0409": {
+      "title": "Toolbars",
+      "controls": {
+        "1106": "Pick which toolbars appear on the taskbar:",
+        "1137": "Toolbars",
+        "1138": "New"
+      }
+    },
+    "205/lang:0409": {
+      "title": "Start &Menu",
+      "controls": {
+        "1134": "To change how links, icons and menus look and behave on the Start menu, press Customize.",
+        "1131": "&Customize...",
+        "65535": "Po&wer button action:",
+        "1136": "Store and show recently opened &programs on the Start menu",
+        "1135": "Store and show recently opened items on the Start &menu and the taskbar",
+        "300": "Privacy",
+        "1116": "Where can I change the Start menu look?"
+      }
+    },
+    "1036/lang:0409": {
+      "title": "Start Menu settings",
+      "controls": {
+        "4294967295#1": "Pick the entries you want and adjust how the Start menu behaves.",
+        "1123": "i&tems",
+        "4294967295#2": "Item counts",
+        "4294967295#3": "&Number of recent items to show:",
+        "4294967295#4": "Recent items shown in &Jump Lists:",
+        "1037": "&Defaults",
+        "1": "OK",
+        "2": "Cancel"
+      }
+    }
+  },
+  "menus": {}
 }

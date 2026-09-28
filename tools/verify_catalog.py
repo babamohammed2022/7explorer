@@ -11,15 +11,20 @@ language catalog against the reference constraints.
 
 Checks (every failure exits 1, CI-ready):
 
-  * the fallback language (en) exists and covers EVERY constrained string;
+  * the fallback language (en) exists and covers EVERY constrained string
+    of every constraints file marked  "require_fallback_coverage": true;
   * every catalog string ID exists in the constraints (no orphan text);
   * placeholders match EXACTLY (number, order and type, %1!s!/%s/%d/...);
   * at most ONE accelerator '&' per string;
   * accelerator uniqueness inside every "coexisting" context
-    (same menu / same dialog);
+    (same menu level / same dialog);
   * length budget: translated length <= max(2x reference, reference+8)
     unless the string opts out with a per-language "maxlen_override"
-    entry (must be accompanied by a "comment" explaining why).
+    entry (must be accompanied by a comment explaining why);
+  * optional dialogs/menus catalog sections are verified the same way:
+    keys "<id>/lang:0409" -> {"title": ..., "controls": {...}} and
+    "<id>/lang:0409" -> {"level/item": "..."}; duplicate control ids
+    take "#n" suffixes in template order.
 
 This is the script required by the task ("script di verifica automatica
 che controlli segnaposto e acceleratori di ogni lingua rispetto alla
@@ -32,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -50,7 +56,9 @@ def load_json(path: Path):
 
 def merge_constraints(paths):
     merged = {"strings": {}, "contexts": {}, "menus": {}, "dialogs": {},
-              "sources": []}
+              "sources": [],
+              # [(name, strings_dict, require_en_coverage)]
+              "coverage_sets": []}
     for p in paths:
         c = load_json(Path(p))
         merged["sources"].append(c.get("source", str(p)))
@@ -58,7 +66,112 @@ def merge_constraints(paths):
         merged["contexts"].update(c.get("contexts", {}))
         merged["menus"].update(c.get("menus", {}))
         merged["dialogs"].update(c.get("dialogs", {}))
+        merged["coverage_sets"].append(
+            (c.get("source", str(p)), c.get("strings", {}),
+             bool(c.get("require_fallback_coverage", False))))
     return merged
+
+
+def budget_for(ref_len: int) -> int:
+    return max(ref_len * 2, ref_len + 8)
+
+
+def check_one(lang, where, text, ref_len, ref_placeholders,
+              overrides, comments, override_key,
+              errors, warnings):
+    """Validate ONE catalog text against {len, placeholders} reference.
+
+    Returns the accelerator letter (or None); appends problems."""
+    if not isinstance(text, str):
+        errors.append(f"{where}: not a string")
+        return None
+
+    try:
+        got = [norm_token(t) for t in extract_placeholders(text)]
+    except ValueError as exc:
+        errors.append(f"{where}: {exc}")
+        return None
+    want = ref_placeholders or []
+    if got != want:
+        errors.append(f"{where}: placeholders {got} != reference {want}")
+
+    try:
+        accel = extract_accel(text)
+    except ValueError as exc:
+        errors.append(f"{where}: {exc}")
+        return None
+
+    budget = budget_for(ref_len)
+    ov = overrides.get(override_key)
+    if ov:
+        comment = comments.get(override_key, "")
+        if isinstance(ov, int):
+            budget = ov
+        if not comment:
+            errors.append(f"{where}: maxlen_override without a comment")
+    plain_len = len(strip_accels(text))
+    if plain_len > budget:
+        errors.append(f"{where}: length {plain_len} exceeds budget {budget} "
+                      f"(reference len {ref_len})")
+    elif ref_len and plain_len > ref_len * 1.5:
+        warnings.append(
+            f"{where}: length {plain_len} > 150% of reference "
+            f"({ref_len}); check dialog/menu fit")
+    return accel
+
+
+def check_accel_uniqueness(pairs, where, lang, errors, warnings):
+    """pairs = [(key, accel_or_None, ref_has_accel)] sharing one visual
+    context. Missing accel is a WARNING only when the reference structure
+    marks that element as mnemonic-bearing."""
+    seen = {}
+    for key, accel, ref_has in pairs:
+        if accel is None:
+            if ref_has:
+                warnings.append(
+                    f"{lang}:{where}: {key} has no accelerator "
+                    f"(reference has one)")
+            continue
+        if not ref_has:
+            warnings.append(
+                f"{lang}:{where}: {key} has accelerator '&{accel}' "
+                f"but reference has none")
+        low = accel.lower()
+        if low in seen:
+            errors.append(
+                f"{lang}:{where}: accelerator '&{accel}' used by both "
+                f"{seen[low]} and {key}")
+        seen[low] = key
+
+
+def expected_dialog_controls(ref):
+    """Map catalog key -> reference control for a dialog constraints entry.
+
+    Catalog rule: controls carrying text in the reference are keyed by
+    control id; when the same id appears more than once with text, keys
+    become "<id>#N" (N from 1) in template order.
+    """
+    counts = Counter(c["id"] for c in ref.get("controls", []) if c.get("len"))
+    seen = Counter()
+    expected = {}
+    for c in ref.get("controls", []):
+        if not c.get("len"):
+            continue
+        cid = c["id"]
+        seen[cid] += 1
+        key = f"{cid}#{seen[cid]}" if counts[cid] > 1 else str(cid)
+        expected[key] = c
+    return expected
+
+
+def expected_menu_items(ref):
+    """Map "level/item" catalog key -> reference item (text items only)."""
+    expected = {}
+    for li, level in enumerate(ref.get("levels", [])):
+        for ii, item in enumerate(level):
+            if item.get("len"):
+                expected[f"{li}/{ii}"] = (li, item)
+    return expected
 
 
 def verify(catalog_dir: Path, constraints_paths) -> int:
@@ -89,16 +202,22 @@ def verify(catalog_dir: Path, constraints_paths) -> int:
     en = catalogs[FALLBACK_LANG]
     en_strings = en.get("strings", {})
 
-    # --- fallback coverage ------------------------------------------------
-    for sid in cstrings:
-        if sid not in en_strings:
-            errors.append(
-                f"{FALLBACK_LANG}: missing string {sid} "
-                f"(fallback must cover every constrained id)")
+    # --- fallback coverage (only for sources that opt in) ----------------
+    for source, strings, require in con["coverage_sets"]:
+        if not require:
+            continue
+        for sid in strings:
+            if sid not in en_strings:
+                errors.append(
+                    f"{FALLBACK_LANG}: missing string {sid} "
+                    f"(fallback must cover every constrained id of "
+                    f"'{source}')")
 
     # --- per language checks ----------------------------------------------
     for lang, data in sorted(catalogs.items()):
         strings = data.get("strings", {})
+        overrides = data.get("maxlen_override", {})
+        comments = data.get("maxlen_override_comment", {})
 
         # orphans: string ids that exist in no constraints file
         for sid in strings:
@@ -106,61 +225,19 @@ def verify(catalog_dir: Path, constraints_paths) -> int:
                 errors.append(f"{lang}: orphan string id {sid} "
                               f"(no such id in the reference structure)")
 
-        overrides = data.get("maxlen_override", {})
-
         for sid, text in strings.items():
             if sid not in cstrings:
                 continue
             ref = cstrings[sid]
-            where = f"{lang}:{sid}"
-            if not isinstance(text, str):
-                errors.append(f"{where}: not a string")
-                continue
+            check_one(lang, f"{lang}:{sid}", text,
+                      ref.get("len", 0), ref.get("placeholders", []),
+                      overrides, comments, sid, errors, warnings)
 
-            # 1) placeholders: exact ordered match (number, order, type)
-            try:
-                got = [norm_token(t) for t in extract_placeholders(text)]
-            except ValueError as exc:
-                errors.append(f"{where}: {exc}")
-                continue
-            want = ref.get("placeholders", [])
-            if got != want:
-                errors.append(
-                    f"{where}: placeholders {got} != reference {want}")
-
-            # 2) accelerator: at most one '&'
-            try:
-                accel = extract_accel(text)
-            except ValueError as exc:
-                errors.append(f"{where}: {exc}")
-                continue
-
-            # 3) length budget
-            budget = max(ref.get("len", 0) * 2, ref.get("len", 0) + 8)
-            ov = overrides.get(sid)
-            if ov:
-                comment = (data.get("maxlen_override_comment", {})
-                           .get(sid, ""))
-                if isinstance(ov, int):
-                    budget = ov
-                if not comment:
-                    errors.append(
-                        f"{where}: maxlen_override without a comment")
-            plain_len = len(strip_accels(text))
-            if plain_len > budget:
-                errors.append(
-                    f"{where}: length {plain_len} exceeds budget {budget} "
-                    f"(reference len {ref.get('len')})")
-            elif plain_len > ref.get("len", 0) * 1.5 and ref.get("len"):
-                warnings.append(
-                    f"{where}: length {plain_len} > 150% of reference "
-                    f"({ref.get('len')}); check dialog/menu fit")
-
-        # 4) accelerator uniqueness per context
+        # 4) accelerator uniqueness per named string context
         for ctx_name, ctx in con.get("contexts", {}).items():
             if not ctx.get("coex", True):
                 continue
-            seen = {}
+            pairs = []
             for sid in ctx.get("members", []):
                 text = strings.get(sid)
                 if not isinstance(text, str):
@@ -169,16 +246,91 @@ def verify(catalog_dir: Path, constraints_paths) -> int:
                     a = extract_accel(text)
                 except ValueError:
                     continue
-                if a is None:
-                    warnings.append(
-                        f"{lang}:{ctx_name}: {sid} has no accelerator")
-                else:
-                    key = a.lower()
-                    if key in seen:
-                        errors.append(
-                            f"{lang}:{ctx_name}: accelerator '&{a}' used by "
-                            f"both {seen[key]} and {sid}")
-                    seen[key] = sid
+                ref_has = bool(cstrings.get(sid, {}).get("accel"))
+                pairs.append((sid, a, ref_has))
+            check_accel_uniqueness(pairs, ctx_name, lang, errors, warnings)
+
+        # 5) dialogs section (optional)
+        for dkey, dentry in data.get("dialogs", {}).items():
+            ref = con["dialogs"].get(dkey)
+            where_base = f"{lang}:{dkey}"
+            if ref is None:
+                errors.append(f"{where_base}: orphan dialog "
+                              f"(no such dialog in the reference structure)")
+                continue
+            if not isinstance(dentry, dict):
+                errors.append(f"{where_base}: dialog entry must be an "
+                              f"object {{\"title\":..., \"controls\":...}}")
+                continue
+
+            pairs = []
+            title = dentry.get("title")
+            if title is not None:
+                check_one(lang, f"{where_base}:title", title,
+                          ref.get("title_len", 0), [],
+                          overrides, comments, f"dialog:{dkey}:title",
+                          errors, warnings)
+
+            expected = expected_dialog_controls(ref)
+            dctl = dentry.get("controls", {})
+            if not isinstance(dctl, dict):
+                errors.append(f"{where_base}: \"controls\" must be an object")
+                continue
+            for key, text in dctl.items():
+                rc = expected.get(key)
+                if rc is None:
+                    errors.append(f"{where_base}: orphan control '{key}'")
+                    continue
+                accel = check_one(lang, f"{where_base}:{key}", text,
+                                  rc.get("len", 0),
+                                  rc.get("placeholders", []),
+                                  overrides, comments,
+                                  f"dialog:{dkey}:{key}",
+                                  errors, warnings)
+                if isinstance(text, str):
+                    pairs.append((key, accel, bool(rc.get("accel"))))
+            for key in expected:
+                if key not in dctl:
+                    warnings.append(f"{where_base}: missing text for "
+                                    f"control {key}")
+            check_accel_uniqueness(pairs, dkey, lang, errors, warnings)
+
+        # 6) menus section (optional)
+        for mkey, mentry in data.get("menus", {}).items():
+            ref = con["menus"].get(mkey)
+            where_base = f"{lang}:{mkey}"
+            if ref is None:
+                errors.append(f"{where_base}: orphan menu "
+                              f"(no such menu in the reference structure)")
+                continue
+            if not isinstance(mentry, dict):
+                errors.append(f"{where_base}: menu entry must be an object "
+                              f"mapping \"level/item\" to text")
+                continue
+            expected = expected_menu_items(ref)
+            levels = {}
+            for key, text in mentry.items():
+                got = expected.get(key)
+                if got is None:
+                    errors.append(f"{where_base}: orphan menu item '{key}'")
+                    continue
+                li, rc = got
+                accel = check_one(lang, f"{where_base}:{key}", text,
+                                  rc.get("len", 0),
+                                  rc.get("placeholders", []),
+                                  overrides, comments,
+                                  f"menu:{mkey}:{key}",
+                                  errors, warnings)
+                if isinstance(text, str):
+                    levels.setdefault(li, []).append(
+                        (key, accel, bool(rc.get("accel"))))
+            for key in expected:
+                if key not in mentry:
+                    warnings.append(f"{where_base}: missing text for "
+                                    f"menu item {key}")
+            for li, pairs in levels.items():
+                check_accel_uniqueness(pairs, f"{mkey} level {li}",
+                                       lang, errors, warnings)
 
     return report(errors, warnings)
 

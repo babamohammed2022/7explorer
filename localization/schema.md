@@ -39,21 +39,29 @@ altrimenti `verify_catalog.py` esige acceleratori distinti nel contesto.
     "name": "italiano", "needs_native_review": false
   },
   "strings": { "5381": "Aggiungi al menu &Start" },
-  "maxlen_override": { "5384": 64 },
+  "maxlen_override": { "5384": 64, "dialog:6/lang:0409:title": 40 },
   "maxlen_override_comment": { "5384": "perché serve (obbligatorio)" },
-  "menus": {}, "dialogs": {}
+  "dialogs": { "6/lang:0409": {
+    "title": "Barra delle applicazioni",
+    "controls": { "1105": "...", "65535#1": "..." } } },
+  "menus": { "211/lang:0409": { "1/0": "..." } }
 }
 ```
 
 Regole (tutte applicate da `tools/verify_catalog.py`):
 
-1. inglese (`en.json`) presente e completo = fallback;
+1. inglese (`en.json`) presente e completo = fallback per ogni fonte
+   constraints con `\"require_fallback_coverage\": true`;
 2. nessun ID che non esista nei constraints ("orphan" = errore);
 3. segnaposto identici per numero, ordine e tipo;
 4. al massimo un acceleratore `&` per stringa; unicità nei contesti coex;
 5. lunghezza ≤ max(2×riferimento, riferimento+8) salvo override commentato;
 6. il testo è ORIGINALE: non copiare/tradurre letteralmente il testo Microsoft
    (riformula il significato con parole tue).
+
+Controlli con id duplicato nel dialog: chiavi `<id>#N` in ordine di
+template. Voci di menu: chiavi `<livello>/<indice>`. Dettagli operativi in
+`localization/METODO_CATALOGO_EXPLORER_MUI.md`.
 
 `tools/embed_catalog.py` genera da qui `installer/ex7selfcontained/lang_catalog.h`
 e `explorerwrapper/ex7_languages.rc` e rifiuta di emettere se la verifica fallisce.

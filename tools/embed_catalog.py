@@ -133,7 +133,9 @@ def main() -> int:
     ap.add_argument("--catalog-dir", default=str(ROOT / "localization" / "catalog"))
     ap.add_argument("--constraints", action="append",
                     default=[str(ROOT / "localization" / "constraints"
-                                 / "shell32.dll.constraints.json")])
+                                 / "shell32.dll.constraints.json"),
+                             str(ROOT / "localization" / "constraints"
+                                 / "explorer.exe.constraints.json")])
     ap.add_argument("--patch-vcxproj", action="store_true")
     args = ap.parse_args()
 

@@ -1,6 +1,7 @@
 {
   "source": "VERIFIED from explorerwrapper source code (StartMenuPin.cpp + wrapper.rc); structural only",
   "source_sha256": null,
+  "require_fallback_coverage": true,
   "note": "These four string IDs are the only shell32.dll.mui resources loaded by the explorer7 wrapper (StartMenuPin.cpp Shell32_LoadString: 0x1505,0x1506,0x1508,0x1509). Lengths/accelerators below describe the STRUCTURE (derived from the project's own wrapper.rc), not runtime-loaded Microsoft text.",
   "strings": {
     "5381": { "len": 20, "accel": "u", "placeholders": [] },

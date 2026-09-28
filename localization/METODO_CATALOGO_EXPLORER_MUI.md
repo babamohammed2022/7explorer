@@ -73,3 +73,52 @@ L'inglese (`en.json`) resta il fallback obbligatorio e deve coprire OGNI ID
 prima delle altre lingue.
 Priorità revisione madrelingua: giapponese e cinese (acceleratori su
 ideogrammi), poi russo, poi le lingue latine.
+
+## Formato catalogo per dialogs/menus (implementato in verify_catalog.py, 2026-09-28)
+
+```json
+"dialogs": {
+  "6/lang:0409": {
+    "title": "...",
+    "controls": { "1105": "...", "65535#1": "...", "65535#2": "..." }
+  }
+},
+"menus": { "211/lang:0409": { "1/0": "...", "1/1": "..." } }
+```
+
+- controlli con **id duplicato** (es. 65535, 4294967295): chiavi `<id>#N`
+  in ordine di template (N da 1); id singolo: chiave semplice `"1131"`;
+- voci menu: chiave `"livello/indice"` (da 0) nella struttura dei
+  constraints; le voci senza testo (separatori) non si traducono;
+- override lunghezze: chiavi `"dialog:<dlg>:<ctrl>"`, `"dialog:<dlg>:title"`,
+  `"menu:<menu>:<l/i>"` dentro `maxlen_override` + commento obbligatorio;
+- acceleratori unici per dialog (titolo escluso) e per livello di menu;
+  il checker avvisa se un controllo marcato con acceleratore nel riferimento
+  resta senza `&` (o viceversa);
+- `require_fallback_coverage` nel file constraints: solo le fonti con
+  `true` esigono copertura completa in `en.json` (shell32 = true;
+  explorer.exe.mui resta a false finché `en` non copre tutti i 161 ID).
+
+## Terminologia standard: mantenere la forma riconoscibile
+
+Decisione del proprietario (2026-09-28): per i termini standard
+("Barra delle applicazioni", "Menu Start", "Area di notifica", ecc.)
+NON serve differenziare le frasi a tutti i costi — la forma riconoscibile
+ha priorità; le differenze creative servono soprattutto per i testi lunghi
+e descrittivi. Se il testo supera il budget, si usa `maxlen_override`
+con commento, non si storcia la frase.
+
+## Conferma funzioni sul file reale (locale, testo MAI committato/pastato)
+
+Il testo originale si estrae solo in locale sulla macchina che ha il
+file:
+
+```
+python tools/analyze_mui.py explorer.exe.mui --with-strings > mui-full.json
+```
+
+`--with-strings` include il testo ORIGINALE (stringhe, voci menu,
+controlli dialog): serve per CAPIRE la funzione e poi scrivere frasi
+proprie. Non committare l'output, non incollarlo in chat/PR.
+Per la verifica delle bozze: confrontare a schermo il dialog originale
+con la tabella della bozza.
