@@ -64,14 +64,14 @@ static BOOL CALLBACK EnumLangCB(HMODULE hModule, LPCWSTR lpType,
 }
 
 static BOOL CALLBACK EnumNameCB(HMODULE hModule, LPCWSTR lpType,
-                                LPCWSTR lpName, LONG_PTR lParam)
+                                LPWSTR lpName, LONG_PTR lParam)
 {
     PrintName(L"name", lpName);
     EnumResourceLanguagesW(hModule, lpType, lpName, EnumLangCB, 0);
     return TRUE;
 }
 
-static BOOL CALLBACK EnumTypeCB(HMODULE hModule, LPCWSTR lpType,
+static BOOL CALLBACK EnumTypeCB(HMODULE hModule, LPWSTR lpType,
                                 LONG_PTR lParam)
 {
     if (IS_INTRESOURCE(lpType))
