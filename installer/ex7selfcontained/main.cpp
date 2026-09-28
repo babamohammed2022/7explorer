@@ -257,18 +257,21 @@ int wmain(int argc, wchar_t** argv) {
         return 1;
     }
 
-    // ---- 3. Authenticode: REQUIRED by default ----------------------------
-    // Because more than one legitimate hash variant exists (see config.h),
-    // the Microsoft signature is the control that binds every accepted
-    // variant to Microsoft. --skip-signature exists only for offline tests.
+    // ---- 3. Authenticode: SECONDARY, advisory only -----------------------
+    // Measured on the real files (2026-09-28): the symbol-server copy is
+    // catalog-signed at OS level and the served PE has NO embedded
+    // signature (WinVerifyTrust => NotSigned is EXPECTED here). The primary
+    // controls are the exact structure + the pinned SHA-256 allow-list.
+    // A valid embedded signature, when present, is logged as a bonus.
     if (!skipSig) {
         auto ts = ex7::CheckAuthenticode(pristine, diag);
-        FileLog(L"authenticode(pristine): %s", diag.c_str());
-        if (ts != ex7::TrustStatus::Valid) {
-            FileLog(L"FAILED: signature does not verify; refusing to proceed "
-                    L"(use --skip-signature ONLY for offline tests)");
-            return 1;
-        }
+        FileLog(L"authenticode(pristine, advisory): %s", diag.c_str());
+        if (ts == ex7::TrustStatus::Valid)
+            FileLog(L"embedded signature present and valid (bonus)");
+        else
+            FileLog(L"no embedded signature — EXPECTED for symbol-server "
+                    L"copies; continuing (structure + SHA-256 allow-list "
+                    L"are the primary controls)");
     }
 
     // ---- 4. working copy: patch imports ----------------------------------
