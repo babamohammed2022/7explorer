@@ -35,6 +35,7 @@ typedef HRESULT(WINAPI *LoaderLoadTheme_t_win11)(
     PVOID, OUT HANDLE*, int, int);
 
 static GetThemeDefaults_t pGetThemeDefaults;
+static BOOL g_forceDefaults = FALSE;
 static FARPROC pLoaderLoadTheme;
 static OpenThemeDataFromFile_t pOpenThemeDataFromFile;
 
@@ -108,10 +109,22 @@ static void ProbeOne(LPCWSTR path)
     }
 
     WCHAR szColor[MAX_PATH] = {0}, szSize[MAX_PATH] = {0};
-    HRESULT hr = pGetThemeDefaults(path, szColor, MAX_PATH,
-                                   szSize, MAX_PATH);
+    SetLastError(0);
+    HRESULT hr = S_OK;
+    __try {
+        hr = pGetThemeDefaults(path, szColor, MAX_PATH,
+                               szSize, MAX_PATH);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        wprintf(L"   GetThemeDefaults      : AV\n");
+        hr = E_FAIL;
+    }
     wprintf(L"   GetThemeDefaults      : 0x%08lx color='%s' size='%s'\n",
             (unsigned long)hr, szColor, szSize);
+    if (g_forceDefaults) {
+        lstrcpyW(szColor, L"NormalColor");
+        lstrcpyW(szSize, L"NormalSize");
+        wprintf(L"   forced color/size     : NormalColor/NormalSize\n");
+    }
 
     UXTHEMEFILE f;
     ZeroMemory(&f, sizeof(f));
@@ -119,12 +132,15 @@ static void ProbeOne(LPCWSTR path)
     memcpy(f.end, "end", 3);
 
     HANDLE hSharable = NULL, hNonSharable = NULL, hReuse = NULL;
+    // real buffers, like a real theme client: NULL+cch0 may be what makes
+    // the loader abort on some paths
+    WCHAR ssName[64] = {0}, nsName[64] = {0};
     SetLastError(0);
     DWORD av = 0;
     __try {
         hr = ((LoaderLoadTheme_t)pLoaderLoadTheme)(
             0, 0, path, szColor, szSize,
-            &hSharable, NULL, 0, &hNonSharable, NULL, 0,
+            &hSharable, ssName, 64, &hNonSharable, nsName, 64,
             NULL, &hReuse, 0, 0, FALSE);
     } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
                 ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
@@ -138,7 +154,7 @@ static void ProbeOne(LPCWSTR path)
         __try {
             hr = ((LoaderLoadTheme_t_win11)pLoaderLoadTheme)(
                 0, 0, path, szColor, szSize,
-                &hSharable, NULL, 0, &hNonSharable, NULL, 0,
+                &hSharable, ssName, 64, &hNonSharable, nsName, 64,
                 NULL, &hReuse, 0, 0);
         } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
                     ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
@@ -190,6 +206,10 @@ int wmain(int argc, wchar_t** argv)
 {
     // unbuffered: a crash in the loader must not swallow output
     setvbuf(stdout, NULL, _IONBF, 0);
+    if (argc > 1 && !lstrcmpiW(argv[1], L"--force-defaults")) {
+        g_forceDefaults = TRUE;
+        argc--; argv++;
+    }
     if (argc > 2 && !lstrcmpiW(argv[1], L"--enum")) {
         EnumResources(argv[2]);
         return 0;
