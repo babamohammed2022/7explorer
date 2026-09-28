@@ -30,6 +30,7 @@ jobs:
               [RU]::V3()
               [RU]::V4()
               [RU]::V5()
+              foreach ($line in [RU]::Log) { Write-Host $line }
               Write-Host "experiments DONE"
             } catch {
               Write-Host ("EXPERIMENT ERROR: " + $_)

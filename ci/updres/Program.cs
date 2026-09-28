@@ -1,9 +1,12 @@
 // UpdateResource behavior probes against the real Win7 explorer.exe.
 // Compiled in CI via Add-Type (no project file needed).
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 public static class RU {
+    public static readonly List<string> Log = new List<string>();
+    static void Out(string s) { Log.Add(s); }
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr BeginUpdateResource(string file, bool del);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -26,7 +29,7 @@ public static class RU {
     static void WriteStrings(string file, ushort lang, string tag) {
         IntPtr h = BeginUpdateResource(file, false);
         if (h == IntPtr.Zero) {
-            Console.WriteLine(tag + ": BeginUpdateResource failed gle="
+            Out(tag + ": BeginUpdateResource failed gle="
                               + Marshal.GetLastWin32Error());
             return;
         }
@@ -36,7 +39,7 @@ public static class RU {
         int gle = Marshal.GetLastWin32Error();
         bool okE = EndUpdateResource(h, !ok);
         int gleE = Marshal.GetLastWin32Error();
-        Console.WriteLine(tag + ": UpdateResource(STRING 337, lang 0x"
+        Out(tag + ": UpdateResource(STRING 337, lang 0x"
             + lang.ToString("X4") + ") ok=" + ok + " gle=" + gle
             + " ; End ok=" + okE + " gle=" + gleE);
     }
@@ -62,7 +65,7 @@ public static class RU {
         int gleD = Marshal.GetLastWin32Error();
         bool okE1 = EndUpdateResource(h, !okD);
         int gleE1 = Marshal.GetLastWin32Error();
-        Console.WriteLine("V3a delete-MUI commit: ok=" + okD + " gle=" + gleD
+        Out("V3a delete-MUI commit: ok=" + okD + " gle=" + gleD
                           + " ; End ok=" + okE1 + " gle=" + gleE1);
         // commit 2: now write strings into the un-marked file
         WriteStrings(@"exp\v3.exe", 0x0409,
@@ -80,7 +83,7 @@ public static class RU {
                                   payload, (uint)payload.Length);
         int gleW = Marshal.GetLastWin32Error();
         bool okE = EndUpdateResource(h, true);
-        Console.WriteLine("V4 same-tx: delMUI ok=" + okD + " gle=" + gleD
+        Out("V4 same-tx: delMUI ok=" + okD + " gle=" + gleD
                           + " ; writeStrings ok=" + okW + " gle=" + gleW
                           + " ; End(discard)=" + okE);
     }
@@ -95,7 +98,7 @@ public static class RU {
         int gleW = Marshal.GetLastWin32Error();
         bool okE = EndUpdateResource(h, false);
         int gleE = Marshal.GetLastWin32Error();
-        Console.WriteLine("V5 deleteExisting=true: write ok=" + okW
+        Out("V5 deleteExisting=true: write ok=" + okW
                           + " gle=" + gleW + " ; End ok=" + okE
                           + " gle=" + gleE);
     }
