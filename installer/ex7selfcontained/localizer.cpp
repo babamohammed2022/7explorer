@@ -57,7 +57,7 @@ struct EnumCtx {
 EnumCtx* g_ctx = nullptr;  // EnumResource*W callbacks carry LPARAM; keep a
                            // single-instance context (tool is single-thread)
 
-static bool SaveEntryBytes(const wchar_t* type, const wchar_t* name,
+static bool SaveEntryBytes(LPCWSTR type, LPCWSTR name,
                            unsigned lang, ResName tn, ResName nn) {
     HRSRC r = FindResourceExW(g_ctx->mod, type, name, (WORD)lang);
     if (!r) { g_ctx->ok = false; return false; }
@@ -79,7 +79,7 @@ static bool SaveEntryBytes(const wchar_t* type, const wchar_t* name,
     return true;
 }
 
-BOOL CALLBACK EnumLangsCb(HMODULE, LPWSTR type, LPWSTR name, WORD lang,
+BOOL CALLBACK EnumLangsCb(HMODULE, LPCWSTR type, LPCWSTR name, WORD lang,
                           LONG_PTR) {
     ResName tn, nn;
     if (IS_INTRESOURCE(type)) { tn.isId = true; tn.id = (unsigned)(uintptr_t)type; }
@@ -89,7 +89,7 @@ BOOL CALLBACK EnumLangsCb(HMODULE, LPWSTR type, LPWSTR name, WORD lang,
     return SaveEntryBytes(type, name, lang, tn, nn) ? TRUE : FALSE;
 }
 
-BOOL CALLBACK EnumNamesCb(HMODULE mod, LPWSTR type, LPWSTR name, LONG_PTR) {
+BOOL CALLBACK EnumNamesCb(HMODULE mod, LPCWSTR type, LPCWSTR name, LONG_PTR) {
     return EnumResourceLanguagesW(mod, type, name, EnumLangsCb, 0);
 }
 
