@@ -32,6 +32,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <commdlg.h>
+#include <shellapi.h>
 #include <shlobj.h>
 #include <objbase.h>
 #include <stdlib.h>
