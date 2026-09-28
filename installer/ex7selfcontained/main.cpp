@@ -312,20 +312,27 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     // ---- 6. localization (PROJECT-GENERATED resources, strict stop) -------
-    // The installer embeds ready-made resource payloads for every catalog
-    // language (en-US fallback + it-IT); injection failure or any UTF-16 /
-    // structure problem discovered at project build time aborts HERE with a
-    // hard error and the update transaction discarded. NO external .mui is
-    // read or required (EX7_REFERENCE_MUI and the transplant were removed
-    // with v0.0.3).
+    // Order matters (v0.0.2 root cause, CI repro 36412428950): while the
+    // copy still carries its "MUI" MU-pairing marker, UpdateResource refuses
+    // to add string resources with ERROR_NOT_SUPPORTED (50). Phase 1 deletes
+    // the marker in its own commit; phase 2 injects the generated payloads
+    // (en-US fallback + it-IT); phase 3 re-parks the marker bytes as "CUI".
+    // Any failure aborts with a hard error; transactions are discarded, so
+    // the copy is never left half-localized. NO external .mui is ever read
+    // or required (EX7_REFERENCE_MUI / transplant removed with v0.0.3).
     std::wstring err;
+    std::vector<unsigned char> savedMui;
+    if (!ex7::NeutralizeMuiResource(workPath, &savedMui, err)) {
+        FileLog(L"FAILED: MUI neutralization: %s", err.c_str());
+        return 1;
+    }
     if (!ex7::InjectGeneratedResources(workPath, err)) {
         FileLog(L"FAILED: localization generation/injection FAILED: %s",
                 err.c_str());
         return 1;
     }
-    if (!ex7::NeutralizeMuiResource(workPath, err)) {
-        FileLog(L"FAILED: MUI neutralization: %s", err.c_str());
+    if (!ex7::RestoreAsCuiResource(workPath, savedMui, err)) {
+        FileLog(L"FAILED: CUI restore: %s", err.c_str());
         return 1;
     }
     if (!ex7::RefreshPeChecksum(workPath, err)) {

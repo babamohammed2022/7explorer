@@ -24,19 +24,31 @@
 
 namespace ex7 {
 
+// PHASE 1 — deletes the "MUI" RCDATA type from `exePath` in its OWN commit.
+// Root cause of v0.0.2's failure (CI repro run 36412428950): on the real
+// Win7 explorer.exe — an MU-paired LN binary — UpdateResourceW refuses to
+// add string resources with ERROR_NOT_SUPPORTED (50) while the file still
+// carries the MUI marker. Removing the marker FIRST (separate transaction)
+// takes the file out of MU pairing; only then are resource writes accepted.
+// The original MUI bytes are returned via `savedBytes` when non-null, so
+// RestoreAsCuiResource() can park them under the "CUI" type afterwards.
+// Idempotent: when no MUI type exists, returns true with empty savedBytes.
+bool NeutralizeMuiResource(const std::wstring& exePath,
+                           std::vector<unsigned char>* savedBytes,
+                           std::wstring& error);
+
 // Injects every embedded language's resource blobs into `exePath` in ONE
 // atomic update transaction. On any failure the transaction is discarded
 // (the file keeps its previous bytes) and `error` describes the failing
 // (type, id, lcid) entry plus GetLastError.
 bool InjectGeneratedResources(const std::wstring& exePath, std::wstring& error);
 
-// Renames the "MUI" RCDATA type to "CUI" inside `exePath`, so the kernel
-// MUI loader stops looking for an external explorer.exe.mui next to the
-// private copy (checksum pairing would otherwise reject everything).
-// Required because ALL languages now come from blobs (full coverage), so
-// there is no coverage gate anymore. If no MUI type exists the step is a
-// no-op (logged) — reruns stay idempotent.
-bool NeutralizeMuiResource(const std::wstring& exePath, std::wstring& error);
+// PHASE 3 — re-adds the saved MUI bytes under the "CUI" type (forensics /
+// debuggability; the kernel MUI loader does not react to "CUI"). No-op when
+// `bytes` is empty (MUI was not present).
+bool RestoreAsCuiResource(const std::wstring& exePath,
+                          const std::vector<unsigned char>& bytes,
+                          std::wstring& error);
 
 // Recomputes the PE optional-header CheckSum field after resource
 // modification (MapFileAndCheckSum-compatible; the resource update makes

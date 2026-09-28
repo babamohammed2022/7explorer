@@ -105,15 +105,20 @@ static bool ReadMuiResourceBytes(const std::wstring& exePath,
     return ok;
 }
 
-bool NeutralizeMuiResource(const std::wstring& exePath, std::wstring& error) {
+bool NeutralizeMuiResource(const std::wstring& exePath,
+                           std::vector<unsigned char>* savedBytes,
+                           std::wstring& error) {
     std::vector<unsigned char> bytes;
     WORD lang = 0;
     if (!ReadMuiResourceBytes(exePath, bytes, lang) || bytes.empty()) {
         Log(L"no MUI resource in %s (already neutralized?) — nothing to do",
             exePath.c_str());
+        if (savedBytes) savedBytes->clear();
         return true;  // idempotent: absence is fine, all resources are ours
     }
 
+    // Dedicated transaction per ERROR_NOT_SUPPORTED root cause (see .h):
+    // delete the MU marker and COMMIT before touching anything else.
     HANDLE h = BeginUpdateResourceW(exePath.c_str(), FALSE);
     if (!h) {
         wchar_t buf[192];
@@ -124,21 +129,53 @@ bool NeutralizeMuiResource(const std::wstring& exePath, std::wstring& error) {
         return false;
     }
     if (!UpdateResourceW(h, L"MUI", MAKEINTRESOURCEW(1), lang, nullptr, 0)) {
+        wchar_t buf[192];
+        _snwprintf_s(buf, _countof(buf), _TRUNCATE,
+                     L"failed to delete MUI resource, GetLastError=%u",
+                     GetLastError());
         EndUpdateResourceW(h, TRUE);
-        error = L"failed to delete MUI resource";
-        return false;
-    }
-    if (!UpdateResourceW(h, L"CUI", MAKEINTRESOURCEW(1), lang,
-                         bytes.data(), (DWORD)bytes.size())) {
-        EndUpdateResourceW(h, TRUE);
-        error = L"failed to add CUI resource";
+        error = buf;
         return false;
     }
     if (!EndUpdateResourceW(h, FALSE)) {
-        error = L"EndUpdateResource failed";
+        error = L"EndUpdateResource (MUI delete) failed";
         return false;
     }
-    Log(L"neutralized MUI resource in %s (MUI -> CUI)", exePath.c_str());
+    if (savedBytes) *savedBytes = bytes;
+    Log(L"deleted MUI resource from %s (saved %u bytes, pending CUI)",
+        exePath.c_str(), (unsigned)bytes.size());
+    return true;
+}
+
+bool RestoreAsCuiResource(const std::wstring& exePath,
+                          const std::vector<unsigned char>& bytes,
+                          std::wstring& error) {
+    if (bytes.empty()) return true;  // nothing was saved: nothing to restore
+    HANDLE h = BeginUpdateResourceW(exePath.c_str(), FALSE);
+    if (!h) {
+        wchar_t buf[192];
+        _snwprintf_s(buf, _countof(buf), _TRUNCATE,
+                     L"BeginUpdateResource failed, GetLastError=%u",
+                     GetLastError());
+        error = buf;
+        return false;
+    }
+    if (!UpdateResourceW(h, L"CUI", MAKEINTRESOURCEW(1),
+                         MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
+                         (LPVOID)bytes.data(), (DWORD)bytes.size())) {
+        wchar_t buf[192];
+        _snwprintf_s(buf, _countof(buf), _TRUNCATE,
+                     L"failed to add CUI resource, GetLastError=%u",
+                     GetLastError());
+        EndUpdateResourceW(h, TRUE);
+        error = buf;
+        return false;
+    }
+    if (!EndUpdateResourceW(h, FALSE)) {
+        error = L"EndUpdateResource (CUI add) failed";
+        return false;
+    }
+    Log(L"parked MU marker bytes as CUI resource in %s", exePath.c_str());
     return true;
 }
 
