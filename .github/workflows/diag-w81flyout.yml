@@ -5,7 +5,7 @@ name: diag-w81flyout
 on:
   push:
     branches: ["arena/**"]
-    paths: [".github/workflows/diag-w81flyout.yml", "tools/analyze_flyout.py"]
+    paths: [".github/workflows/diag-w81flyout.yml", "tools/analyze_flyout.py", "tools/w81_compat_check.py"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -55,6 +55,16 @@ jobs:
           dumpbin /nologo /disasm work\w81-batmeter.dll > work\bat.asm 2>&1
           findstr /n /i "LoadLibrary batmeter CoCreateInstance DllGetClassObject" work\sto.asm > ci-logs\w81-sto-calls.txt 2>&1
           python -c "import os;[print(f,os.path.getsize('work/'+f)) for f in os.listdir('work')]" >> ci-logs\w81-download.txt
+      - name: Runtime compatibility on this Windows build
+        shell: cmd
+        continue-on-error: true
+        run: |
+          pip install pefile > nul
+          python tools\w81_compat_check.py work\w81-stobject.dll work\w81-batmeter.dll > ci-logs\w81-compat.txt 2>&1
+          python tools\w81_compat_check.py --strings-only work\cache\stobject.dll >> ci-logs\w81-compat.txt 2>&1
+          python tools\w81_compat_check.py --strings-only work\cache\batmeter.dll >> ci-logs\w81-compat.txt 2>&1
+          python -c "import pefile;p=pefile.PE(r'work\w81-batmeter.dll');[print(t.id,t.name,len(t.directory.entries)) for t in p.DIRECTORY_ENTRY_RESOURCE.entries]" >> ci-logs\w81-compat.txt 2>&1
+          powershell -NoProfile -Command "(Get-Item C:\Windows\System32\twinapi.dll).VersionInfo.FileVersion; Test-Path C:\Windows\System32\settingsyncpolicy.dll; Test-Path C:\Windows\System32\dui70.dll" >> ci-logs\w81-compat.txt 2>&1
       - name: Symbols (public PDB) for function names
         shell: pwsh
         continue-on-error: true
