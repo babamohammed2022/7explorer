@@ -25,6 +25,8 @@ jobs:
       - name: Probe explorer.exe.mui on the symbol server
         shell: cmd
         run: |
+          if not exist ci-logs mkdir ci-logs
+          if not exist work mkdir work
           echo --- mui probe --- > ci-logs\mui-probe.txt
           for %%I in (6000 5600 5800 8000 A000 C000 10000) do (
             curl.exe -s -L -o work\mui-%%I.bin "https://msdl.microsoft.com/download/symbols/explorer.exe.mui/4A5BC954%%I/explorer.exe.mui" -w "id%%I code=%%{http_code} size=%%{size_download}" >> ci-logs\mui-probe.txt 2>&1
@@ -37,7 +39,8 @@ jobs:
         continue-on-error: true
         shell: cmd
         run: |
-          mkdir work
+          if not exist work mkdir work
+          if not exist ci-logs mkdir ci-logs
           echo === probe run %GITHUB_RUN_ID% > ci-logs\diag-probe.txt
           for %%U in ("curl-default" "-" "Microsoft-Symbol-Server/6.3" "MSDL-PROD") do (
             setlocal enabledelayedexpansion
