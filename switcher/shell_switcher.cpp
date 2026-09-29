@@ -983,7 +983,7 @@ static BOOL RecoveryTaskInstallInner(LPWSTR pErr, DWORD errChars) {
     do {
         if (!broot || !bname) break;
         if (FAILED(hr = svc->GetFolder(broot, &root))) break;
-        if (FAILED(hr = root->NewTask(0, &def))) break;
+        if (FAILED(hr = svc->NewTask(0, &def))) break;  // ITaskService::NewTask
         ITriggerCollection* trigs = NULL;
         if (FAILED(hr = def->get_Triggers(&trigs))) break;
         ITrigger* trig = NULL;
