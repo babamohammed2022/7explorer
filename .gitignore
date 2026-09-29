@@ -399,3 +399,23 @@ FodyWeavers.xsd
 
 # Minhook minibuild
 minhook/
+
+# ---- 7explorer: CI scratch dirs and local build leftovers -----------------
+# (CI writes run logs here and uploads them as artifacts; nothing is
+#  committed to branches anymore)
+ci-logs/
+collect-logs/
+ci-run/
+logs/
+exp/
+exp-upload/
+pipe-upload/
+work/
+work-theme-check/
+e2e/
+bundle/
+wh-obj/
+msbuild-*.log
+# minhook is cloned and built locally (see README); its static lib is a
+# build output and must never be committed
+explorerwrapper/libMinHook.x64.lib

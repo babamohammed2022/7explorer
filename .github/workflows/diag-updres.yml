@@ -6,7 +6,7 @@ on:
       - .github/workflows/diag-updres.yml
       - ci/updres/**
 permissions:
-  contents: write
+  contents: read  # log upload only, no branch commits
 jobs:
   experiments:
     runs-on: windows-latest
@@ -38,18 +38,10 @@ jobs:
             }
           } *>&1 | Tee-Object -FilePath exp\updres.out
           exit 0
-      - name: Collect experiment logs
+      - name: Upload experiment logs as artifact
         if: always()
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.email "ci@localhost"
-          git config user.name "ci-log-bot"
-          $br = "ci-logs/updres-" + $env:GITHUB_RUN_ID
-          git checkout -b $br 2>$null
-          New-Item -ItemType Directory -Force -Path exp-upload | Out-Null
-          if (Test-Path exp\updres.out) { Copy-Item exp\updres.out exp-upload\ }
-          git add -f exp-upload
-          git commit --allow-empty -m "updres experiments run $env:GITHUB_RUN_ID"
-          git push -f origin $br
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-updres-${{ github.run_id }}
+          path: exp/
+          if-no-files-found: warn

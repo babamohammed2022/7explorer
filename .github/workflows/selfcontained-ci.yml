@@ -71,8 +71,8 @@ jobs:
         shell: cmd
         run: |
           mkdir work
-          echo --- download --- > ci-logs\run-verify.txt
-          curl.exe -L -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe" 2>> ci-logs\run-verify.txt
+          echo --- download --- > logs\run-verify.txt
+          curl.exe -L -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe" 2>> logs\run-verify.txt
           if errorlevel 1 exit /b 1
 
       - name: Re-verify hash (allow-list), size and signature
@@ -83,13 +83,13 @@ jobs:
             '6a671b92a69755de6fd063fcbe4ba926d83b49f78c42dbaeed8cdb6bbc57576a')
           $h = (Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower()
           $s = (Get-Item work\explorer-ref.exe).Length
-          "--- hash+size ---"     | Add-Content ci-logs\run-verify.txt
-          "sha256: $h"            | Add-Content ci-logs\run-verify.txt
-          "size: $s"              | Add-Content ci-logs\run-verify.txt
+          "--- hash+size ---"     | Add-Content logs\run-verify.txt
+          "sha256: $h"            | Add-Content logs\run-verify.txt
+          "size: $s"              | Add-Content logs\run-verify.txt
           if (-not ($expected -contains $h)) { throw "SHA256 NOT IN ALLOW-LIST: $h" }
           if ($s -ne 2872320) { throw "SIZE MISMATCH: $s" }
           $sig = Get-AuthenticodeSignature work\explorer-ref.exe
-          "signature: $($sig.Status) | $($sig.SignerCertificate.Subject)" | Add-Content ci-logs\run-verify.txt
+          "signature: $($sig.Status) | $($sig.SignerCertificate.Subject)" | Add-Content logs\run-verify.txt
           # NotSigned is EXPECTED for symbol-server copies of Win7 binaries
           # (they are catalog-signed at OS level, not embedded); log it.
           if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'NotSigned') { throw "UNEXPECTED SIGNATURE STATUS: $($sig.Status)" }
@@ -97,14 +97,14 @@ jobs:
       - name: Dump PE headers of the reference (log evidence)
         shell: cmd
         run: |
-          echo --- pe headers --- >> ci-logs\run-verify.txt
-          python tools\analyze_mui.py work\explorer-ref.exe --dump-headers >> ci-logs\run-verify.txt 2>&1
+          echo --- pe headers --- >> logs\run-verify.txt
+          python tools\analyze_mui.py work\explorer-ref.exe --dump-headers >> logs\run-verify.txt 2>&1
           if errorlevel 1 exit /b 1
 
       - name: Structure probe of the reference menus (NO text extracted)
         shell: cmd
         run: |
-          python tools\structure_probe.py work\explorer-ref.exe --out ci-logs\structure-ref.json
+          python tools\structure_probe.py work\explorer-ref.exe --out logs\structure-ref.json
           if errorlevel 1 exit /b 1
 
       - name: Patch imports on the REAL file with the Python reference
@@ -113,9 +113,9 @@ jobs:
       - name: Patch imports with the C++ build and compare byte-for-byte
         shell: cmd
         run: |
-          installer\ex7selfcontained\bin\ex7selfcontained.exe --selftest-importpatch work\explorer-ref.exe > ci-logs\selftest.txt 2>&1
+          installer\ex7selfcontained\bin\ex7selfcontained.exe --selftest-importpatch work\explorer-ref.exe > logs\selftest.txt 2>&1
           if errorlevel 1 exit /b 1
-          fc /b work\explorer-ref.exe.ex7patched work\explorer-py.exe >> ci-logs\selftest.txt 2>&1
+          fc /b work\explorer-ref.exe.ex7patched work\explorer-py.exe >> logs\selftest.txt 2>&1
           if errorlevel 1 exit /b 1
 
       - name: Verify the patched imports resolve to wrp64.dll
@@ -139,9 +139,9 @@ jobs:
         shell: cmd
         run: |
           python tools\check_pe_resources.py e2e\explorer.exe ^
-            > ci-logs\check-pe-resources.txt 2>&1
-          if errorlevel 1 (type ci-logs\check-pe-resources.txt & exit /b 1)
-          type ci-logs\check-pe-resources.txt
+            > logs\check-pe-resources.txt 2>&1
+          if errorlevel 1 (type logs\check-pe-resources.txt & exit /b 1)
+          type logs\check-pe-resources.txt
       - name: "E2E rerun — idempotency (second run rewrites identically)"
         shell: cmd
         run: |
@@ -175,20 +175,14 @@ jobs:
           $lines | Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
 
-      - name: Commit build logs on failure (readable from the dev sandbox)
+      - name: Collect run logs (uploaded as artifact, never committed)
         if: always()
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.email "ci@localhost"
-          git config user.name "ci-log-bot"
-          $br = "ci-logs/sc-" + $env:GITHUB_RUN_ID
-          Get-ChildItem msbuild-*.log -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName ("ci-logs\" + $_.BaseName + ".txt") -Force }
-          git checkout -b $br 2>$null
-          git add -f ci-logs
-          git commit -m "build logs for run $env:GITHUB_RUN_ID" -m "(auto)"
-          git push -f origin $br
+          New-Item -ItemType Directory -Force collect-logs | Out-Null
+          Get-ChildItem msbuild-*.log -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName ("collect-logs\" + $_.BaseName + ".txt") -Force }
+          if (Test-Path logs) { Copy-Item logs\* collect-logs\ -Force -ErrorAction SilentlyContinue }
+          Get-ChildItem collect-logs | Select-Object Name,Length
 
       - name: Upload artifacts (NO Microsoft binaries)
         if: always()  # anche in caso di fallimento: servono i log di build
@@ -205,6 +199,7 @@ jobs:
             msbuild-ex7selfcontained.log
             msbuild-switcher.log
             msbuild-minhook.log
+            collect-logs/
           retention-days: 30
 
   prerelease:
@@ -223,10 +218,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse -File | Select-Object -ExpandProperty FullName |
-            Out-File ci-logs\release.txt -Append
+          Get-ChildItem -Recurse -File | Select-Object -ExpandProperty FullName
           gh release create "$env:TAG" --prerelease `
-            --title "ex7 self-contained bootstrap - test $env:TAG" `
+            --title "7explorer $env:TAG (reference test build)" `
             --notes-file docs/RELEASE_NOTES_test.md `
             "Release/wrp64.dll#wrp64.dll" `
             "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
@@ -235,21 +229,6 @@ jobs:
             "windhawk/ex7-userinit-shell.cpp#ex7-userinit-shell.wh.cpp" `
             "windhawk/ex7-fake-explorer-path.cpp#ex7-fake-explorer-path.wh.cpp" `
             "windhawk/README.md#windhawk-POC-README.md" `
-            "SHA256SUMS.txt" *>&1 |
-            Out-File ci-logs\release.txt -Append
+            "SHA256SUMS.txt"
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
-          gh release view "$env:TAG" *>&1 | Out-File ci-logs\release.txt -Append
-
-      - name: Commit release logs on failure
-        if: failure()
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.email "ci@localhost"
-          git config user.name "ci-log-bot"
-          $br = "ci-logs/rel-" + $env:GITHUB_RUN_ID
-          git checkout -b $br 2>$null
-          git add -f ci-logs
-          git commit -m "release logs for run $env:GITHUB_RUN_ID" -m "(auto)"
-          git push -f origin $br
+          gh release view "$env:TAG"

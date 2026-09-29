@@ -13,7 +13,7 @@ on:
       - switcher/**
       - windhawk/**
 permissions:
-  contents: write
+  contents: read  # log upload only, no branch commits
 jobs:
   windows-acceptance:
     runs-on: windows-latest
@@ -71,21 +71,8 @@ jobs:
           path: |
             ci-run/run.out
             ci-run/msbuild.log
+            ci-run/msbuild-switcher.log
+            ci-run/windhawk-clcheck.log
             ci-run/log/**
             ci-run/state/**
           if-no-files-found: warn
-      - name: Commit logs to ci-logs branch (sandbox-readable channel)
-        if: always()
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.email "ci@localhost"
-          git config user.name "ci-log-bot"
-          $br = "ci-logs/locpipe-" + $env:GITHUB_RUN_ID
-          git checkout -b $br 2>$null
-          New-Item -ItemType Directory -Force -Path pipe-upload | Out-Null
-          Get-ChildItem -Recurse -File ci-run | Where-Object { $_.Extension -in '.out','.log','.txt' } | ForEach-Object { Copy-Item $_.FullName (Join-Path 'pipe-upload' $_.Name) -Force }
-          git add -f pipe-upload
-          git commit --allow-empty -m "localization pipeline logs run $env:GITHUB_RUN_ID"
-          git push -f origin $br
