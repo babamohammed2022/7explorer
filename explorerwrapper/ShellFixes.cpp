@@ -31,6 +31,7 @@
 #include <shobjidl.h>
 #include "dbgprint.h"
 #include <shlwapi.h>
+#include <tlhelp32.h>
 
 void CreateTwinUI_UWP(); // ImmersiveShell.cpp
 
@@ -701,16 +702,48 @@ bool IsForeignModule(const wchar_t* path)
 		StrCmpNIW(path, g_selfDir, lstrlenW(g_selfDir)) != 0;
 }
 
+// Windhawk mod policy for the Win7 shell process (test20):
+//  InjectionPolicy 0 = off, 1 = quarantine only, 2 = allow-list (default):
+//  a DLL under \Windhawk\Engine\Mods\ loads only if its key is listed in
+//  InjectionAllowlist (REG_MULTI_SZ, same key format as the quarantine).
+//  Safe mode: after 2 start-ups that never reached the taskbar, every
+//  Windhawk mod is refused (allow-list ignored) until one start succeeds.
+DWORD g_policy = 2;
+bool g_safeMode = false;
+wchar_t g_allow[2048];
+
+bool IsWindhawkMod(const wchar_t* path) { return StrStrIW(path, L"\\Windhawk\\Engine\\Mods\\") != nullptr; }
+
+bool IsAllowed(const wchar_t* key)
+{
+	for (const wchar_t* q = g_allow; *q; q += lstrlenW(q) + 1)
+		if (lstrcmpiW(q, key) == 0) return true;
+	return false;
+}
+
+// 0 = load, else reason text
+const wchar_t* RefuseReason(const wchar_t* path, const wchar_t* key)
+{
+	if (g_policy == 0) return nullptr;
+	if (IsQuarantined(key)) return L"quarantined (crashed earlier)";
+	if (g_policy >= 2 && IsWindhawkMod(path)) {
+		if (g_safeMode) return L"safe mode (previous start-ups did not reach the taskbar)";
+		if (!IsAllowed(key)) return L"not in InjectionAllowlist";
+	}
+	return nullptr;
+}
+
 LONG NTAPI LdrLoadDll_Hook(PWSTR sp, PULONG ch, EX7_USTR* name, PVOID* h)
 {
 	__try {
-		if (name && name->Buffer && name->Length && g_quarantine[0]) {
+		if (name && name->Buffer && name->Length) {
 			wchar_t path[MAX_PATH], key[128];
 			int n = (int)(name->Length / sizeof(wchar_t)); if (n > MAX_PATH - 1) n = MAX_PATH - 1;
 			CopyMemory(path, name->Buffer, n * sizeof(wchar_t)); path[n] = 0;
 			ModuleKey(path, key, ARRAYSIZE(key));
-			if (IsQuarantined(key)) {
-				LogLine(L"[ex7] injection guard: refused quarantined module %s", path);
+			const wchar_t* why = RefuseReason(path, key);
+			if (why) {
+				LogLine(L"[ex7] injection guard: refused %s (key %s): %s", path, key, why);
 				if (h) *h = nullptr;
 				return (LONG)0xC0000135; // STATUS_DLL_NOT_FOUND
 			}
@@ -810,6 +843,65 @@ LONG WINAPI UEF_Hook(EXCEPTION_POINTERS* ep)
 	return g_origUEF(ep);
 }
 
+// ---- start-up watchdog: reports where the shell hangs before the taskbar
+volatile LONG g_trayReached = 0;
+DWORD g_mainThread = 0;
+
+void DumpThreadStack(DWORD tid)
+{
+	HANDLE t = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+	if (!t) return;
+	DWORD64 pcs[12] = {}; int n = 0;
+	if (SuspendThread(t) != (DWORD)-1) {
+		// only raw addresses while suspended (the thread may own the loader lock)
+		CONTEXT c = {}; c.ContextFlags = CONTEXT_FULL;
+		if (GetThreadContext(t, &c)) {
+			__try {
+				for (; n < 12 && c.Rip; ) { pcs[n++] = c.Rip; if (!UnwindOnce(&c)) break; }
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER) {}
+		}
+		ResumeThread(t);
+	}
+	CloseHandle(t);
+	wchar_t line[900]; int pos = wnsprintfW(line, 200, L"[ex7] watchdog thread %u:", tid);
+	for (int d = 0; d < n && pos < 800; ++d) {
+		HMODULE m = nullptr; wchar_t mp[MAX_PATH] = L"?";
+		if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)pcs[d], &m))
+			GetModuleFileNameW(m, mp, MAX_PATH);
+		pos += wnsprintfW(line + pos, 900 - pos, L" %s+0x%X", PathFindFileNameW(mp), (DWORD)(pcs[d] - (DWORD64)m));
+	}
+	LogLine(L"%s", line);
+}
+
+DWORD WINAPI WatchdogThread(LPVOID)
+{
+	for (int i = 0; i < 25 && !g_trayReached; ++i) Sleep(1000);
+	if (g_trayReached) return 0;
+	LogLine(L"[ex7] watchdog: taskbar not created after 25 s - start-up hang, thread stacks follow");
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (snap == INVALID_HANDLE_VALUE) return 0;
+	THREADENTRY32 te = { sizeof(te) };
+	int n = 0;
+	for (BOOL ok = Thread32First(snap, &te); ok && n < 40; ok = Thread32Next(snap, &te))
+		if (te.th32OwnerProcessID == GetCurrentProcessId() && te.th32ThreadID != GetCurrentThreadId()) {
+			DumpThreadStack(te.th32ThreadID); ++n;
+		}
+	CloseHandle(snap);
+	return 0;
+}
+
+void LogLoadedForeignModules()
+{
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+	if (snap == INVALID_HANDLE_VALUE) return;
+	MODULEENTRY32W me = { sizeof(me) };
+	for (BOOL ok = Module32FirstW(snap, &me); ok; ok = Module32NextW(snap, &me))
+		if (IsForeignModule(me.szExePath))
+			LogLine(L"[ex7] injection guard: foreign module already loaded before guard: %s", me.szExePath);
+	CloseHandle(snap);
+}
+
 void DirOf(wchar_t* p) { PathRemoveFileSpecW(p); lstrcatW(p, L"\\"); }
 
 void InstallInjectionGuard()
@@ -819,6 +911,22 @@ void InstallInjectionGuard()
 	GetModuleFileNameW(nullptr, g_exeDir, MAX_PATH); DirOf(g_exeDir);
 	GetModuleFileNameW(g_self, g_selfDir, MAX_PATH); DirOf(g_selfDir);
 	g_swallow = ReadAdvancedDword(L"InjectionSwallow", 1) != 0;
+	g_policy = ReadAdvancedDword(L"InjectionPolicy", 2);
+	DWORD fails = ReadAdvancedDword(L"StartupFailures", 0);
+	g_safeMode = fails >= 2;
+	WriteAdvancedDword(L"StartupFailures", fails + 1); // cleared when the taskbar is created
+	{
+		DWORD cb = sizeof(g_allow) - 2 * sizeof(wchar_t);
+		ZeroMemory(g_allow, sizeof(g_allow));
+		if (RegGetValueW(HKEY_CURRENT_USER, kAdvancedKey, L"InjectionAllowlist", RRF_RT_REG_MULTI_SZ, nullptr, g_allow, &cb) != ERROR_SUCCESS)
+			ZeroMemory(g_allow, sizeof(g_allow));
+	}
+	LogLine(L"[ex7] injection guard: policy=%u safeMode=%d (failed start-ups=%u)", g_policy, g_safeMode, fails);
+	for (const wchar_t* q = g_allow; *q; q += lstrlenW(q) + 1)
+		LogLine(L"[ex7] injection guard: allowed %s", q);
+	LogLoadedForeignModules();
+	HANDLE wd = CreateThread(nullptr, 0, WatchdogThread, nullptr, 0, nullptr);
+	if (wd) CloseHandle(wd);
 	LoadQuarantine();
 	for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1)
 		LogLine(L"[ex7] injection guard: quarantined %s", q);
@@ -845,7 +953,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test19), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test20), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
@@ -897,7 +1005,11 @@ void SafeCreateTwinUI_UWP()
 
 namespace ex7 {
 // dllmain: system CLSID_SysTray instance created (8.1 path not taken).
-void OnSysTrayCreateBegin() { LogLine(L"[ex7] SysTray: CoCreateInstance start"); }
+void OnSysTrayCreateBegin()
+{
+	LogLine(L"[ex7] SysTray: CoCreateInstance start");
+	if (InterlockedExchange(&g_trayReached, 1) == 0) WriteAdvancedDword(L"StartupFailures", 0);
+}
 void OnSystemSysTrayCreated()
 {
 	LogLine(L"[ex7] SysTray: system stobject in use (8.1 active=%d)", ex7::w81::IsActive());
