@@ -1033,8 +1033,65 @@ DWORD WINAPI GPPS_Hook(LPCWSTR app, LPCWSTR key, LPCWSTR def, LPWSTR out, DWORD 
 	return r;
 }
 
+// ---- ForceShell (test24): the Win7 explorer must not decline to be the shell.
+// explorer.exe 6.1.7601.17514 (timestamp 0x4CE7A144, hash-pinned by the
+// installer): ShouldStartDesktopAndTray at RVA 0x2BC40 and
+// CreateDesktopAndTray at RVA 0x20BE4 (public PDB). Prologue bytes are
+// verified before hooking; any mismatch = no hook.
+typedef BOOL (*ShouldStart_t)();
+typedef BOOL (*CreateDT_t)(void*);
+ShouldStart_t g_origShouldStart = nullptr;
+CreateDT_t g_origCreateDT = nullptr;
+
+BOOL ShouldStart_Hook()
+{
+	BOOL r = g_origShouldStart();
+	LogLine(L"[ex7] ShouldStartDesktopAndTray returned %d%s", r, r ? L"" : L" -> forced to 1 (ForceShell)");
+	return TRUE;
+}
+
+BOOL CreateDT_Hook(void* p)
+{
+	LogLine(L"[ex7] CreateDesktopAndTray start");
+	BOOL r = g_origCreateDT(p);
+	LogLine(L"[ex7] CreateDesktopAndTray returned %d", r);
+	return r;
+}
+
+bool BytesAt(BYTE* p, const BYTE* want, size_t n)
+{
+	__try { return memcmp(p, want, n) == 0; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+void InstallForceShell()
+{
+	if (ReadAdvancedDword(L"ForceShell", 1) == 0) { LogLine(L"[ex7] ForceShell=0"); return; }
+	BYTE* base = (BYTE*)GetModuleHandleW(nullptr);
+	IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(base + ((IMAGE_DOS_HEADER*)base)->e_lfanew);
+	if (nt->FileHeader.TimeDateStamp != 0x4CE7A144) {
+		LogLine(L"[ex7] ForceShell: explorer timestamp 0x%08X is not 6.1.7601.17514, not hooked", nt->FileHeader.TimeDateStamp);
+		return;
+	}
+	static const BYTE ssPro[] = { 0x48,0x89,0x5C,0x24,0x08, 0x48,0x89,0x74,0x24,0x10, 0x57, 0x48,0x83,0xEC,0x60 };
+	static const BYTE cdPro[] = { 0x48,0x89,0x5C,0x24,0x08, 0x56, 0x48,0x83,0xEC,0x20 };
+	BYTE* ss = base + 0x2BC40; BYTE* cd = base + 0x20BE4;
+	MH_Initialize();
+	if (BytesAt(ss, ssPro, sizeof(ssPro))) {
+		MH_STATUS a = MH_CreateHook(ss, (void*)ShouldStart_Hook, (void**)&g_origShouldStart);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(ss) : a;
+		LogLine(L"[ex7] ForceShell: ShouldStartDesktopAndTray hook %d/%d", a, b);
+	} else LogLine(L"[ex7] ForceShell: ShouldStartDesktopAndTray prologue mismatch");
+	if (BytesAt(cd, cdPro, sizeof(cdPro))) {
+		MH_STATUS a = MH_CreateHook(cd, (void*)CreateDT_Hook, (void**)&g_origCreateDT);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(cd) : a;
+		LogLine(L"[ex7] ForceShell: CreateDesktopAndTray hook %d/%d", a, b);
+	} else LogLine(L"[ex7] ForceShell: CreateDesktopAndTray prologue mismatch");
+}
+
 void InstallExplorerIsShellFix()
 {
+	InstallForceShell();
 	if (ReadAdvancedDword(L"ForceExplorerIsShell", 1) == 0) return;
 	g_origGPPS = (GPPS_t)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetPrivateProfileStringW");
 	if (!g_origGPPS) return;
@@ -1099,7 +1156,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test23), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test24), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
