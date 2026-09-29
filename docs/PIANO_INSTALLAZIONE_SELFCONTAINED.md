@@ -1,5 +1,9 @@
 # Piano: installazione completamente self-contained di explorer7
 
+> Nota: documento **storico/tecnico** (2026-09-28) — è il piano di
+> progettazione dell'installer, mantenuto per riferimento; lo stato
+> attuale dell'installazione utente è in [installazione.md](installazione.md).
+
 Data analisi: 2026-09-28. Legenda stato di ogni affermazione:
 
 - ✅ **VERIFICATO NEL SORGENTE** — letto direttamente nel codice di questo

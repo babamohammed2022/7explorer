@@ -2,372 +2,235 @@
   <img src="https://github.com/user-attachments/assets/77a7d7b1-3022-43ab-9c2a-9a09a923be39">
 </p>
 
+# 7explorer
 
-explorer7 is a **wrapper library** that allows Windows 7's explorer.exe to run properly on modern Windows versions, aiming to resurrect the original Windows 7 shell experience.
+**7explorer** è il shell-explorer di **Windows 7** che gira **come shell di
+Windows 11** (target: build **24H2 / 25H2**, x64): taskbar, menu Start e
+Esplora risorse dell'epoca, nel desktop di oggi.
 
-> **This fork — self-contained bootstrap + progetto di localizzazione integrato**
-> This fork adds `installer/ex7selfcontained` (download-verifica-patch-localizza
-> in una sola esecuzione) e una **pipeline di risorse generate dal progetto**:
-> tutte le risorse UI della copia privata (stringhe, menu, dialoghi,
-> acceleratori — en-US + it-IT) sono **prodotte dal repository**
-> (`localization/catalog` + `localization/templates`
-> → `tools/build_resources.py` → blob validati) e iniettate con riscrittura
-> atomica della tabella risorse. **Non serve nessun `explorer.exe.mui`** né
-> alcun altro file Microsoft oltre al singolo `explorer.exe` scaricato dal
-> symbol server. Dettagli: `installer/ex7selfcontained/README.md`.
+È un **fork di [explorer7](https://github.com/world-windows-federation/explorer7)**
+(World Windows Federation), licenza **GPLv3**. Il cuore è una *wrapper
+library* (`wrp64.dll`) caricata da una copia **privata** di `explorer.exe`
+di Windows 7 SP1: nessun file di `C:\Windows` viene mai modificato.
 
-> **Runtime shell switcher (test tool) — `switcher/`**
-> Small native Win32 GUI (`CreateWindowExW` + standard controls, static CRT)
-> to swap the **running** shell at runtime between `%SystemRoot%\explorer.exe`
-> and the private Explorer7 — no logout/reboot, no registry, no Winlogon.
-> Identifies the shell via the owner of `GetShellWindow()` +
-> `QueryFullProcessImageNameW` (immune to the Windhawk path spoof): only that
-> process is stopped (graceful `WM_QUIT`, terminate after timeout). Build:
-> `msbuild switcher\shell_switcher.vcxproj`.
+> [!IMPORTANT]
+> ## ⚡ COME TORNARE SUBITO A WINDOWS 11
+> **Premi `Ctrl` + `Alt` + `Shift` + `S`** — apre lo *Shell Switcher* anche
+> se la shell Win7 è bloccata o è crashata. Da lì seleziona
+> **"Esplora risorse Windows nativo" → Cambia**: il passaggio Win7 ⇄ Win11 è
+> **istantaneo, senza logout e senza riavvio**.
+>
+> È il **pulsante di sicurezza** di tutto il progetto: qualunque cosa vada
+> storto con la shell Win7, una pressione ti riporta alla shell di Windows 11.
+> Dettagli su quando è attiva: [la scorciatoia di emergenza](#-la-scorciatoia-di-emergenza-ctrlaltshifts).
 
-### Quick test (all-in-one ZIP, recommended)
+> [!WARNING]
+> **Stato: progetto in fase di test (commit `testNN`, ultimo `test37`).**
+> Le funzioni sono reali ma non tutto è stabile: leggi
+> [Stato onesto del progetto](#stato-onesto-del-progetto) prima di
+> installare, e tieni sempre a portata di mano `Ctrl+Alt+Shift+S`.
 
-1. Download **`ex7-test-bundle.zip`** from the test release and extract it
-   into a single folder, e.g. `C:\ex7test`.
-2. Run `ex7selfcontained.exe` from that folder → it produces the patched +
-   localized `explorer.exe` right there (side-by-side with the switcher).
-3. Start `7explorer-shell-switcher.exe` — it finds the private explorer
-   automatically (own folder first; `EX7_EXPLORER_PATH` honored; Browse…
-   available).
-4. Select **Windows 7 Explorer** → **Switch** → the Windows 7 taskbar
-   replaces the Windows 11 taskbar immediately. Since test4 the
-   `%SystemRoot%\explorer.exe` path-spoof is **built into `wrp64.dll`** —
-   no Windhawk install needed for the runtime switch (Windhawk mods kept as
-   source/optional, `windhawk/`).
-5. Select **Native Windows Explorer** → **Switch** → back to the Win11 shell.
-   No logout, no registry. Optional: the checkbox "Start Windows 7 Explorer
-   automatically at logon" uses a plain link in the user Startup folder
-   (file-based, non invasivo, rimovibile).
+---
+
+## Indice
+
+- [⚡ La scorciatoia di emergenza (Ctrl+Alt+Shift+S)](#-la-scorciatoia-di-emergenza-ctrlaltshifts)
+- [Stato onesto del progetto](#stato-onesto-del-progetto)
+- [Quick start](#quick-start)
+- [Requisiti](#requisiti)
+- [Avvio automatico al logon](#avvio-automatico-al-logon)
+- [Documentazione](#documentazione)
+- [Componenti del repository](#componenti-del-repository)
+- [Sviluppo e build](#sviluppo-e-build)
+- [Convenzione linguistica](#convenzione-linguistica)
+- [Licenza e crediti](#licenza-e-crediti)
+
+## ⚡ La scorciatoia di emergenza: Ctrl+Alt+Shift+S
+
+| | |
+|---|---|
+| **Cosa fa** | Apre (o porta in primo piano) il *7explorer Shell Switcher*, da cui si cambia shell **senza logout e senza riavvio**. Se la shell Win7 è appesa, crashata o assente, la scorciatoia funziona comunque: l'istanza che la possiede è un processo indipendente da explorer. |
+| **Quando è attiva** | Quando è in esecuzione l'istanza resident `--hotkey` del switcher (una sola per sessione, protetta da mutex `Local\7explorer.ShellSwitcher.Hotkey`). Viene avviata automaticamente: ① dalla **GUI** dello switcher, ogni volta che la apri; ② da **`wrp64.dll`** al primo avvio della shell Win7 (quindi è attiva **dopo ogni logon** con l'avvio automatico abilitato, senza aprire nulla — verificato nel codice: `StartSwitcherHotkey` in `explorerwrapper/ShellFixes.cpp`); ③ dal task di recovery e dai comandi `--apply-*` dopo uno switch riuscito. |
+| **Quando NON è attiva** | Se la shell Win7 non è in esecuzione **e** lo switcher non è mai stato aperto in quella sessione (es. shell nativa dopo un logon senza avvio automatico): nessun processo possiede la scorciatoia e la pressione non fa nulla. Soluzione: apri `7explorer-shell-switcher.exe` una volta. |
+| **Disattivabile** | Sì, con l'opzione `SwitcherHotkey=0` (vedi [docs/opzioni.md](docs/opzioni.md)). |
+
+Recovery manuale estrema (nessuna shell sullo schermo): `Ctrl+Shift+Esc` →
+Gestione attività → *Esegui nuova attività* → `explorer.exe`.
+
+## Stato onesto del progetto
+
+Il progetto è in **fase di test attiva**: la numerazione dei commit
+(`testNN`, ultimo `test37`) è la cronologia delle iterazioni. Cosa funziona
+e cosa no, oggi:
+
+**Funziona (usato regolarmente in sviluppo)**
+
+- La shell Win7 parte e resta come shell su Windows 11 24H2/25H2:
+  taskbar, menu Start, tray, Esplora risorse, tema Aero.
+- **Cambio shell a runtime** Win7 ⇄ Win11 senza logout (switcher +
+  scorciatoia Ctrl+Alt+Shift+S).
+- **Avvio automatico al logon** (test37): valore `Shell` per-utente,
+  reversibile, con fallback e task di recovery automatico —
+  [docs/avvio-al-login.md](docs/avvio-al-login.md). *Nota: la matrice di
+  test completa logoff/riavvio è in verifica su hardware reale, vedi il
+  PR del test37.*
+- Installer **self-contained**: scarica l'`explorer.exe` Win7 SP1 dal
+  symbol server Microsoft (SHA-256 fissato nel codice), lo patcha e lo
+  localizza; **offline dal secondo avvio**.
+- Risorse UI (stringhe/menu/dialoghi, en-US + it-IT) **generate dal
+  progetto**: nessun file `.mui` Microsoft.
+- Menu tray classici (volume, rete), flyout battery in stile 8.1,
+  flyout con bordi Aero, Win+I che apre Impostazioni, jump list delle app
+  Win32.
+
+**Parziale / noto-rotto (onestamente)**
+
+- **Tema embedded v0**: solo colori e metriche, niente atlanti grafici
+  completi — vedi [docs/troubleshooting.md](docs/troubleshooting.md) per
+  usare il proprio `.msstyles`.
+- **Icona di rete**: compare dal **secondo** avvio della shell (il
+  componente che la abilita si scarica in background al primo).
+- **Jump list UWP**: le app dello Store mostrano un fallback
+  (`AppsFolder`); **Impostazioni non ha jump list per design**.
+- **Pagina "Icone area di notifica"** di Windows: su 24H2 esiste ancora ma
+  si apre **vuota**; usare la finestra integrata (`NotifyIconsUseSettings=3`).
+- **HiDPI**: il layout della taskbar Win7 non è DPI-aware come quello di
+  Win11 (limitazione notissima dell'explorer Win7, non risolvibile qui).
+- Multi-monitor: la taskbar Win7 esiste solo sul monitor primario
+  (limitazione dell'explorer Win7).
+
+## Quick start
+
+1. Scarica **`ex7-test-bundle.zip`** dalla [release di riferimento](https://github.com/babamohammed2022/7explorer/releases)
+   e decomprimila in una cartella, ad es. `C:\ex7test`.
+2. Avvia **`ex7selfcontained.exe`** dalla cartella (serve Internet la
+   prima volta): scarica l'`explorer.exe` di Windows 7 dal symbol server
+   Microsoft (con verifica SHA-256), lo patcha verso `wrp64.dll` e genera
+   le risorse UI. Alla fine hai `explorer.exe` privato affianco ai
+   binari del bundle.
+3. Avvia **`7explorer-shell-switcher.exe`**: trova l'explorer privato da
+   solo (stessa cartella). Seleziona **Windows 7 Explorer → Cambia** → la
+   taskbar di Windows 7 sostituisce quella di Windows 11.
+4. Per tornare indietro: **Ctrl+Alt+Shift+S** → *Esplora risorse Windows
+   nativo* → **Cambia** (nessun logout).
+5. (Opzionale) spunta **"Avvia Explorer7 automaticamente al logon"** per
+   renderlo permanente — [docs/avvio-al-login.md](docs/avvio-al-login.md).
+
+Dettagli, incluso l'avvio offline e la tabella di trasparenza dei download:
+[docs/installazione.md](docs/installazione.md).
 
 <details>
-  <summary>Screenshots</summary>
+<summary>Screenshot</summary>
 
 <p align=center>
   <img src="https://github.com/user-attachments/assets/a428c168-b1ca-49cc-aac0-7959cd892cba">
-  <br>
-    <i>The start menu in the default view.</i>
+  <br><i>Il menu Start nella vista predefinita.</i>
   <br>
   <img src="https://github.com/user-attachments/assets/edd254ba-1763-415a-b61b-78bd196b1500">
-  <br>
-    <i>The start menu in the programs view.</i>
+  <br><i>Il menu Start nella vista programmi.</i>
   <br>
   <img src="https://github.com/user-attachments/assets/22320c33-6448-44b5-8ff1-2681fad74b25">
-  <br>
-    <i>The taskbar jumplist and tray overflow.</i>
+  <br><i>Jump list della taskbar e overflow del tray.</i>
   <br>
 </p>
 
 </details>
 
-## Known issues (Milestone 2 Update 3, last modified 2026-03-13)
-These issues, unless specified to have been resolved in a later Windows version, are persistent across subsequent versions of Windows from their introduction.
+## Requisiti
 
-**MAKE SURE YOU READ THESE FIRST SO YOU ARE AWARE OF WHAT YOU ARE GETTING INTO!**
+- Windows 11 **24H2 / 25H2**, **x64** (target attivo del progetto; 8.1/10
+  funzionano in larga parte ma non sono il focus).
+- Connessione Internet **solo al primo avvio** (download dell'explorer
+  Win7 dal symbol server Microsoft, ~2,8 MB; poi tutto è in cache locale).
+- Nessuna elevazione: tutto gira per-utente, niente file di sistema
+  toccati.
 
-**Windows 8.1**
-- No proper strings are contained for the "Customize Start Menu" dialog (fixed system-wide in Windows 10).
+## Avvio automatico al logon
 
-**Windows 10**
-- Autoplay does not work (1507+).
-- When ColorizationOptions is set to 0, system msstyles with the name "aero.msstyles" will result in the start menu and taskbar using the wrong color (1809+).
-- "Notification Area Icon" settings in Control Panel are missing (1507+).
-- The taskbar might overlap fullscreen applications whilst immersive shell is enabled (1507+).
-- If a user has StartIsBack++ installed, it may attempt to erroneously hook the shell, causing both visual and functional issues.
+La casella *"Avvia Explorer7 automaticamente al logon"* dello switcher
+imposta il **valore `Shell` per-utente** (`HKCU`): il metodo standard di
+Windows per la shell di un utente, **senza elevazione e reversibile**
+(valore precedente salvato e ripristinato byte per byte). In più: un link
+di fallback nella cartella Esecuzione automatica e un **task di recovery**
+che al logon successivo verifica che la shell privata sia partita e, in
+caso contrario, ripristina tutto da solo. Documentazione completa, incluse
+le procedure di disattivazione e recovery:
+**[docs/avvio-al-login.md](docs/avvio-al-login.md)**.
 
-**Windows 11**
-- Official support for Windows 11-based operating systems ended on February 21st 2026, as announced through official WWF channels. Issues present for these operating system versions will not be resolved going forward.
+## Documentazione
 
-**Windows 7 limitations/bugs**
+| documento | contenuto |
+|---|---|
+| [docs/installazione.md](docs/installazione.md) | procedura completa: bundle, primo avvio (cosa scarica e dove va in cache), avvio offline, tabella di trasparenza URL + SHA-256 |
+| [docs/avvio-al-login.md](docs/avvio-al-login.md) | avvio automatico al logon: cosa modifica, come disattivarlo, recovery |
+| [docs/opzioni.md](docs/opzioni.md) | tutte le opzioni di registro e `config.ini` (nome, tipo, default, significato) |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | dove stanno i log e i problemi noti con le relative soluzioni |
+| [docs/config.ini.example](docs/config.ini.example) | esempio commentato del file di configurazione tema |
+| [docs/PIANO_INSTALLAZIONE_SELFCONTAINED.md](docs/PIANO_INSTALLAZIONE_SELFCONTAINED.md) | piano tecnico dell'installer self-contained |
+| [docs/REPO_CLEANUP.md](docs/REPO_CLEANUP.md) | cronologia della riorganizzazione del repository (branch, release, artefatti) |
+| [installer/ex7selfcontained/README.md](installer/ex7selfcontained/README.md) | dettagli tecnici dell'installer |
+| [switcher/README.md](switcher/README.md) | dettagli tecnici dello switcher |
+| [windhawk/README.md](windhawk/README.md) | mod Windhawk opzionali (sorgente) |
 
-All of the following are bugs or limitations within Windows 7's explorer itself, and will not be accounted for:
+## Componenti del repository
 
-- Multi-monitor taskbars are not supported. These were later introduced in Windows 8 build 7779.
-- Startup items defined in the modern Task Manager are not correctly accounted for - you must use the old msconfig.exe.
-- It takes a few minutes for changes to the size and position of the taskbar to be written to the registry; restarting Explorer too quickly will revert these changes.
-- Whilst small taskbar icons are enabled, changing the position to `Top` or `Bottom` from the properties window (NOT from dragging) will result in extra space being allocated between the taskbar and the working area.
+| componente | ruolo |
+|---|---|
+| `explorerwrapper/` | **`wrp64.dll`**: la wrapper library caricata dall'explorer Win7 privato (import patchati). Hook di sistema, fix, tema, rete, tray. C++ con `/EH` off, CRT minima, codice pericoloso sotto SEH, RAII da `SafeGuards.h`. |
+| `installer/ex7selfcontained/` | **bootstrap self-contained**: scarica `explorer.exe` Win7 SP1 x64 dal symbol server Microsoft (SHA-256 fissato nel codice), patcha gli import verso `wrp64.dll`, inietta le risorse UI generate (en-US + it-IT, nessun `.mui`). |
+| `switcher/` | **`7explorer-shell-switcher.exe`**: GUI Win32 (CRT statica) che cambia shell a runtime; hotkey globale; avvio al logon. |
+| `windhawk/` | 2 mod Windhawk opzionali (sorgente): `ex7-fake-explorer-path` (ora ridondante: lo spoof è integrato in `wrp64.dll`) e `ex7-userinit-shell` (soppiantato dal valore `Shell` per-utente). |
+| `localization/`, `tools/`, `tests/` | pipeline di localizzazione: cataloghi JSON → `tools/build_resources.py` → blob validati → `embed_catalog.py`; test Python (51). |
+| `ci/`, `.github/workflows/` | CI: `msbuild.yml`, `selfcontained-ci.yml`, `localization-pipeline.yml` + job diagnostici `diag-*.yml` (log come artifact). |
 
-## Installation Guide
-
-For casual users, the **regular installation method** is listed below:
-
-<details>
-  <summary>Standard installation</summary>
-  
-**Pre-Requirements**
-1. The explorer7 package from releases.
-2. A valid Windows 7 x64 installation medium, in the same language as your system.
-
-**How-to**
-1. Mount your Windows 7 install media by double-clicking it.
-2. Extract the explorer7 package to a suitable location. For example: `X:\Program Files\explorer7`, or `X:\explorer7`.
-3. Run Ex7forW8.exe. The installer will ask for Windows 7 files. You can select either option for installation, provided that the installation media is mounted.
-4. You should see the following dialog if the installer succeeded:
-   
-   ![image](https://github.com/user-attachments/assets/09de37a8-a179-4bac-b15e-ca248e4d96f9)
-   
-5. After that, when you wish to switch your shell to the Windows 7 explorer, select the applicable option. You can always change back by running Ex7forW8.exe once again and selecting the "Use Windows 8 explorer" option (this is currently a misnomer, it actually reverts to your system's default shell, which in most cases is the modern explorer executable).
-6. Enjoy!
-</details>
- 
-
-If you have an unsupported explorer.exe file from another Windows release that you want to use, or your installation medium is in another language, you can try **manually patching and installing** with your own files:
-
-<details>
-  <summary>Manual Installation/Patching</summary>
-
-**Pre-Requirements:**
-1. The explorer7 package from releases.
-2. [CFF Explorer](https://ntcore.com/files/CFF_Explorer.zip)
-3. Valid installation medium of your choice (Windows XP x64 - Windows 7 SP1 x64).
-4. [7-Zip](https://www.7-zip.org/) or [WinRAR](https://www.win-rar.com/start.html) unless you want to mount install.wim using DISM to extract a few files.
-5. Experience with utilizing a personal computer and advanced file modification.
-
-**Step 1 - Fetching files**
-
-1. Mount your install media
-2. Open `\sources\install.wim` using your archiver of choice (listed 2 in the pre-requirements)
-3. Fetch the following files from install.wim (copy them somewhere safe): `\1\Windows\explorer.exe`, `\1\Windows\en-US\explorer.exe.mui` and `\1\Windows\System32\en-US\shell32.dll.mui`
-4. Make an "en-US" folder in the folder which contains the explorer7 package. The file tree will look something like the following:
-```
-ex7_example/
-├─ theme/
-├─ en-US/
-├─ ex7forw8.exe
-├─ Import Me.reg
-├─ README.txt
-├─ wrp64.dll
+## Sviluppo e build
 
 ```
-5. Copy `shell32.dll.mui` and `explorer.exe.mui` to the `en-US` folder you've just created, and `explorer.exe` alongside `wrp64.dll`:
-```
-ex7_example/
-├─ theme/
-├─ en-US/
-│  ├─ explorer.exe.mui
-│  ├─ shell32.dll.mui
-├─ ex7forw8.exe
-├─ explorer.exe
-├─ Import Me.reg
-├─ README.txt
-├─ wrp64.dll
-
+git clone https://github.com/babamohammed2022/7explorer.git
+cd 7explorer
+git clone https://github.com/TsudaKageyu/minhook.git minhook
+msbuild minhook\build\VC17\MinHookVC17.sln /p:Configuration=Release /p:Platform=x64
+copy /Y minhook\build\VC17\lib\Release\libMinHook.x64.lib explorerwrapper\
+msbuild explorerwrapper.sln /p:Configuration=Release /p:Platform=x64
+msbuild switcher\shell_switcher.vcxproj /p:Configuration=Release /p:Platform=x64
+msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64
 ```
 
-Now you should have all of the necessary files to go onto the next step.
+- `libMinHook.x64.lib` **non è nel repository** (è un output di build): va
+  compilato dai sorgenti come sopra — la CI lo fa a ogni run.
+- Test: `python tests/run_tests.py` (51 test, girano anche su Linux).
+- CI su ogni push: build completa + verifica su file Microsoft reale +
+  test Python; i log di build sono artifact della run
+  (`docs/REPO_CLEANUP.md` spiega perché non sono più su branch).
 
-**Step 2 - Patching explorer.exe**
+## Convenzione linguistica
 
-By default, explorer.exe will not use the wrapper dll, so you have to change out a few imports in the executable. Make sure you've fetched [CFF Explorer](https://ntcore.com/files/CFF_Explorer.zip) from the requirements.
-1. Open CFF Explorer, drag explorer.exe into the window
-2. Open the "Import Directory" folder in the left sidebar
-3. Change out the imports for `SHLWAPI.DLL`, `OLE32.DLL` and (if applicable) `EXPLORERFRAME.DLL`:
+- **Documentazione per gli utenti** (README, `docs/*`): **italiano**,
+  lingua principale del progetto e del suo pubblico.
+- **Codice, commenti, commit e documentazione tecnica interna**
+  (es. `installer/ex7selfcontained/README.md`, messaggi di log):
+  **inglese**.
+- Le stringhe UI generate: en-US (fallback) + it-IT
+  (`localization/catalog/`).
 
-![image](https://github.com/user-attachments/assets/21169181-fa4a-45db-9947-12fffc8ed239)
+## Licenza e crediti
 
-4. Save the file.
+Codice licenziato **GPLv3** ([LICENSE](LICENSE)). Questo progetto è un
+fork di **explorer7** del [World Windows Federation]
+(https://github.com/world-windows-federation/explorer7): senza il loro
+lavoro niente di tutto questo esisterebbe.
 
-By now, you should be able to start `explorer.exe` from task manager or through other means. 
+Tecniche e codice derivati, con crediti espliciti anche nei sorgenti:
 
-</details>
+- **[world-windows-federation/explorer7](https://github.com/world-windows-federation/explorer7)** —
+  upstream: wrapper library, meccanismo di import patching, temi, orb.
+- **[aubymori — Aero Flyout Fix](https://github.com/aubymori)** — bordi
+  Aero sui flyout legacy (`explorerwrapper/FlyoutFrames.cpp`).
+- **[valinet/ExplorerPatcher](https://github.com/valinet/ExplorerPatcher)** —
+  tecnica dei menu tray classici su SndVolSSO/pnidui
+  (`explorerwrapper/ImmersiveMenus.*`), componenti pnidui 22621 per
+  l'icona di rete (`explorerwrapper/NetworkIcon.cpp`).
 
-
-## Registry options
-
-These options are located under `HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced`.
-
-| Name | Type | Description | Default Value |
-| ---- | ---- | ----------- | ------------- |
-| Theme | REG_SZ | Name of the theme file to use. This is relative to the installation directory. For example, `"aero"` will use the theme at `"explorer7\theme\aero.msstyles"`, `"Aero\aero"` will use the theme at `"explorer7\theme\Aero\aero.msstyles"`. If this is not specified, `aero` will be used. | **aero** |
-| OrbDirectory | REG_SZ | Name of the orb images directory to use. This is relative to the installation directory. For example, `"6801"` will use the orb images located at `"explorer7\orbs\6801\"`, `"Orb1\6801"` will use the orbs located at `"explorer7\orbs\Orb1\6801\"`. If this is not specified, the internal explorer image will be used.| **default** |
-| DisableComposition | REG_DWORD | When set to 1, explorer7 will act as if the Desktop Window Manager is not running. | **0** |
-| ClassicTheme | REG_DWORD | When set to 1, explorer7 will use the Windows Classic theme. | **0** |
-| EnableImmersive | REG_DWORD | Controls the ability to run immersive applications in the system. When set to 0, immersive applications will not be able to run. | **0** |
-| StoreAppsInStart | REG_DWORD | When set to 0, immersive applications will be hidden from the All Programs list. | **1** |
-| StoreAppsOnTaskbar | REG_DWORD | When set to 0, specializations applied to load immersive application icons will not be applied, and pinned immersive applications will be hidden. | **0 (when EnableImmersive = 0)**, **1 (when EnableImmersive = 1)** |
-| ColorizationOptions | REG_DWORD | Controls shell colorization behaviour. Options 1 to 4 may have varying compatibility across Windows versions. | **1** |
-| AcrylicColorization | REG_DWORD | Controls acrylic colorization behaviour. Options 0-2 control the use of immersive colours, option 3 will use the regular colorization. | **0** |
-| OverrideAlpha | REG_DWORD | When set to 1, colorization alpha specified by DWM is overridden on the taskbar, start menu, and thumbnails. | **0** |
-| AlphaValue | REG_DWORD | For use alongside OverrideAlpha, to specify a 2-digit hex code for the colorization system to use. | **0x6B** |
-| UseTaskbarPinning | REG_DWORD | Determines whether taskbar pinning functionality is available to the user. When set to 0, pins will not be loaded and cannot be modified from jumplists. | **1** |
-
-## Theme support (7explorer fork)
-
-This fork adds a **self-contained theming layer** on top of the upstream
-mechanism, while keeping the classic option below untouched:
-
-- **Embedded fallback theme**: `wrp64.dll` carries a project-authored,
-  Windows-7-like `.msstyles` (drawn from scratch, no Microsoft assets).
-  On first run it is extracted automatically to
-  `%LocalAppData%\7explorer\theme\aero.msstyles` and used whenever no
-  user theme is installed or the chosen theme fails to load. **No
-  download, no user file, no prompt — ever.**
-- **`config.ini` next to `explorer.exe`** selects the mode (see
-  `docs/config.ini.example`):
-  - `Mode=Auto` (default): user theme from `theme\` if present, else
-    embedded;
-  - `Mode=Fallback`: always the embedded theme;
-  - `Mode=Custom` / `Mode=Windows7` / `Mode=Windows81`: load the named
-    `.msstyles` from `theme\` (keep the upstream folder layout below),
-    automatic fallback to the embedded theme on any error;
-  - `Name=<file>` picks the theme file base name (default `aero`, the
-    registry `Theme` value is honoured when `Name` is omitted).
-- The shell never becomes unusable: if every theme load fails, 7explorer
-  silently keeps the classic look (identical to previous builds).
-- Diagnostics: `%LocalAppData%\7explorer\theme.log` (attach it to bug
-  reports; no extra steps needed).
-- Nothing on the system is modified: no `uxtheme.dll`/`themeui.dll`
-  patching, no changes to the Windows theme configuration — everything
-  happens inside the 7explorer directory/process.
-
-### Upstream theme files (optional)
-
-explorer7 allows any theme from Windows Vista to Windows 8.0 to be used for the start menu and taskbar. If applicable, you **must** include the "en-US" folder that comes along with your .msstyles file, otherwise the theme won't be applied. Themes from Windows 8.1 and later do work, but will not have the proper classes for the start menu, an issue which cannot currently be resolved.
-
-<details>
-  <summary>Here are valid file structures for the theme folder:</summary>
-
-`Theme` registry key set to `theme1`
-```
-explorer7/
-├─ theme/
-│  ├─ en-US/
-│  ├─ theme1.msstyles
-```
-
-`Theme` registry key set to `Themefolder\theme1`
-```
-explorer7/
-├─ theme/
-│  ├─ Themefolder/
-│  │  ├─ en-US/
-│  │  ├─ theme1.msstyles
-
-```
-  
-</details>
-
-## Custom orbs
-
-As an additional feature, explorer7 lets you import your own custom orbs without having to patch your explorer.exe using Resource Hacker or using specialized programs. Due to WinGDI limitations, it only supports .bmp images. To do this, simply make a directory inside the "orbs" folder and place your images inside it with the naming scheme from the example layout below. If it finds the appropiate images, the orb system will also account for 125% and 150% DPI (HiDPI) automatically. The layout should be as it follows:
-
-<details>
-  <summary>Valid layout for custom orbs:</summary>
-
-`OrbDirectory` registry key set to `blue`
-```
-explorer7/
-├─ orbs/
-│  ├─ blue/
-│  │  ├─ 6801.bmp (100% DPI - 52x162 - Bottom-aligned taskbar image)
-│  │  │  6802.bmp (125% DPI - 66x198 - Bottom-aligned taskbar image)
-│  │  │  6803.bmp (150% DPI - 81x243 - Bottom-aligned taskbar image)
-│  │  │  6804.bmp (190% DPI - 106x318 - Bottom-aligned taskbar image)
-│  │  │  6805.bmp (100% DPI - 52x162 - Left/right-aligned taskbar image)
-│  │  │  6806.bmp (125% DPI - 66x198 - Left/right-aligned taskbar image)
-│  │  │  6807.bmp (150% DPI - 81x243 - Left/right-aligned taskbar image)
-│  │  │  6808.bmp (190% DPI - 106x318 - Left/right-aligned taskbar image)
-│  │  │  6809.bmp (100% DPI - 52x162 - Top-aligned taskbar image)
-│  │  │  6810.bmp (125% DPI - 66x198 - Top-aligned taskbar image)
-│  │  │  6811.bmp (150% DPI - 81x243 - Top-aligned taskbar image)
-│  │  │  6812.bmp (190% DPI - 106x318 - Top-aligned taskbar image)
-
-```
-
-`OrbDirectory` registry key set to `colors\green`
-```
-explorer7/
-├─ orbs/
-│  ├─ colors/
-│  │  ├─ green/
-│  │  │  ├─ 6801.bmp (100% DPI - 52x162 - Bottom-aligned taskbar image)
-│  │  │  │  6802.bmp (125% DPI - 66x198 - Bottom-aligned taskbar image)
-│  │  │  │  6803.bmp (150% DPI - 81x243 - Bottom-aligned taskbar image)
-│  │  │  │  6804.bmp (190% DPI - 106x318 - Bottom-aligned taskbar image)
-│  │  │  │  6805.bmp (100% DPI - 52x162 - Left/right-aligned taskbar image)
-│  │  │  │  6806.bmp (125% DPI - 66x198 - Left/right-aligned taskbar image)
-│  │  │  │  6807.bmp (150% DPI - 81x243 - Left/right-aligned taskbar image)
-│  │  │  │  6808.bmp (190% DPI - 106x318 - Left/right-aligned taskbar image)
-│  │  │  │  6809.bmp (100% DPI - 52x162 - Top-aligned taskbar image)
-│  │  │  │  6810.bmp (125% DPI - 66x198 - Top-aligned taskbar image)
-│  │  │  │  6811.bmp (150% DPI - 81x243 - Top-aligned taskbar image)
-│  │  │  │  6812.bmp (190% DPI - 106x318 - Top-aligned taskbar image)
-
-```
-  
-</details>
-
-**NOTE 1:** BE CAREFUL! If the image corresponding to your case DOES NOT exist in your orb directory, it will automatically fall back to the original image inside explorer.exe.
-
-**NOTE 2:** If an image is larger than what the system expects, the image might clip out. Use the example layout as a reference! For more information, you can also check out this guide: https://www.sevenforums.com/tutorials/73616-how-create-custom-start-orb-image.html
-
-**NOTE 3:** If you're looking to create high-quality orbs (32-bit bitmaps), you could use a tool to convert your images from other formats. Check out [Pixelformer](https://www.qualibyte.com/pixelformer/).
-
-## Localized resources without any `.mui` (v0.0.3, self-contained installer)
-
-The private copy of explorer.exe that `installer/ex7selfcontained` prepares
-is localized with **resources generated by this project** — STRINGTABLE,
-MENU, DIALOGEX and ACCELERATOR payloads are built by
-`tools/build_resources.py` from:
-
-- `localization/catalog/{en,it}.json` — the project's own texts
-  (**en-US = fallback, always present; it-IT**; other UI languages planned,
-  the structure is language-agnostic: adding a catalog file adds the
-  language);
-- `localization/templates/explorer.exe.templates.json` — the full
-  **structural** descriptor (resource IDs, control IDs, styles, rects,
-  class atoms, command IDs, virtual keys). No Microsoft text anywhere in
-  the repo.
-
-At install time the installer enumerates all existing resources of the copy
-and **rewrites the whole resource table atomically**
-(`BeginUpdateResource(deleteExisting=TRUE)`), replacing/adding our payloads
-per language and parking the old `MUI` marker as `CUI`. No `.mui` file is
-needed, requested, read or downloaded — `EX7_REFERENCE_MUI` and the old
-transplant code were removed after the v0.0.2 real-world failures (root
-cause: `localization/ROOT_CAUSE_v0.0.3.md`).
-
-**Licensing note**: catalogs and templates are project-generated original
-data; the only Microsoft artifact ever involved is the pristine
-`explorer.exe` downloaded from Microsoft's symbol server at install time
-(never redistributed by us, never present in release assets). If a resource
-proves impossible to reconstruct safely, we document it — we do not
-silently guess (see `localization/templates/*._notice` and the `--compare`
-mode of `tools/build_resources.py`).
-
-## Development plan
-
-We're working based on a series of development milestones. Here's the planned development stages as things currently stand:
-
-|   Stage   | Goal | Status |
-| -------- | --------- | ------ |
-| Milestone 1 | Initial release focused on stability for Windows 8.1, and providing a starting point for Windows 10 support. |  |
-| Milestone 2 | - Achieving stability for Windows 10 and 11 (up to and including 23H2) <br> - Ensuring that behaviour on Windows 8.1 perfectly matches its predecessor. <br> - Providing more visually accurate interfaces (e.g. program list) <br> - Supporting older .msstyles <br> - Introducing immersive shell support <br> - Custom orb support | ✅ Completed |
-| Milestone 3 | Solving persistent bugs remaining on Windows 10. Likely to focus more on fixes and adjustments than new features. | ⏳ Work in progress |
-
-While this project is aimed at restoring Windows 7 explorer.exe functionality, some older explorer versions have been found to work with the wrapper. In the future, we plan to support some of these directly.  Here's the chart
-for support:
-
-| Version | Status |
-| ------- | ------ |
-| Windows 7 | ⏳ Work in progress |
-| Windows Vista | ❌ Not in active development |
-
-## Minhook Linker errors
-
-If you're having linker errors because of the prebuilt minhook, do the following:
-
-- In the root folder, open a cmd and grab the minhook repo: `git clone https://github.com/TsudaKageyu/minhook.git minhook`
-- Once it's done, compile the solution in `minhook\build\VC17\MinHookVC17.sln`, specifying x64 Platform. You can do this using Visual Studio.
-- Either copy it to the explorerwrapper project folder or just don't do anything and compile. A pre-build task will copy the new version over for you to use.
-
-Contributors: DON'T COMMIT YOUR MODIFIED `libMinHook.x64.lib` UNLESS SPECIFIED!
-
-## Licensing
-The code for the project is licensed under GPLv3, to allow both for further research and for power-users to be able to make their own modifications. For the safety of users and developers alike, inclusion of compiled explorer7 DLL files in any form (whether compiled from source, forks of the source code, or from the release repository) in modified Windows ISOs, or "transformation packs", is discouraged, though any such use, must be in compliance with the license.
-
-We reserve every right to act against unauthorised usage of the software, as outlined above.
+Come da licenza: siete liberi di studiare, modificare e ridistribuire,
+sempre con licenza GPLv3 e crediti visibili. L'inclusione dei binari
+compilati in ISO Windows modificate o "transformation pack" è sconsigliata.
