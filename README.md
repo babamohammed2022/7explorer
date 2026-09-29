@@ -83,9 +83,11 @@ This section is currently a work in progress.
 
 ### Windows 7 Aero Theme Requirement
 
-A Windows 7 Aero theme is required for the project to function correctly.
+A Windows 7 Aero theme is **required** for the shell to function.
 
-The Windows 7 Explorer shell was designed around the Windows 7 Desktop Window Manager and visual style system. Without the appropriate Aero theme, graphical elements and shell functionality may not work correctly.
+The Windows 7 Explorer shell was designed around the Windows 7 Desktop Window Manager and visual style system. Without the appropriate Aero theme, graphical elements and shell functionality will not work correctly.
+
+Other visual styles or themes can theoretically be tried, but they are untested with this project and not supported: if anything looks or behaves incorrectly, switch back to a Windows 7 Aero theme first.
 
 The project does not replace Windows system files to provide the required theme.
 

@@ -28,6 +28,12 @@ CRegistryManager::CRegistryManager()
 {
 }
 
+// NOTE: no destructor by design (see RegistryManager.h): with /ENTRY:DllMain
+// there is no CRT termination pass, so a dtor could never run; worse, the
+// atexit() references it emits break the static-CRT link (LNK2001
+// __vcrt_initialize et al). The lazily opened keys are process-lifetime
+// handles reclaimed by the OS at exit.
+
 LSTATUS CRegistryManager::QueryValue(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType)
 {
 	_OpenKeys();

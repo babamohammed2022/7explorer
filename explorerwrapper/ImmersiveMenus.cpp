@@ -2,7 +2,7 @@
 #include "SafeGuards.h"
 #include "MinHook.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
 namespace {
@@ -41,7 +41,7 @@ void Unsafe(Ctx* c)
 	for (WORD i = 0; i < nt->FileHeader.NumberOfSections && !hit; ++i)
 		if (!memcmp(sec[i].Name, ".text", 5)) hit = Find(base + sec[i].VirtualAddress, sec[i].Misc.VirtualSize);
 	wchar_t l[200];
-	if (!hit) { wnsprintfW(l, 200, L"[ex7][menus] %s: ApplyOwnerDrawToMenu not found (menu stays as is)", c->name); LogText(l); return; }
+	if (!hit) { wnsprintfW(l, 200, L"[Win7ExplorerRestorer][menus] %s: ApplyOwnerDrawToMenu not found (menu stays as is)", c->name); LogText(l); return; }
 	MH_Initialize();
 	int slot = -1;
 	for (int i = 0; i < 8; ++i) if (!g_done[i]) { slot = i; break; }
@@ -49,7 +49,7 @@ void Unsafe(Ctx* c)
 	MH_STATUS a = MH_CreateHook(hit, (void*)ApplyOwnerDraw_NoOp, &g_tramp[slot]);
 	MH_STATUS b = a == MH_OK ? MH_EnableHook(hit) : a;
 	g_done[slot] = c->m;
-	wnsprintfW(l, 200, L"[ex7][menus] %s: immersive menus disabled at +0x%X (%d/%d)", c->name, (DWORD)(hit - base), a, b);
+	wnsprintfW(l, 200, L"[Win7ExplorerRestorer][menus] %s: immersive menus disabled at +0x%X (%d/%d)", c->name, (DWORD)(hit - base), a, b);
 	LogText(l);
 }
 
@@ -64,4 +64,4 @@ void ClassicMenusFor(HMODULE m, const wchar_t* name)
 	SafeInvokeCtx<Ctx>(L"ClassicMenusFor", Unsafe, &c);
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

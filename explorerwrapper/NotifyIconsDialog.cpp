@@ -1,10 +1,11 @@
 #include "NotifyIconsDialog.h"
 #include "SafeGuards.h"
+#include "ShellUiLang.h"
 #include <commctrl.h>
 #include <shellapi.h>
 #include <shlwapi.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 bool OpenNotifyIconsPage();
 void LogText(const wchar_t* text);
 namespace {
@@ -34,8 +35,6 @@ HWND g_dlg = nullptr, g_list = nullptr, g_combo = nullptr, g_check = nullptr;
 ITrayNotify7* g_tn = nullptr;
 volatile LONG g_open = 0;
 
-bool Italian() { return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_ITALIAN; }
-const wchar_t* T(const wchar_t* it, const wchar_t* en) { return Italian() ? it : en; }
 
 class CB : public INotificationCB {
 public:
@@ -71,9 +70,21 @@ enum { IDC_LIST = 100, IDC_COMBO, IDC_CHECK, IDC_OK, IDC_CANCEL };
 const wchar_t* PrefText(DWORD p)
 {
 	switch (p) {
-	case 2: return T(L"Mostra icona e notifiche", L"Show icon and notifications");
-	case 1: return T(L"Nascondi icona e notifiche", L"Hide icon and notifications");
-	default: return T(L"Mostra solo notifiche", L"Only show notifications");
+	case 2: return TX(L"Show icon and notifications", L"Mostra icona e notifiche",
+			L"Symbol und Benachrichtigungen anzeigen", L"Mostrar icono y notificaciones",
+			L"Afficher l'ic\u00f4ne et les notifications", L"\u30a2\u30a4\u30b3\u30f3\u3068\u901a\u77e5\u3092\u8868\u793a",
+			L"Pokaz ikony i powiadomienia", L"Mostrar \u00edcone e notifica\u00e7\u00f5es",
+			L"\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0437\u043d\u0430\u0447\u043e\u043a \u0438 \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", L"\u663e\u793a\u56fe\u6807\u548c\u901a\u77e5");
+	case 1: return TX(L"Hide icon and notifications", L"Nascondi icona e notifiche",
+			L"Symbol und Benachrichtigungen ausblenden", L"Ocultar icono y notificaciones",
+			L"Masquer l'ic\u00f4ne et les notifications", L"\u30a2\u30a4\u30b3\u30f3\u3068\u901a\u77e5\u3092\u975e\u8868\u793a",
+			L"Ukryj ikony i powiadomienia", L"Ocultar \u00edcone e notifica\u00e7\u00f5es",
+			L"\u0421\u043a\u0440\u044b\u0442\u044c \u0437\u043d\u0430\u0447\u043e\u043a \u0438 \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", L"\u9690\u85cf\u56fe\u6807\u548c\u901a\u77e5");
+	default: return TX(L"Only show notifications", L"Mostra solo notifiche",
+			L"Nur Benachrichtigungen anzeigen", L"Mostrar solo notificaciones",
+			L"Afficher uniquement les notifications", L"\u901a\u77e5\u306e\u307f\u3092\u8868\u793a",
+			L"Pokazuj tylko powiadomienia", L"Mostrar somente notifica\u00e7\u00f5es",
+			L"\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", L"\u4ec5\u663e\u793a\u901a\u77e5");
 	}
 }
 
@@ -161,7 +172,7 @@ HWND Ctl(HWND p, DWORD ex, const wchar_t* cls, const wchar_t* text, DWORD style,
 void RunUnsafe()
 {
 	HRESULT hr = CoCreateInstance(kClsidTrayNotify, nullptr, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER, kIidTrayNotify7, (void**)&g_tn);
-	wchar_t l[160]; wnsprintfW(l, 160, L"[ex7][notifyicons] TrayNotify hr=0x%08X", (DWORD)hr); LogText(l);
+	wchar_t l[160]; wnsprintfW(l, 160, L"[Win7ExplorerRestorer][notifyicons] TrayNotify hr=0x%08X", (DWORD)hr); LogText(l);
 	if (FAILED(hr) || !g_tn) {
 		g_tn = nullptr;
 		OpenNotifyIconsPage();
@@ -173,26 +184,45 @@ void RunUnsafe()
 	InitCommonControlsEx(&icc);
 	WNDCLASSW wc = {}; wc.lpfnWndProc = WndProc; wc.hInstance = GetModuleHandleW(nullptr);
 	wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1); wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-	wc.lpszClassName = L"Ex7NotifyIconsWnd";
+	wc.lpszClassName = L"Win7ExplorerRestorerNotifyIconsWnd";
 	RegisterClassW(&wc);
 	NONCLIENTMETRICSW ncm = { sizeof(ncm) };
 	SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
 	HFONT font = CreateFontIndirectW(&ncm.lfMessageFont);
-	g_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME, wc.lpszClassName, T(L"Icone dell'area di notifica", L"Notification Area Icons"),
+	g_dlg = CreateWindowExW(WS_EX_DLGMODALFRAME, wc.lpszClassName, TX(L"Notification Area Icons", L"Icone dell'area di notifica",
+			L"Infobereichsymbole", L"Iconos del \u00e1rea de notificaci\u00f3n",
+			L"Ic\u00f4nes de la zone de notification", L"\u901a\u77e5\u9818\u57df\u30a2\u30a4\u30b3\u30f3",
+			L"Ikony obszaru powiadomie\u0144", L"\u00cdcones da \u00c1rea de Notifica\u00e7\u00e3o",
+			L"\u0417\u043d\u0430\u0447\u043a\u0438 \u043e\u0431\u043b\u0430\u0441\u0442\u0438 \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439", L"\u901a\u77e5\u533a\u57df\u56fe\u6807"),
 		WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME, CW_USEDEFAULT, CW_USEDEFAULT, 620, 480, nullptr, nullptr, wc.hInstance, nullptr);
 	if (!g_dlg) { if (font) DeleteObject(font); return; }
 	g_list = Ctl(g_dlg, WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, IDC_LIST, font);
 	ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 	LVCOLUMNW col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH;
-	col.pszText = (LPWSTR)T(L"Icone", L"Icons"); col.cx = 320; ListView_InsertColumn(g_list, 0, &col);
-	col.pszText = (LPWSTR)T(L"Comportamento", L"Behaviors"); col.cx = 250; ListView_InsertColumn(g_list, 1, &col);
+	col.pszText = (LPWSTR)TX(L"Icons", L"Icone",
+			L"Symbole", L"Iconos",
+			L"Ic\u00f4nes", L"\u30a2\u30a4\u30b3\u30f3",
+			L"Ikony", L"\u00cdcones",
+			L"\u0417\u043d\u0430\u0447\u043a\u0438", L"\u56fe\u6807"); col.cx = 320; ListView_InsertColumn(g_list, 0, &col);
+	col.pszText = (LPWSTR)TX(L"Behaviors", L"Comportamento",
+			L"Verhaltensweisen", L"Comportamientos",
+			L"Comportements", L"\u52d5\u4f5c",
+			L"Zachowania", L"Comportamentos",
+			L"\u041f\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435", L"\u884c\u4e3a"); col.cx = 250; ListView_InsertColumn(g_list, 1, &col);
 	g_combo = Ctl(g_dlg, 0, WC_COMBOBOXW, L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, IDC_COMBO, font);
 	const DWORD prefs[3] = { 2, 1, 0 };
 	for (DWORD p : prefs) SendMessageW(g_combo, CB_ADDSTRING, 0, (LPARAM)PrefText(p));
-	g_check = Ctl(g_dlg, 0, WC_BUTTONW, T(L"Mostra sempre tutte le icone e le notifiche sulla barra delle applicazioni",
-		L"Always show all icons and notifications on the taskbar"), BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHECK, font);
+	g_check = Ctl(g_dlg, 0, WC_BUTTONW, TX(L"Always show all icons and notifications on the taskbar", L"Mostra sempre tutte le icone e le notifiche sulla barra delle applicazioni",
+			L"Alle Symbole und Benachrichtigungen auf der Taskleiste immer anzeigen", L"Mostrar siempre todos los iconos y notificaciones en la barra de tareas",
+			L"Toujours afficher toutes les ic\u00f4nes et les notifications dans la barre des t\u00e2ches", L"\u30bf\u30b9\u30af \u30d0\u30fc\u306b\u3059\u3079\u3066\u306e\u30a2\u30a4\u30b3\u30f3\u3068\u901a\u77e5\u3092\u5e38\u306b\u8868\u793a\u3059\u308b",
+			L"Zawsze pokazuj wszystkie ikony i powiadomienia na pasku zada\u0144", L"Sempre mostrar todos os \u00edcones e notifica\u00e7\u00f5es na barra de tarefas",
+			L"\u0412\u0441\u0435\u0433\u0434\u0430 \u043e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0442\u044c \u0432\u0441\u0435 \u0437\u043d\u0430\u0447\u043a\u0438 \u0438 \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u043d\u0430 \u043f\u0430\u043d\u0435\u043b\u0438 \u0437\u0430\u0434\u0430\u0447", L"\u59cb\u7ec8\u5728\u4efb\u52a1\u680f\u4e0a\u663e\u793a\u6240\u6709\u56fe\u6807\u548c\u901a\u77e5"), BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHECK, font);
 	Ctl(g_dlg, 0, WC_BUTTONW, L"OK", BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_OK, font);
-	Ctl(g_dlg, 0, WC_BUTTONW, T(L"Annulla", L"Cancel"), BS_PUSHBUTTON | WS_TABSTOP, IDC_CANCEL, font);
+	Ctl(g_dlg, 0, WC_BUTTONW, TX(L"Cancel", L"Annulla",
+			L"Abbrechen", L"Cancelar",
+			L"Annuler", L"\u30ad\u30e3\u30f3\u30bb\u30eb",
+			L"Anuluj", L"Cancelar",
+			L"\u041e\u0442\u043c\u0435\u043d\u0430", L"\u53d6\u6d88"), BS_PUSHBUTTON | WS_TABSTOP, IDC_CANCEL, font);
 	// the callback enumerates the current icons; give it a moment
 	DWORD t0 = GetTickCount(); MSG m;
 	while (GetTickCount() - t0 < 400) {
@@ -231,7 +261,7 @@ DWORD WINAPI Thread(LPVOID)
 bool ShowNotifyIconsDialog()
 {
 	if (InterlockedCompareExchange(&g_open, 1, 0) != 0) {
-		HWND h = FindWindowW(L"Ex7NotifyIconsWnd", nullptr);
+		HWND h = FindWindowW(L"Win7ExplorerRestorerNotifyIconsWnd", nullptr);
 		if (h) SetForegroundWindow(h);
 		return true;
 	}
@@ -241,4 +271,4 @@ bool ShowNotifyIconsDialog()
 	return true;
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

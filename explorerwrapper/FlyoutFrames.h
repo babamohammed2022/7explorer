@@ -16,6 +16,6 @@
 // Opt-out: HKCU\...\Explorer\Advanced\AeroFlyoutFrames = 0.
 #include "common.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void InstallFlyoutFrames();
 }

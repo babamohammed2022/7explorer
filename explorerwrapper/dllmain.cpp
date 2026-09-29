@@ -304,7 +304,7 @@ void ModifyDesktopHwnd()
 // ---------------------------------------------------------------------
 // 7explorer fork: self-contained "fake explorer path".
 //
-// The original setup relies on the Windhawk mod "ex7-fake-explorer-path"
+// The original setup relies on the Windhawk mod "win7explorerestorer-fake-explorer-path"
 // so that explorer.exe's own GetModuleFileNameW(NULL, ...) calls report
 // %SystemRoot%\explorer.exe (several code paths assume that). Since
 // wrp64.dll is already loaded inside the explorer process by the import
@@ -435,7 +435,7 @@ BOOL WINAPI GetUserObjectInformationNew(HANDLE hObj, int nIndex, PVOID pvInfo, D
 BOOL WINAPI GetWindowBandNew(HWND hwnd, DWORD* out)
 {
 	BOOL ret = GetWindowBandOrig(hwnd, out);
-	DWORD origband = (DWORD)GetProp(GetAncestor(hwnd, GA_ROOTOWNER), L"explorer7.WindowBand");
+	DWORD origband = (DWORD)GetProp(GetAncestor(hwnd, GA_ROOTOWNER), L"Win7ExplorerRestorer.WindowBand");
 	//dbgprintf(L"GetWindowBand %p %p %p",hwnd,*out,origband);
 	if (origband && out) *out = origband;
 	return ret;
@@ -570,14 +570,14 @@ void InitPinnedListHack()
 // ---------------------------------------------------------------------
 // 7explorer fork: per-process UI language override for the private
 // explorer, selected by the shell switcher at launch time through the
-// EX7_UI_LANG environment variable (e.g. "it-IT" / "en-US"). Registry-
+// WIN7EXPLORERRESTORER_UI_LANG environment variable (e.g. "it-IT" / "en-US"). Registry-
 // free and fully reversible (only this process's environment). Without
 // the variable, normal system MUI resolution applies.
 // ---------------------------------------------------------------------
 static void ApplyPerProcessUILanguage()
 {
 	WCHAR lang[32];
-	DWORD n = GetEnvironmentVariableW(L"EX7_UI_LANG", lang, 31);
+	DWORD n = GetEnvironmentVariableW(L"WIN7EXPLORERRESTORER_UI_LANG", lang, 31);
 	if (n == 0 || n >= 31)
 		return;
 	// pcszzList double-NUL terminated: "<lang>;en-US "
@@ -609,7 +609,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			InitPinnedListHack();
 		}*/
 
-		ApplyPerProcessUILanguage(); // 7explorer fork: EX7_UI_LANG override
+		ApplyPerProcessUILanguage(); // 7explorer fork: WIN7EXPLORERRESTORER_UI_LANG override
 
 		CreateShellFolder(); // Fix shell folder for 1607+...
 		EnsureWindowColorization(); // Correct colorization enablement setting for Win10/11
@@ -638,7 +638,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		else
 		{
 			HookAPIs();
-			ex7::InstallShellFixes(hModule); // remaps dead Win7 shell targets, Help name, transparency (SEH-guarded)
+			Win7ExplorerRestorer::InstallShellFixes(hModule); // remaps dead Win7 shell targets, Help name, transparency (SEH-guarded)
 		}
 	}
 	break;
@@ -678,9 +678,9 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	bool w81SysTray = false;
 	if (rclsid == CLSID_SysTray)
 	{
-		ex7::OnSysTrayCreateBegin();
-		w81SysTray = ex7::w81::TryCreateSysTray(pUnkOuter, riid, ppv, &result);
-		if (w81SysTray && riid == IID_IOleCommandTarget && *ppv && ex7::w81::WrapSysTray())
+		Win7ExplorerRestorer::OnSysTrayCreateBegin();
+		w81SysTray = Win7ExplorerRestorer::w81::TryCreateSysTray(pUnkOuter, riid, ppv, &result);
+		if (w81SysTray && riid == IID_IOleCommandTarget && *ppv && Win7ExplorerRestorer::w81::WrapSysTray())
 		{
 			// Win8-era SSO protocol (command 2/4 differences), see TrayObject.cpp
 			*ppv = static_cast<IOleCommandTarget*>(new CSysTrayWrapper((IOleCommandTarget*)*ppv));
@@ -689,7 +689,7 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	if (!w81SysTray)
 		result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
 	if (rclsid == CLSID_SysTray && !w81SysTray && SUCCEEDED(result))
-		ex7::OnSystemSysTrayCreated(); // Win32 battery flyout of the system stobject
+		Win7ExplorerRestorer::OnSystemSysTrayCreated(); // Win32 battery flyout of the system stobject
 
 	if (rclsid == CLSID_PersonalStartMenu && riid == IID_IShellItemFilter && result != S_OK && g_osVersion.BuildNumber() >= 10074) //Ittr: as far as im aware doesnt cause crashing on 1507/11. needs further checking when im awake
 	{
@@ -700,10 +700,10 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	if (rclsid == CLSID_SysTray) //create Metro before tray
 	{
 		dbgprintf(L"create Metro before tray\n");
-		ex7::SafeInvoke(L"HookImmersive", HookImmersive);
+		Win7ExplorerRestorer::SafeInvoke(L"HookImmersive", HookImmersive);
 
 		if (s_EnableImmersiveShellStack == 1) // Ittr: Only create TWinUI UWP mode here if we are going to use it
-			ex7::SafeCreateTwinUI_UWP(); // SEH + crash sentinel, once per process
+			Win7ExplorerRestorer::SafeCreateTwinUI_UWP(); // SEH + crash sentinel, once per process
 
 	}
 	if (rclsid == CLSID_RegTreeOptions && riid == IID_IRegTreeOptions7) //upgrading RegTreeOptions interface

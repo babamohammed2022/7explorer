@@ -5,7 +5,7 @@ into a resource-only PE and read back with tests/win32_ref.py, a Win32 reader
 written from the Microsoft specs that shares no code with tools/.
 
 The EXPECTED structure comes from the real Win7 explorer.exe.mui:
-  * if the real file is available (env EX7_REF_MUI, or
+  * if the real file is available (env WIN7EXPLORERRESTORER_REF_MUI, or
     localization/explorer.exe.mui) it is parsed directly with win32_ref;
   * otherwise from tests/fixtures/win7_explorer_structure.json, which was
     produced from that same file by tests/make_win7_fixture.py (win32_ref
@@ -32,7 +32,7 @@ REAL_SHA = "4cc514a7d9afae763cdd21932ee722ae4a787c968bab971c3b1d30044151cfe3"
 
 
 def reference():
-    for cand in (os.environ.get("EX7_REF_MUI"),
+    for cand in (os.environ.get("WIN7EXPLORERRESTORER_REF_MUI"),
                  ROOT / "localization" / "explorer.exe.mui"):
         if cand and Path(cand).is_file():
             s = structure(cand)

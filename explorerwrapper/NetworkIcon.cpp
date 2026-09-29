@@ -2,13 +2,14 @@
 // under SEH; no C++ exceptions (the wrapper has no CRT EH support).
 #include "NetworkIcon.h"
 #include "SafeGuards.h"
+#include "ShellUiLang.h"
 #include "OptionConfig.h"
 #include <shlwapi.h>
 #include <unknwn.h>
 
 #include "dbgprint.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);                       // ShellFixes.cpp
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def); // ShellFixes.cpp
 namespace net {
@@ -20,7 +21,7 @@ void Log(const wchar_t* fmt, ...)
 	va_list ap; va_start(ap, fmt);
 	wvnsprintfW(msg, ARRAYSIZE(msg), fmt, ap);
 	va_end(ap);
-	wnsprintfW(line, ARRAYSIZE(line), L"[ex7][net] %s", msg);
+	wnsprintfW(line, ARRAYSIZE(line), L"[Win7ExplorerRestorer][net] %s", msg);
 	LogText(line);
 }
 DWORD ReadAdvancedDword(const wchar_t* n, DWORD d) { return ReadAdvancedDwordPublic(n, d); }
@@ -180,6 +181,9 @@ void PrepareUnsafe()
 	if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &n, langs, &cch))
 		for (const wchar_t* p = langs; *p; p += lstrlenW(p) + 1) PrepareMui(p);
 	PrepareMui(L"en-US");
+	// The forced language may sit outside the user list: fetch its .mui too
+	// (no-op unless the switcher set WIN7EXPLORERRESTORER_UI_LANG).
+	if (ShellUiLangOverridden()) PrepareMui(ShellUiLangCode());
 	Log(L"cache %s: %s", g_dir, ok ? L"ready" : L"incomplete (icon from the next start after a successful download)");
 }
 
@@ -358,4 +362,4 @@ void OnStobjectLoaded(HMODULE st)
 }
 
 } // namespace net
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

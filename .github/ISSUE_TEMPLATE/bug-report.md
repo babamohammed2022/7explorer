@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Issue guidelines for any issues related to the current explorer7 codebase.
+about: Issue guidelines for any issues related to the current Windows 7 Explorer Restorer codebase.
 title: 'Bug: '
 labels: ''
 assignees: ''

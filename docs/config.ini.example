@@ -1,7 +1,7 @@
 ; ============================================================
 ; 7explorer - esempio di configurazione tema
 ; Copia questo file come "config.ini" accanto a explorer.exe
-; (es. C:\ex7test\config.ini).
+; (es. C:\Win7ExplorerRestorerTest\config.ini).
 ;
 ; 7explorer NON modifica mai file di sistema (uxtheme.dll,
 ; themeui.dll, themes di Windows ...): tutto avviene nella

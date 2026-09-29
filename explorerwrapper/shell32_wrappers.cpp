@@ -314,7 +314,20 @@ HRESULT WINAPI Shell32_CoCreateInstance(
 	__out  LPVOID* ppv
 )
 {
+	// Win7 "Connect To" (::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}) no longer
+	// exists on Windows 10/11, and the Start menu binds it directly (no
+	// ShellExecute call is ever issued, so the ShellFixes verb alone cannot
+	// fire). Primary fix is the per-user TreatAs registered by ShellFixes;
+	// this retry stays as a fallback, retargeted with it to the Videos
+	// library (shell:::{18989B1D-99B5-455B-841C-AB7C74E4DDFC}), a generic
+	// folder that always resolves. Only failed binds are touched.
+	static const GUID kWin7ConnectTo = { 0x38A98528, 0x6CBF, 0x4CA9, { 0x8D, 0xC0, 0xB1, 0xE1, 0xD1, 0x0F, 0x7B, 0x1B } };
+	static const GUID kVideosLibrary = { 0x18989B1D, 0x99B5, 0x455B, { 0x84, 0x1C, 0xAB, 0x7C, 0x74, 0xE4, 0xDD, 0xFC } };
 	HRESULT result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	if (result != S_OK && rclsid == kWin7ConnectTo) {
+		dbgprintf(L"Shell32_CoCreateInstance: Connect To failed, retrying as Videos library\n");
+		result = CoCreateInstance(kVideosLibrary, pUnkOuter, dwClsContext, riid, ppv);
+	}
 	if (rclsid == CLSID_ProgramsFolderAndFastItems && result != S_OK)
 	{
 		IShellFolder* ShellFolder;

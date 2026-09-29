@@ -3,7 +3,7 @@
 // Windows 10/11, UWP start-up protection and DWM transparency prerequisites.
 #include "common.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 // Installs the ShellExecuteEx/ShellExecute remapping on explorer's IAT and
 // applies the registry prerequisites. Every step is SEH-guarded.
@@ -22,4 +22,4 @@ void SafeCreateTwinUI_UWP();
 void OnSystemSysTrayCreated();
 void OnSysTrayCreateBegin();
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

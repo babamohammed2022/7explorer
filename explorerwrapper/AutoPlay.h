@@ -59,3 +59,7 @@ HRESULT WINAPI Shell32_CoCreateInstance(
   __in   REFIID riid,
   __out  LPVOID *ppv
 );
+
+// Repairs per-user AutoPlay policies that fully disable AutoPlay (HKCU-only,
+// missing values untouched). Opt-out: Advanced\FixAutoPlay = 0. See AutoPlay.cpp.
+void EnsureAutoPlayDefaults();

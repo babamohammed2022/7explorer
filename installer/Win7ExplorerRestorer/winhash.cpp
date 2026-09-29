@@ -16,7 +16,7 @@
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 static const wchar_t* kHex = L"0123456789abcdef";
 
@@ -216,4 +216,4 @@ bool SameFileById(HANDLE h1, HANDLE h2, bool& same) {
     return true;
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

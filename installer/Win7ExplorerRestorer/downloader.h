@@ -11,7 +11,7 @@
 #include <windows.h>
 #include <string>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 struct DownloadOptions {
     std::wstring appDir;        // cache lives under appDir\cache
@@ -28,4 +28,4 @@ extern LogFn g_log;
 // hash-verified copy of the pinned explorer.exe.
 bool EnsurePristineExplorer(const DownloadOptions& opt, std::wstring& destPath);
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

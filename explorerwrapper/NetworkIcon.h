@@ -9,7 +9,7 @@
 // Windows To Go SSO slot, and its CoCreateInstance is routed to the cache.
 #include "common.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 namespace net {
 
 // DllMain (explorer only): starts a worker thread that fills the cache.
@@ -33,4 +33,4 @@ void StartFallbackTrayIcon();
 namespace w81 {
 bool Sha256OfFile(const wchar_t* path, char hex[65]);
 }
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

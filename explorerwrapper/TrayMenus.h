@@ -11,7 +11,7 @@
 //   Settings pages they target do not open under the Win7 shell).
 // Opt-out: Explorer\Advanced ClassicTrayMenus=0 / VolumeMenuActions=0.
 #include "common.h"
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void InstallTrayMenus();
 void InstallControlPanelOpenHook();
 bool OpenNotifyIconsPage(); // explorer.exe shell:::{05D7B0F4-...}, SEH-guarded // IOpenControlPanel::Open("...NotificationAreaIcons")

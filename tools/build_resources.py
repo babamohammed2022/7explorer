@@ -12,7 +12,7 @@ Inputs (all in-repo, zero Microsoft text/binaries):
 
 Output:
   list of {type, res_id, payload} per language, fed to
-  tools/embed_catalog.py which writes installer/ex7selfcontained/
+  tools/embed_catalog.py which writes installer/Win7ExplorerRestorer/
   lang_catalog.h byte blobs. Runtime: the installer injects these blobs
   into the private explorer.exe copy — no external .mui ever read.
 

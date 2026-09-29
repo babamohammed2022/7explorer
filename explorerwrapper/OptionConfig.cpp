@@ -46,7 +46,7 @@ void InitializeConfiguration()
 		dwEnableUWP = 0; // change to fully disabled state as though 2 doesn't exist
 	}
 #endif
-	if (dwEnableUWP == 1 && !ex7::ImmersiveStartupAllowed())
+	if (dwEnableUWP == 1 && !Win7ExplorerRestorer::ImmersiveStartupAllowed())
 		dwEnableUWP = 0;
 	s_EnableImmersiveShellStack = dwEnableUWP;
 

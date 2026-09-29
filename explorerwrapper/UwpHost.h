@@ -14,7 +14,7 @@
 // Win7 desktop. UwpEarlyHost: 1 = start early (set by itself when a late host
 // did not help), 0 = never early.
 #include "common.h"
-namespace ex7 { namespace uwp {
+namespace Win7ExplorerRestorer { namespace uwp {
 void SetTwinUiStarted(bool ok);        // ImmersiveShell.cpp result
 void StartupCheck();
 void EarlyStart();                      // UwpHostRuntime=3 or UwpEarlyHost=1 (set automatically)                    // ~10 s after the tray is up

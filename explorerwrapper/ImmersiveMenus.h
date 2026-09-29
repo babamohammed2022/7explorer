@@ -8,6 +8,6 @@
 // shown by TrackPopupMenu as a classic themed Win32 menu.
 // Opt-out: HKCU\...\Explorer\Advanced\ClassicTrayMenus = 0.
 #include "common.h"
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void ClassicMenusFor(HMODULE module, const wchar_t* name); // idempotent, SEH inside
 }

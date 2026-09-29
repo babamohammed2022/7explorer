@@ -21,12 +21,12 @@ Indice: [requisiti](#requisiti) · [procedura](#procedura) · [cosa viene scaric
 
 ## Procedura
 
-1. Scarica **`ex7-test-bundle.zip`** dalla [release di riferimento]
+1. Scarica **`Win7ExplorerRestorer-test-bundle.zip`** dalla [release di riferimento]
    (https://github.com/babamohammed2022/7explorer/releases) — contiene
-   `wrp64.dll`, `ex7selfcontained.exe`, `7explorer-shell-switcher.exe` e i
+   `wrp64.dll`, `Win7ExplorerRestorer.exe`, `shell-switcher.exe` e i
    README (inclusi i sorgenti dei mod Windhawk opzionali).
-2. Decomprimi tutto in **una singola cartella**, ad es. `C:\ex7test`.
-3. Avvia **`ex7selfcontained.exe`**:
+2. Decomprimi tutto in **una singola cartella**, ad es. `C:\Win7ExplorerRestorerTest`.
+3. Avvia **`Win7ExplorerRestorer.exe`**:
    - scarica `explorer.exe` (Windows 7 SP1 x64) dal symbol server
      Microsoft e ne verifica **SHA-256, dimensione, TimeDateStamp e firma
      Authenticode** prima di usarlo;
@@ -36,11 +36,16 @@ Indice: [requisiti](#requisiti) · [procedura](#procedura) · [cosa viene scaric
      **nessun file `.mui`** viene richiesto, scaricato o creato.
    L'operazione è deterministica e ripetibile: rieseguirla riscrive lo
    stesso file (verificato dalla CI a ogni build).
-4. Avvia **`7explorer-shell-switcher.exe`** → **Windows 7 Explorer** →
-   **Cambia**. La shell Win7 sostituisce quella di Windows 11 al volo.
+   In alternativa puoi saltare questo passo: avviando direttamente
+   **`shell-switcher.exe`**, se l'installazione manca la finestra
+   propone **Installa** ed esegue `Win7ExplorerRestorer.exe` da sola
+   (nascosto, con barra di avanzamento e dettagli dal log).
+4. Avvia **`shell-switcher.exe`** → seleziona
+   **Windows 7 Explorer** → **Usa Win7ExplorerRestorer**. La shell Win7
+   sostituisce quella di Windows 11 al volo.
 5. Per tornare: `Ctrl+Alt+Shift+S` → **Esplora risorse Windows nativo** →
    **Cambia**.
-6. (Opzionale) **"Avvia Explorer7 automaticamente al logon"** nel omonimo
+6. (Opzionale) **"Avvia Win7ExplorerRestorer automaticamente al logon"** nel omonimo
    switcher: [avvio-al-login.md](avvio-al-login.md).
 
 ## Cosa viene scaricato e verificato
@@ -51,11 +56,11 @@ scartato. Nessun binario Microsoft viene mai ridistribuito dal progetto:
 il download avviene sempre dai server originali (symbol server Microsoft o
 repository ExplorerPatcher per i soli file `.mui` di pnidui).
 
-### All'installazione (`ex7selfcontained.exe`, primo avvio)
+### All'installazione (`Win7ExplorerRestorer.exe`, primo avvio)
 
 | file | URL | SHA-256 (allow-list) |
 |---|---|---|
-| `explorer.exe` Win7 SP1 x64 (6.1.7601.17514, 2.872.320 byte, TimeDateStamp `0x4CE7A144`, SizeOfImage `0x2C0000`) | `https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe` | `5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b` oppure `6a671b92a69755de6fd063fcbe4ba926d83b49f78c42dbaeed8cdb6bbc57576a` (due copie legittime re-firmate osservate: utente Win10 21H2 LTSC e runner CI; struttura identica, vedi `installer/ex7selfcontained/config.h`) |
+| `explorer.exe` Win7 SP1 x64 (6.1.7601.17514, 2.872.320 byte, TimeDateStamp `0x4CE7A144`, SizeOfImage `0x2C0000`) | `https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe` | `5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b` oppure `6a671b92a69755de6fd063fcbe4ba926d83b49f78c42dbaeed8cdb6bbc57576a` (due copie legittime re-firmate osservate: utente Win10 21H2 LTSC e runner CI; struttura identica, vedi `installer/Win7ExplorerRestorer/config.h`) |
 
 L'identità è verificata su **quattro livelli**: hash allow-list,
 dimensione in byte, `TimeDateStamp`/`SizeOfImage` e firma Authenticode.
@@ -90,7 +95,7 @@ Note:
 | `<cartella del bundle>\explorer.exe` | la copia privata, patchata e localizzata (il "working copy") |
 | `<cartella del bundle>\cache\explorer-<ts>-<soi>.pris` | copia **pristina** verificata dell'explorer Win7 (riusata offline) |
 | `<cartella del bundle>\state\install.json` | record di installazione (hash, orari) |
-| `<cartella del bundle>\log\ex7setup.log` | log leggibile dell'installer |
+| `<cartella del bundle>\log\Win7ExplorerRestorerSetup.log` | log leggibile dell'installer |
 | `%LocalAppData%\7explorer\pnidui-F717CABC20B000\` | pnidui + .mui per l'icona di rete |
 | `%LocalAppData%\7explorer\w81flyout\` | batmeter/stobject 8.1 per il flyout batteria |
 | `%LocalAppData%\7explorer\theme\aero.msstyles` | tema embedded auto-estratto (fallback) |
@@ -102,7 +107,7 @@ Note:
 
 Dal **secondo** avvio non serve alcuna rete:
 
-- `ex7selfcontained.exe` riusa la copia pristina in `cache\` (già
+- `Win7ExplorerRestorer.exe` riusa la copia pristina in `cache\` (già
   verificata all'origine) — oppure accetta il flag `--offline` per non
   tentare alcun contatto;
 - la shell riusa i componenti in `%LocalAppData%\7explorer\`; se un
@@ -113,7 +118,7 @@ Dal **secondo** avvio non serve alcuna rete:
 ## Disinstallazione
 
 1. Deseleziona l'avvio automatico al logon (o
-   `7explorer-shell-switcher.exe --uninstall-login`) — ripristina il
+   `shell-switcher.exe --uninstall-login`) — ripristina il
    valore `Shell` precedente, elimina link e task di recovery
    ([dettagli](avvio-al-login.md)).
 2. Torna alla shell nativa (switcher o `Ctrl+Alt+Shift+S`).

@@ -115,7 +115,7 @@ void RenderThumbnail(PVOID This, int animoffset, int bNoRedraw)
 	rc.bottom -= mar.cyBottomHeight;
 	DwmpUpdateAccentBlurRect(hwnd, &rc);
 	}
-	__except (ex7::SehFilter(L"RenderThumbnail", GetExceptionInformation()))
+	__except (Win7ExplorerRestorer::SehFilter(L"RenderThumbnail", GetExceptionInformation()))
 	{
 	}
 }
@@ -591,6 +591,6 @@ void ChangeMinhookImports()
 	SetProgramListNscTreeAttributes(); // Restore the relevant contents to the program list
 	HandleThumbnailColorization(); // Thumbnail colorization to match
 	RenderStoreAppsOnTaskbar(); // UWP icon rendering for the taskbar
-	ex7::SafeInvoke(L"CreateImmersiveShell", CreateImmersiveShell); // Immersive shell initialisation (SEH-guarded)
+	Win7ExplorerRestorer::SafeInvoke(L"CreateImmersiveShell", CreateImmersiveShell); // Immersive shell initialisation (SEH-guarded)
 	_OnHShellTaskMan(); // Handling the immersive shell's impacts on the holographic shell and associated ShellHook messages
 }

@@ -4,7 +4,7 @@
 #include "MinHook.h"
 #include <commctrl.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
 namespace {
@@ -15,7 +15,7 @@ void Log(const wchar_t* fmt, ...)
 	va_list ap; va_start(ap, fmt);
 	wvnsprintfW(msg, ARRAYSIZE(msg), fmt, ap);
 	va_end(ap);
-	wnsprintfW(line, ARRAYSIZE(line), L"[ex7][flyout] %s", msg);
+	wnsprintfW(line, ARRAYSIZE(line), L"[Win7ExplorerRestorer][flyout] %s", msg);
 	LogText(line);
 }
 
@@ -151,4 +151,4 @@ void InstallUnsafe()
 
 void InstallFlyoutFrames() { SafeInvoke(L"InstallFlyoutFrames", InstallUnsafe); }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

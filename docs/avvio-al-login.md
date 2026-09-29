@@ -1,6 +1,6 @@
 # Avvio automatico al logon — come funziona
 
-> **Sintesi**: la casella *"Avvia Explorer7 automaticamente al logon"* dello
+> **Sintesi**: la casella *"Avvia Win7ExplorerRestorer automaticamente al logon"* dello
 > switcher imposta il **valore `Shell` per-utente** (`HKCU`), il metodo
 > standard di Windows per scegliere la shell di un utente: niente elevazione,
 > niente file di sistema, completamente reversibile. In più installa due
@@ -28,14 +28,14 @@ Indice:
 
 Fino a **test36** la casella creava solo un collegamento nella cartella
 `Esecuzione automatica` dell'utente, che eseguiva
-`7explorer-shell-switcher.exe --apply-ex7` **dopo** il logon. Era una gara
+`shell-switcher.exe --apply-win7explorerestorer` **dopo** il logon. Era una gara
 persa in partenza:
 
 1. Winlogon avvia **prima** la shell di sistema (`C:\Windows\explorer.exe`,
    quella di Windows 11), che diventa proprietaria del desktop e inizializza
    il tray;
 2. solo dopo, la shell già in esecuzione processa la cartella Esecuzione
-   automatica: a quel punto `--apply-ex7` doveva fermare la shell nativa
+   automatica: a quel punto `--apply-win7explorerestorer` doveva fermare la shell nativa
    *mentre si stava ancora inizializzando* e avviare quella privata.
 
 Risultato (il bug segnalato): al logon tornava la shell nativa di Windows 11
@@ -52,8 +52,8 @@ Attivandola (test37) vengono eseguite **tre** operazioni, tutte per-utente
 | # | Cosa | Dove | A cosa serve |
 |---|------|------|--------------|
 | 1 | Valore `Shell` = percorso dell'explorer privato (REG_SZ) | `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell` | **Meccanismo primario**: userinit lancia l'explorer privato *come shell*, prima che parta quella nativa. Il valore precedente viene salvato (vedi sotto) e ripristinato byte per byte alla disattivazione. |
-| 2 | Link `7explorer-shell.lnk` → `7explorer-shell-switcher.exe --apply-ex7 --logon` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | **Fallback**: se il valore Shell non bastasse, al logon lo switcher verifica che lo switch sia davvero avvenuto (retry con backoff per ~60 s) e riavvia l'istanza `--hotkey`. |
-| 3 | Task pianificato `7explorer Shell Recovery` → `7explorer-shell-switcher.exe --recover-login` | libreria Utilità di pianificazione (per-utente, trigger "al logon" con ritardo 30 s) | **Rete di sicurezza**: ~30 s dopo il logon controlla che la shell privata sia viva; se non lo è, ripristina la configurazione precedente e garantisce una shell (vedi [Recovery](#recovery-se-la-shell-privata-non-parte)). |
+| 2 | Link `7explorer-shell.lnk` → `shell-switcher.exe --apply-win7explorerestorer --logon` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | **Fallback**: se il valore Shell non bastasse, al logon lo switcher verifica che lo switch sia davvero avvenuto (retry con backoff per ~60 s) e riavvia l'istanza `--hotkey`. |
+| 3 | Task pianificato `7explorer Shell Recovery` → `shell-switcher.exe --recover-login` | libreria Utilità di pianificazione (per-utente, trigger "al logon" con ritardo 30 s) | **Rete di sicurezza**: ~30 s dopo il logon controlla che la shell privata sia viva; se non lo è, ripristina la configurazione precedente e garantisce una shell (vedi [Recovery](#recovery-se-la-shell-privata-non-parte)). |
 
 Note sul valore `Shell`:
 
@@ -90,7 +90,7 @@ Note sul valore `Shell`:
    - **riavvia automaticamente l'istanza `--hotkey`** dello switcher se la
      trova accanto a `explorer.exe`/`wrp64.dll` (opzione
      `SwitcherHotkey`, vedi sotto).
-3. Il link di fallback parte con la shell: `--apply-ex7 --logon` rileva che
+3. Il link di fallback parte con la shell: `--apply-win7explorerestorer --logon` rileva che
    la shell privata è già attiva, non fa nulla di invasivo e si assicura che
    l'istanza `--hotkey` esista, poi esce.
 4. Dopo ~30 s il task `7explorer Shell Recovery` controlla che la shell
@@ -119,7 +119,7 @@ scorciatoia in vita. Disattivabile con `SwitcherHotkey=0` (vedi
   2. eliminato il task `7explorer Shell Recovery`;
   3. eliminato il link `7explorer-shell.lnk`.
 - **Da riga di comando**:
-  `7explorer-shell-switcher.exe --uninstall-login` (equivalente alla
+  `shell-switcher.exe --uninstall-login` (equivalente alla
   casella deselezionata).
 - **A mano** (emergenza, se lo switcher non è disponibile):
   - `reg delete "HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /f`
@@ -168,11 +168,11 @@ Per chi non vuole **alcuna** modifica al registro è disponibile il solo
 meccanismo di fallback:
 
 ```
-7explorer-shell-switcher.exe --install-login     # crea SOLO il link
-7explorer-shell-switcher.exe --uninstall-login   # rimuove tutto (anche eventuale valore Shell)
+shell-switcher.exe --install-login     # crea SOLO il link
+shell-switcher.exe --uninstall-login   # rimuove tutto (anche eventuale valore Shell)
 ```
 
-Il link esegue `--apply-ex7 --logon`: switch verificato, retry con backoff
+Il link esegue `--apply-win7explorerestorer --logon`: switch verificato, retry con backoff
 per ~60 s, riavvio di `--hotkey` al successo, errori solo nel log (niente
 finestre di dialogo al logon). È il comportamento delle versioni ≤ test36,
 resa robusta. Limiti (motivo per cui il valore `Shell` è il meccanismo
@@ -189,10 +189,10 @@ quando avviene lo switch.
 - **Perché non un task al logon come meccanismo primario**: visivamente
   peggiore (parte prima la shell nativa, flicker, gara con il tray). Il task
   resta solo come rete di sicurezza.
-- **`EX7_UI_LANG`**: la lingua UI scelta nella GUI viene passata
+- **`WIN7EXPLORERRESTORER_UI_LANG`**: la lingua UI scelta nella GUI viene passata
   all'explorer privato quando è lo switcher ad avviarlo. Quando invece è
   userinit ad avviarlo (valore Shell), la lingua è quella di sistema
-  (impostabile a livello utente con la variabile d'ambiente `EX7_UI_LANG`).
+  (impostabile a livello utente con la variabile d'ambiente `WIN7EXPLORERRESTORER_UI_LANG`).
 - **L'explorer privato deve restare nella stessa cartella di
   `wrp64.dll`** (layout del bundle). Se la cartella viene spostata, vedi la
   sezione [Recovery](#recovery-se-la-shell-privata-non-parte).

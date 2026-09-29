@@ -71,7 +71,7 @@ Prima: i workflow `selfcontained-ci`, `localization-pipeline` e i sette
 | `ci-logs/` (dir, solo `.gitkeep`) | segnaposto per log di build: non è sorgente |
 | `explorerwrapper/explorerwrapper.vcxproj.user` | file `.user` di Visual Studio (impostazioni locali sviluppatore) |
 | `explorerwrapper/libMinHook.x64.lib` (520 KB) | output di build di MinHook (libreria statica di terze parti). La CI clona e compila MinHook a ogni run (`msbuild.yml`, `selfcontained-ci.yml`); per build locali vedi il README ("Minhook"). Aggiunto a `.gitignore` |
-| `localization/explorer.exe.mui` (22 KB) | binario Microsoft (`.mui` di explorer.exe Win7) usato solo come riferimento dai test. I test usano già il fallback by-design `tests/fixtures/win7_explorer_structure.json` (struttura senza testo Microsoft, stesso `source_sha256`); verificato: `python tests/run_tests.py` → 51 test OK anche senza il file. Chi vuole il confronto col file reale può passare `EX7_REF_MUI=<percorso>` |
+| `localization/explorer.exe.mui` (22 KB) | binario Microsoft (`.mui` di explorer.exe Win7) usato solo come riferimento dai test. I test usano già il fallback by-design `tests/fixtures/win7_explorer_structure.json` (struttura senza testo Microsoft, stesso `source_sha256`); verificato: `python tests/run_tests.py` → 51 test OK anche senza il file. Chi vuole il confronto col file reale può passare `WIN7EXPLORERRESTORER_REF_MUI=<percorso>` |
 
 Verifica post-rimozione: suite Python completa OK (51 test), workflow YAML
 validati.
@@ -82,8 +82,8 @@ validati.
 
 39 release (tutte pre-release): `v0.0.1-test1` … `v0.0.3-test36`, una per
 ogni iterazione di test, più la nuova `v0.3-test37`. Ogni release conteneva
-gli stessi asset (wrp64.dll, ex7selfcontained.exe,
-7explorer-shell-switcher.exe, ex7-test-bundle.zip, sorgenti windhawk,
+gli stessi asset (wrp64.dll, Win7ExplorerRestorer.exe,
+shell-switcher.exe, Win7ExplorerRestorer-test-bundle.zip, sorgenti windhawk,
 SHA256SUMS.txt). A 38 vecchi tag corrispondevano 38 vecchie release
 (verificato con `git ls-remote --tags` e l'API `/releases`: nessun tag
 orfano).
@@ -94,7 +94,7 @@ orfano).
   `main`, costruita dalla CI dal tag esatto):
   - corpo = `docs/RELEASE_NOTES_test.md`: cosa funziona, problemi noti,
     download, tabella dei file scaricati a runtime con URL + SHA-256;
-  - asset: `ex7-test-bundle.zip` (bundle completo corrispondente al tag) +
+  - asset: `Win7ExplorerRestorer-test-bundle.zip` (bundle completo corrispondente al tag) +
     binari singoli + `SHA256SUMS.txt`.
 - **Le 38 release precedenti sono state eliminate** insieme ai rispettivi
   tag: erano istantanee di test sovrapposte, nessuna indicizzata da
@@ -104,6 +104,15 @@ orfano).
 Tag nominativo `v0.3-test37`: `0.3` = maturazione della serie `0.0.x`
 (self-contained + switcher + fix logon), `test37` = prosecuzione diretta
 della numerazione `testNN` della storia di main (ultimo in main: test36).
+
+### Aggiornamento test38 (policy release, vale per ogni release)
+
+- Le note sono GENERICHE e in inglese, schema fisso in
+  `docs/RELEASE_NOTES_test.md` (stesso schema della `0.0.3-alpha`): mai
+  cosa è migliorato, risolto o resta incompleto.
+- Unico asset scaricabile: `Win7ExplorerRestorer-test-bundle.zip`
+  (imposto dal job `prerelease` in
+  `.github/workflows/selfcontained-ci.yml`).
 
 ## Stato finale
 

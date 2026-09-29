@@ -7,7 +7,7 @@
 #include <shlwapi.h>
 #include <shobjidl.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 bool OpenNotifyIconsPage();
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
@@ -90,7 +90,7 @@ bool RunSys(const wchar_t* file, const wchar_t* params)
 	GetSystemDirectoryW(sys, MAX_PATH);
 	wnsprintfW(exe, MAX_PATH, L"%s\\%s", sys, file);
 	HINSTANCE r = ShellExecuteW(nullptr, nullptr, exe, params, nullptr, SW_SHOWNORMAL);
-	wchar_t l[400]; wnsprintfW(l, 400, L"[ex7][menus] volume action -> %s %s: %d", exe, params ? params : L"", (int)(INT_PTR)r);
+	wchar_t l[400]; wnsprintfW(l, 400, L"[Win7ExplorerRestorer][menus] volume action -> %s %s: %d", exe, params ? params : L"", (int)(INT_PTR)r);
 	LogText(l);
 	return (INT_PTR)r > 32;
 }
@@ -103,7 +103,7 @@ bool VolumeAction(HMENU h, UINT cmd)
 		if (!GetMenuStringW(h, cmd, text, 256, MF_BYCOMMAND)) return false;
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-	wchar_t l[400]; wnsprintfW(l, 400, L"[ex7][menus] volume menu cmd=%u text=%s", cmd, text); LogText(l);
+	wchar_t l[400]; wnsprintfW(l, 400, L"[Win7ExplorerRestorer][menus] volume menu cmd=%u text=%s", cmd, text); LogText(l);
 	if (Has(text, L"mixer") || Has(text, L"mezclador") || Has(text, L"m\u00E9langeur") || Has(text, L"Lautst\u00E4rkemix"))
 		return RunSys(L"SndVol.exe", nullptr);
 	bool settings = Has(text, L"impostazioni") || Has(text, L"settings") || Has(text, L"einstellungen") ||
@@ -161,7 +161,7 @@ bool Hook(void* target, void* detour, void** orig, const wchar_t* name)
 	if (!target) return false;
 	MH_STATUS a = MH_CreateHook(target, detour, orig);
 	MH_STATUS b = a == MH_OK ? MH_EnableHook(target) : a;
-	wchar_t l[160]; wnsprintfW(l, 160, L"[ex7][menus] hook %s %d/%d", name, a, b); LogText(l);
+	wchar_t l[160]; wnsprintfW(l, 160, L"[Win7ExplorerRestorer][menus] hook %s %d/%d", name, a, b); LogText(l);
 	return b == MH_OK;
 }
 
@@ -195,7 +195,7 @@ void OpenPageUnsafe(PageCtx* c)
 	sei.lpParameters = L"shell:::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}";
 	sei.nShow = SW_SHOWNORMAL;
 	c->ok = ShellExecuteExW(&sei);
-	wchar_t l[160]; wnsprintfW(l, 160, L"[ex7][notifyicons] explorer shell:::{05D7B0F4-...} -> %d (%u)", c->ok, c->ok ? 0 : GetLastError());
+	wchar_t l[160]; wnsprintfW(l, 160, L"[Win7ExplorerRestorer][notifyicons] explorer shell:::{05D7B0F4-...} -> %d (%u)", c->ok, c->ok ? 0 : GetLastError());
 	LogText(l);
 }
 typedef HRESULT(STDMETHODCALLTYPE* Open_t)(IOpenControlPanel*, LPCWSTR, LPCWSTR, IUnknown*);
@@ -206,7 +206,7 @@ HRESULT STDMETHODCALLTYPE Open_Hook(IOpenControlPanel* self, LPCWSTR name, LPCWS
 	bool mine = false;
 	__try {
 		mine = name && (StrStrIW(name, L"NotificationAreaIcons") || StrStrIW(name, L"05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9"));
-		wchar_t l[300]; wnsprintfW(l, 300, L"[ex7] IOpenControlPanel::Open name=%s page=%s", name ? name : L"", page ? page : L"");
+		wchar_t l[300]; wnsprintfW(l, 300, L"[Win7ExplorerRestorer] IOpenControlPanel::Open name=%s page=%s", name ? name : L"", page ? page : L"");
 		LogText(l);
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) { mine = false; }
@@ -235,7 +235,7 @@ void InstallOpenUnsafe()
 		Hook(fn, (void*)Open_Hook, (void**)&g_origOpen, L"IOpenControlPanel::Open");
 		p->Release();
 	} else {
-		wchar_t l[120]; wnsprintfW(l, 120, L"[ex7] OpenControlPanel CoCreate hr=0x%08X", (DWORD)hr); LogText(l);
+		wchar_t l[120]; wnsprintfW(l, 120, L"[Win7ExplorerRestorer] OpenControlPanel CoCreate hr=0x%08X", (DWORD)hr); LogText(l);
 	}
 	if (SUCCEEDED(hi)) CoUninitialize();
 }
@@ -259,4 +259,4 @@ void InstallControlPanelOpenHook()
 	if (t) CloseHandle(t); // never wait: may run under the loader lock
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

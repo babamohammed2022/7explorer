@@ -7,10 +7,10 @@
 
 // One PE-resource payload (type = RT_MENU 4, RT_DIALOG 5,
 // RT_STRING 6, RT_ACCELERATOR 9) ready for UpdateResourceW.
-struct Ex7ResBlob { unsigned int type; unsigned int id;
+struct Win7ExplorerRestorerResBlob { unsigned int type; unsigned int id;
                     const unsigned char* data; unsigned int size; };
-struct Ex7ResLang { unsigned int lcid; const wchar_t* name;
-                    const Ex7ResBlob* blobs; unsigned int blobCount; };
+struct Win7ExplorerRestorerResLang { unsigned int lcid; const wchar_t* name;
+                    const Win7ExplorerRestorerResBlob* blobs; unsigned int blobCount; };
 
 static const unsigned char g_res_en_000[] = {
     0x00, 0x00, 0x00, 0x00, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x98, 0x01, 0x26, 0x00, 0x41, 0x00,
@@ -1203,7 +1203,7 @@ static const unsigned char g_res_en_043[] = {
     0x0B, 0x00, 0x5A, 0x00, 0xA0, 0x01, 0x00, 0x00, 0x03, 0x00, 0x72, 0x00, 0x85, 0xA0, 0x00, 0x00,
     0x93, 0x00, 0x4D, 0x00, 0xA3, 0x01, 0x00, 0x00,
 };
-static const Ex7ResBlob g_blobs_en[] = {
+static const Win7ExplorerRestorerResBlob g_blobs_en[] = {
     { 4, 205, g_res_en_000, sizeof(g_res_en_000) },
     { 4, 211, g_res_en_001, sizeof(g_res_en_001) },
     { 4, 212, g_res_en_002, sizeof(g_res_en_002) },
@@ -2613,7 +2613,7 @@ static const unsigned char g_res_it_043[] = {
     0x0B, 0x00, 0x5A, 0x00, 0xA0, 0x01, 0x00, 0x00, 0x03, 0x00, 0x72, 0x00, 0x85, 0xA0, 0x00, 0x00,
     0x93, 0x00, 0x4D, 0x00, 0xA3, 0x01, 0x00, 0x00,
 };
-static const Ex7ResBlob g_blobs_it[] = {
+static const Win7ExplorerRestorerResBlob g_blobs_it[] = {
     { 4, 205, g_res_it_000, sizeof(g_res_it_000) },
     { 4, 211, g_res_it_001, sizeof(g_res_it_001) },
     { 4, 212, g_res_it_002, sizeof(g_res_it_002) },
@@ -2660,8 +2660,8 @@ static const Ex7ResBlob g_blobs_it[] = {
     { 9, 251, g_res_it_043, sizeof(g_res_it_043) },
 };
 
-static const Ex7ResLang g_ex7ResLangs[] = {
+static const Win7ExplorerRestorerResLang g_Win7ExplorerRestorerResLangs[] = {
     { 0x0409, L"en-US", g_blobs_en, sizeof(g_blobs_en) / sizeof(g_blobs_en[0]) },
     { 0x0410, L"it-IT", g_blobs_it, sizeof(g_blobs_it) / sizeof(g_blobs_it[0]) },
 };
-static const unsigned int g_ex7ResLangCount = sizeof(g_ex7ResLangs) / sizeof(g_ex7ResLangs[0]);
+static const unsigned int g_Win7ExplorerRestorerResLangCount = sizeof(g_Win7ExplorerRestorerResLangs) / sizeof(g_Win7ExplorerRestorerResLangs[0]);

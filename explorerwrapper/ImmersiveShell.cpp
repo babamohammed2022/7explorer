@@ -5,7 +5,7 @@
 #include "SafeGuards.h"
 #include "ImmersiveShell.h"
 #include "dbgprint.h"
-namespace ex7 { void LogText(const wchar_t* text); namespace uwp { void SetTwinUiStarted(bool ok); } }
+namespace Win7ExplorerRestorer { void LogText(const wchar_t* text); namespace uwp { void SetTwinUiStarted(bool ok); } }
 
 typedef HWND(WINAPI* GetTaskmanWindow)();
 typedef BOOL(WINAPI* SetTaskmanWindow)(HWND handle);
@@ -97,8 +97,12 @@ LRESULT TaskmanWndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			GUID SID_Unknown;
 			CLSIDFromString(L"{914d9b3a-5e53-4e14-bbba-46062acb35a4}", &SID_Unknown);
 
-			IServiceProvider* ImmersiveShell;
-			if (CoCreateInstance(guidImmersiveShell, 0, 0x404u, IID_IServiceProvider, (LPVOID*)&ImmersiveShell) >= 0)
+			// 7explorer fork: RAII holder. The service provider used to be leaked
+			// here (once per shell lifetime, or once per message while the
+			// QueryService below kept failing); only ShellHookService is
+			// intentionally kept alive.
+			Win7ExplorerRestorer::ComPtr<IServiceProvider> ImmersiveShell;
+			if (CoCreateInstance(guidImmersiveShell, 0, 0x404u, IID_IServiceProvider, ImmersiveShell.PutVoid()) >= 0)
 			{
 				ImmersiveShell->QueryService(SID_ImmersiveShellHookService, SID_Unknown, (void**)&ShellHookService);
 			}
@@ -142,7 +146,7 @@ void CreateTwinUI()
 		IImmersiveShellController* controller;
 		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
 		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
-		{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI CreateShell hr=0x%08X", (DWORD)ret); ex7::LogText(l); }
+		{ wchar_t l[128]; wnsprintfW(l, 128, L"[Win7ExplorerRestorer] TwinUI CreateShell hr=0x%08X", (DWORD)ret); Win7ExplorerRestorer::LogText(l); }
 		if (SUCCEEDED(ret))
 		{
 			//HRESULT ret = controller->Start();
@@ -171,7 +175,7 @@ void CreateTwinUI_UWP()
 
 	// 7explorer fork: the builder is released automatically (RAII); the
 	// controller is intentionally kept alive for the lifetime of the shell.
-	ex7::ComPtr<IImmersiveShellCreator> ImmersiveShellCreator;
+	Win7ExplorerRestorer::ComPtr<IImmersiveShellCreator> ImmersiveShellCreator;
 	HRESULT hrB = CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid());
 	if (hrB == CO_E_NOTINITIALIZED) {
 		// test34: this call comes from explorer's main thread before COM is
@@ -180,10 +184,10 @@ void CreateTwinUI_UWP()
 		// shell is started from the tray thread (COM ready, as upstream
 		// explorer7 does), see RetryDeferredTwinUI().
 		g_twinDeferred = 1;
-		ex7::LogText(L"[ex7] TwinUI: COM not initialised on this thread, start deferred to the tray thread");
+		Win7ExplorerRestorer::LogText(L"[Win7ExplorerRestorer] TwinUI: COM not initialised on this thread, start deferred to the tray thread");
 		return;
 	}
-	{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI ImmersiveShellBuilder hr=0x%08X", (DWORD)hrB); ex7::LogText(l); }
+	{ wchar_t l[128]; wnsprintfW(l, 128, L"[Win7ExplorerRestorer] TwinUI ImmersiveShellBuilder hr=0x%08X", (DWORD)hrB); Win7ExplorerRestorer::LogText(l); }
 	if (SUCCEEDED(hrB))
 	{
 		dbgprintf(L"TwinUI factory created!");
@@ -191,15 +195,15 @@ void CreateTwinUI_UWP()
 		static IImmersiveShellController* controller = nullptr;
 		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
 		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
-		{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI CreateShell hr=0x%08X", (DWORD)ret); ex7::LogText(l); }
+		{ wchar_t l[128]; wnsprintfW(l, 128, L"[Win7ExplorerRestorer] TwinUI CreateShell hr=0x%08X", (DWORD)ret); Win7ExplorerRestorer::LogText(l); }
 		if (SUCCEEDED(ret))
 		{
 			HRESULT hr = controller->Start();
 
 			dbgprintf(L"Immersive Shell Controller Result: %x", hr);
-			{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI controller Start hr=0x%08X", (DWORD)hr); ex7::LogText(l); }
+			{ wchar_t l[128]; wnsprintfW(l, 128, L"[Win7ExplorerRestorer] TwinUI controller Start hr=0x%08X", (DWORD)hr); Win7ExplorerRestorer::LogText(l); }
 			g_twinStartHr = hr;
-			if (hr != RPC_E_WRONG_THREAD) ex7::uwp::SetTwinUiStarted(SUCCEEDED(hr));
+			if (hr != RPC_E_WRONG_THREAD) Win7ExplorerRestorer::uwp::SetTwinUiStarted(SUCCEEDED(hr));
 		}
 	}
 }
@@ -294,21 +298,21 @@ static DWORD WINAPI TwinMtaThread(LPVOID)
 	// (the controller lives in this apartment).
 	HRESULT hi = CoInitializeEx(NULL, COINIT_MULTITHREADED);
 	__try { CreateTwinUI_UWP(); }
-	__except (EXCEPTION_EXECUTE_HANDLER) { ex7::LogText(L"[ex7] TwinUI MTA attempt faulted"); }
-	{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI MTA thread: CoInit=0x%08X Start=0x%08X", (DWORD)hi, (DWORD)g_twinStartHr); ex7::LogText(l); }
-	if (FAILED(g_twinStartHr)) ex7::uwp::SetTwinUiStarted(false);
+	__except (EXCEPTION_EXECUTE_HANDLER) { Win7ExplorerRestorer::LogText(L"[Win7ExplorerRestorer] TwinUI MTA attempt faulted"); }
+	{ wchar_t l[128]; wnsprintfW(l, 128, L"[Win7ExplorerRestorer] TwinUI MTA thread: CoInit=0x%08X Start=0x%08X", (DWORD)hi, (DWORD)g_twinStartHr); Win7ExplorerRestorer::LogText(l); }
+	if (FAILED(g_twinStartHr)) Win7ExplorerRestorer::uwp::SetTwinUiStarted(false);
 	if (SUCCEEDED(g_twinStartHr)) { for (;;) Sleep(INFINITE); }
 	return 0;
 }
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 // Tray thread (COM initialised by explorer): run the deferred start.
 void RetryDeferredTwinUI()
 {
 	if (!InterlockedExchange(&g_twinDeferred, 0)) return;
-	LogText(L"[ex7] TwinUI: deferred start on the tray thread");
+	LogText(L"[Win7ExplorerRestorer] TwinUI: deferred start on the tray thread");
 	__try { CreateTwinUI_UWP(); }
-	__except (EXCEPTION_EXECUTE_HANDLER) { LogText(L"[ex7] TwinUI deferred start faulted"); g_twinStartHr = E_FAIL; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { LogText(L"[Win7ExplorerRestorer] TwinUI deferred start faulted"); g_twinStartHr = E_FAIL; }
 	if (g_twinStartHr == RPC_E_WRONG_THREAD || g_twinStartHr == E_PENDING || g_twinDeferred) {
 		g_twinDeferred = 0;
 		HANDLE t = CreateThread(NULL, 0, TwinMtaThread, NULL, 0, NULL);

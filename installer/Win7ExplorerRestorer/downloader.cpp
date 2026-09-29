@@ -11,7 +11,7 @@
 
 #pragma comment(lib, "wininet.lib")
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 LogFn g_log = nullptr;
 static void Log(const wchar_t* fmt, ...) {
@@ -56,7 +56,7 @@ static bool TryDownloadOnce(const std::wstring& tmpPath,
     HINTERNET hInet = nullptr, hConn = nullptr, hReq = nullptr;
     HANDLE hFile = INVALID_HANDLE_VALUE;
 
-    hInet = InternetOpenW(L"ex7selfcontained/1.0",
+    hInet = InternetOpenW(L"Win7ExplorerRestorer/1.0",
                           INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
     if (!hInet) { Log(L"InternetOpen failed: %lu", GetLastError()); goto out; }
 
@@ -186,8 +186,10 @@ bool EnsurePristineExplorer(const DownloadOptions& opt, std::wstring& destPath) 
     }
 
     // --- download path -------------------------------------------------------
+    // NOTE: GetTempFileNameW uses only the first 3 chars of the prefix,
+    // hence the abbreviated project tag.
     wchar_t tmpName[MAX_PATH];
-    if (!GetTempFileNameW(tmpDir.c_str(), L"ex7", 0, tmpName)) {
+    if (!GetTempFileNameW(tmpDir.c_str(), L"W7E", 0, tmpName)) {
         Log(L"GetTempFileName failed: %lu", GetLastError());
         return false;
     }
@@ -246,4 +248,4 @@ bool EnsurePristineExplorer(const DownloadOptions& opt, std::wstring& destPath) 
     return false;
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer
