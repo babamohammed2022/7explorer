@@ -1,8 +1,8 @@
-# switcher/ — 7explorer Shell Switcher (runtime test tool)
+# switcher/ — Windows 7 Explorer Restorer Shell Switcher (runtime test tool)
 
 Small native Win32 GUI application that switches the **running** shell
-process between the native Windows Explorer and the private 7explorer
-Win7ExplorerRestorer — **no logout, no reboot**.
+process between the native Windows Explorer and the private
+Windows 7 Explorer Restorer — **no logout, no reboot**.
 
 Technical notes (design is intentionally conservative):
 
@@ -10,7 +10,7 @@ Technical notes (design is intentionally conservative):
   `GetShellWindow()` (the shell desktop window). Its executable path is
   read with `QueryFullProcessImageNameW` — kernel-provided, so it is
   **not affected** by the Windhawk `win7explorerestorer-fake-explorer-path` spoof (which
-  only hooks `GetModuleFileNameW` inside Win7ExplorerRestorer). Only the identified
+  only hooks `GetModuleFileNameW` inside the private Windows 7 Explorer Restorer process). Only the identified
   shell PID is ever stopped — never `taskkill /f /im explorer.exe`, never
   unrelated explorer instances.
 - **Stop**: `WM_QUIT` to the shell window (graceful), then
@@ -35,7 +35,7 @@ Technical notes (design is intentionally conservative):
 | shell | path |
 |---|---|
 | Native | `%SystemRoot%\explorer.exe` |
-| 7explorer | first hit of: ① env var `WIN7EXPLORERRESTORER_EXPLORER_PATH` (expands `%VAR%`) → ② `explorer.exe` **next to the switcher exe** (the bundle-zip layout: one folder for everything) → ③ legacy fallback `C:\Win7ExplorerRestorerTest\explorer.exe` |
+| Windows 7 Explorer Restorer | first hit of: ① env var `WIN7EXPLORERRESTORER_EXPLORER_PATH` (expands `%VAR%`) → ② `explorer.exe` **next to the switcher exe** (the bundle-zip layout: one folder for everything) → ③ legacy fallback `C:\Win7ExplorerRestorerTest\explorer.exe` |
 
 A **Browse…** button lets you point anywhere else.
 
@@ -96,7 +96,7 @@ removes everything, like unchecking the box.
 
 ```
 7explorer-shell-switcher.exe              # GUI
---apply-win7explorerestorer        # switch to Win7ExplorerRestorer (verified + retry ~60 s + hotkey restart;
+--apply-win7explorerestorer        # switch to Windows 7 Explorer Restorer (verified + retry ~60 s + hotkey restart;
                    #   exit code 0/2)
 --apply-win7explorerestorer --logon  # as above, from the logon link: fully silent (log only)
 --apply-native     # switch back to the native shell

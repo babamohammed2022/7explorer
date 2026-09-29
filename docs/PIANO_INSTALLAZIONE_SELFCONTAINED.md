@@ -1,4 +1,4 @@
-# Piano: installazione completamente self-contained di Win7ExplorerRestorer
+# Piano: installazione completamente self-contained di Windows 7 Explorer Restorer
 
 > Nota: documento **storico/tecnico** (2026-09-28) — è il piano di
 > progettazione dell'installer, mantenuto per riferimento; lo stato
@@ -134,7 +134,7 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
    wrp64.dll stesso**. `wrapper.rc` contiene già le 4 stringhe inglesi.
    Contesto d'uso: testi "pin/unpin" del menu Start (serve perché su Win ≥ 8
    gli ID cambiarono; cf. anche README, nota Windows 8.1 "Customize Start
-   Menu"). Quindi: **tipologie davvero usate da Win7ExplorerRestorer solo queste 4
+   Menu"). Quindi: **tipologie davvero usate da Windows 7 Explorer Restorer solo queste 4
    stringhe** — niente menu/dialog di shell32.
 2. **explorer.exe.mui** — caricato dal **gestore MUI del kernel**: il
    Win7 `explorer.exe` è un PE language-neutral con risorsa `RCDATA "MUI"`;
@@ -176,7 +176,7 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
   `explorerwrapper/Win7ExplorerRestorer_languages.rc` (aggiunto al vcxproj) con le
   STRINGTABLE in tutte le lingue del catalogo; il fallback già esistente in
   `StartMenuPin.cpp` le serve automaticamente nella lingua UI.
-  `Win7ExplorerRestorer` può anche generare un `shell32.dll.mui` ridotto
+  `Windows 7 Explorer Restorer` può anche generare un `shell32.dll.mui` ridotto
   (PE solo risorse) — il wrapper lo caricherebbe come datafile senza
   validazione incrociata (🌐: nessun checksum MUI coinvolto su quel path) —
   lasciato come miglioria futura non necessaria.

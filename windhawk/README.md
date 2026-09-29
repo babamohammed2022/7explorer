@@ -1,4 +1,4 @@
-# windhawk/ — PoC shell Win7ExplorerRestorer (mod OPZIONALI)
+# windhawk/ — PoC shell Windows 7 Explorer Restorer (mod OPZIONALI)
 
 > **Stato attuale (test37)**: entrambe le funzioni dei mod sono ora
 > coperte dal progetto stesso e i mod sono **opzionali/supplementari**:
@@ -15,7 +15,7 @@
 
 
 Due mod Windhawk **sorgente** (Windhawk compila localmente quando li abiliti)
-che rendono l'explorer privato di 7explorer la **shell attiva**, usando le
+che rendono l'explorer privato di Windows 7 Explorer Restorer la **shell attiva**, usando le
 stesse tecniche dei mod di riferimento di Anixx:
 
 | File | Target | Hook | Cosa fa |
@@ -56,7 +56,7 @@ com'era al prossimo logon.
 login Windows 11
    → userinit.exe
    → Shell = C:\Win7ExplorerRestorerTest\explorer.exe          (risposta del mod, non dal registry)
-   → Win7ExplorerRestorer parte (pensa di essere C:\Windows\explorer.exe per l'altro mod)
+   → Windows 7 Explorer Restorer parte (pensa di essere C:\Windows\explorer.exe per l'altro mod)
    → compare la taskbar Windows 7
    → la taskbar Windows 11 non è più attiva
 ```
@@ -69,7 +69,7 @@ Log dei mod (Windhawk → mod → scheda log / enable logging): cerca righe
 
 - **Caso normale**: disabilita `Win7ExplorerRestorer shell launcher` in Windhawk →
   disconnetti/riaccendi → torna la shell Windows normale.
-- **Se Win7ExplorerRestorer crasha** e resta schermo nero col cursore:
+- **Se Windows 7 Explorer Restorer crasha** e resta schermo nero col cursore:
   `Ctrl+Shift+Esc` → Task Manager → *File → Esegui nuova attività* → `cmd`
   → apri Windhawk da lì, disabilita il mod → disconnetti.
 - **Worst case**: avvia in **Modalità provvisoria** (Windhawk non parte in

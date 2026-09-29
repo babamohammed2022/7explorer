@@ -121,7 +121,7 @@ scritto/ripristinato, link, task di recovery, switch verificati,
 
 La shell privata usa en-US (fallback) o it-IT a seconda della lingua del
 sistema. Lo switcher permette di forzare la lingua UI per gli avvii da
-esso gestiti (combo "Lingua UI di Win7ExplorerRestorer"); per l'avvio da logon vale
+esso gestiti (combo "Lingua UI di Windows 7 Explorer Restorer"); per l'avvio da logon vale
 la variabile d'ambiente `WIN7EXPLORERRESTORER_UI_LANG` utente (vedi
 [avvio-al-login.md](avvio-al-login.md#dettagli-tecnici-e-limiti-noti)).
 
