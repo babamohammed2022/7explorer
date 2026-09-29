@@ -39,6 +39,9 @@
 #include "PatternImports.h"
 #include "MinhookImports.h"
 #include "TypeDefinitions.h"
+#include "SafeGuards.h"
+#include "ShellFixes.h"
+#include "LegacyBatteryFlyout.h"
 
 LRESULT CALLBACK NewTrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -592,11 +595,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	DWORD  ul_reason_for_call,
 	LPVOID lpReserved)
 {
-	// Ittr: We initialise values for closing program if incompatible software is present
-	WCHAR programPath[MAX_PATH] = L"\\Stardock\\WindowBlinds 11\\unins000.exe";
-	WCHAR blacklistPath[MAX_PATH];
-	ExpandEnvironmentStringsW(L"%ProgramFiles%", (LPWSTR)blacklistPath, sizeof(blacklistPath));
-	lstrcat(blacklistPath, programPath);
 
 	switch (ul_reason_for_call)
 	{
@@ -604,8 +602,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	{
 		PatchShunimpl();
 
-		if (GetFileAttributesW((LPCWSTR)blacklistPath) != INVALID_FILE_ATTRIBUTES) // Windowblinds blockage part 1 - create user-facing error
-			CrashError(); // The user-facing crash message - we do these blocks of code like this, so that the 0xc0000142 error doesn't appear
+		// 7explorer fork: WindowBlinds block removed (no technical conflict) // The user-facing crash message - we do these blocks of code like this, so that the 0xc0000142 error doesn't appear
 
 		/*if (g_osVersion.BuildNumber() >= 26100)
 		{
@@ -641,6 +638,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		else
 		{
 			HookAPIs();
+			ex7::InstallShellFixes(hModule); // remaps dead Win7 shell targets, Help name, transparency (SEH-guarded)
 		}
 	}
 	break;
@@ -653,8 +651,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			g_alttabhooked = TRUE;
 		}
 
-		if (GetFileAttributes((LPCWSTR)blacklistPath) != INVALID_FILE_ATTRIBUTES) // Windowblinds blockage part 2 - actually stops the program from running
-			ExitExplorerSilently(); //byebye WB users
+		// 7explorer fork: WindowBlinds block removed (no technical conflict) //byebye WB users
 
 	}
 	break;
@@ -676,7 +673,23 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 )
 {
 	HRESULT result;
-	result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	// 7explorer fork: Windows 8.1 SysTray (battery flyout) from the verified
+	// local cache, see LegacyBatteryFlyout.cpp. Falls back to the system object.
+	bool w81SysTray = false;
+	if (rclsid == CLSID_SysTray)
+	{
+		ex7::OnSysTrayCreateBegin();
+		w81SysTray = ex7::w81::TryCreateSysTray(pUnkOuter, riid, ppv, &result);
+		if (w81SysTray && riid == IID_IOleCommandTarget && *ppv && ex7::w81::WrapSysTray())
+		{
+			// Win8-era SSO protocol (command 2/4 differences), see TrayObject.cpp
+			*ppv = static_cast<IOleCommandTarget*>(new CSysTrayWrapper((IOleCommandTarget*)*ppv));
+		}
+	}
+	if (!w81SysTray)
+		result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	if (rclsid == CLSID_SysTray && !w81SysTray && SUCCEEDED(result))
+		ex7::OnSystemSysTrayCreated(); // Win32 battery flyout of the system stobject
 
 	if (rclsid == CLSID_PersonalStartMenu && riid == IID_IShellItemFilter && result != S_OK && g_osVersion.BuildNumber() >= 10074) //Ittr: as far as im aware doesnt cause crashing on 1507/11. needs further checking when im awake
 	{
@@ -687,10 +700,10 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	if (rclsid == CLSID_SysTray) //create Metro before tray
 	{
 		dbgprintf(L"create Metro before tray\n");
-		HookImmersive();
+		ex7::SafeInvoke(L"HookImmersive", HookImmersive);
 
 		if (s_EnableImmersiveShellStack == 1) // Ittr: Only create TWinUI UWP mode here if we are going to use it
-			CreateTwinUI_UWP();
+			ex7::SafeCreateTwinUI_UWP(); // SEH + crash sentinel, once per process
 
 	}
 	if (rclsid == CLSID_RegTreeOptions && riid == IID_IRegTreeOptions7) //upgrading RegTreeOptions interface
@@ -795,7 +808,8 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	{
 		dbgprintf(L"USE 10 AUTODESTLIST!!!!\n");
 		result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, IID_AutoDestList10, ppv);
-		*ppv = new CAutoDestWrapper((IAutoDestinationList10*)*ppv);
+		if (SUCCEEDED(result) && *ppv) *ppv = new CAutoDestWrapper((IAutoDestinationList10*)*ppv);
+		else { *ppv = nullptr; if (SUCCEEDED(result)) result = E_NOINTERFACE; }
 	}
 	if (riid == IID_CustomDestList && result != S_OK)
 	{
@@ -804,7 +818,8 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 		if (result != S_OK || !*ppv)
 		{
 			result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, IID_CustomDestList1507, ppv);
-			*ppv = new CCustomDestWrapper((IInternalCustomDestList1507*)*ppv);
+			if (SUCCEEDED(result) && *ppv) *ppv = new CCustomDestWrapper((IInternalCustomDestList1507*)*ppv);
+			else { *ppv = nullptr; if (SUCCEEDED(result)) result = E_NOINTERFACE; }
 		}
 		else
 			*ppv = new CCustomDestWrapper((IInternalCustomDestList10*)*ppv);

@@ -1,4 +1,5 @@
 #include "OptionConfig.h"
+#include "ShellFixes.h"
 
 // Ittr: Migrated all configuration here to make things clearer in dllmain
 
@@ -15,6 +16,7 @@ int s_ColorizationOptions;
 bool s_OverrideAlpha;
 DWORD s_AlphaValue;
 bool s_UseDCompFlyouts;
+bool s_OpaqueThumbnails;
 
 // This is called at the beginning of the library's execution
 // The format for each setting is generally:
@@ -26,9 +28,11 @@ bool s_UseDCompFlyouts;
 void InitializeConfiguration()
 {
 	// Immersive shell stack for modern apps (e.g. PC settings)
-	// - Defaults to disabled (0)
-	// - Pending stability improvements before default enablement
-	DWORD dwEnableUWP = 0;
+	// - 7explorer fork: defaults to ENABLED (1); explorer7 upstream defaults to 0
+	// - Start-up is SEH-guarded and protected by a crash sentinel
+	//   (ImmersiveInitFailures, see ShellFixes.cpp): after 2 failed start-ups
+	//   in a row it falls back to 0 for the session
+	DWORD dwEnableUWP = 1;
 	if (g_osVersion.BuildNumber() >= 10074 && g_osVersion.BuildNumber() < 27686) // Note: Immersive is currently buggy in 27686 and later
 	{
 		// Immersive shell can only be enabled on TH1 onwards
@@ -42,6 +46,8 @@ void InitializeConfiguration()
 		dwEnableUWP = 0; // change to fully disabled state as though 2 doesn't exist
 	}
 #endif
+	if (dwEnableUWP == 1 && !ex7::ImmersiveStartupAllowed())
+		dwEnableUWP = 0;
 	s_EnableImmersiveShellStack = dwEnableUWP;
 
 	// Taskbar pinning
@@ -157,4 +163,11 @@ void InitializeConfiguration()
 	DWORD dwUseDCompFlyouts = s_EnableImmersiveShellStack;
 	g_registry.QueryValue(L"UseDCompFlyouts", (LPBYTE)&dwUseDCompFlyouts, sizeof(DWORD));
 	s_UseDCompFlyouts = dwUseDCompFlyouts;
+
+	// 7explorer fork: taskbar thumbnails
+	// - Defaults to translucent (0). Upstream forced an opaque gradient on
+	//   thumbnails in pseudo-aero mode; set OpaqueThumbnails=1 to restore that
+	DWORD dwOpaqueThumbnails = 0;
+	g_registry.QueryValue(L"OpaqueThumbnails", (LPBYTE)&dwOpaqueThumbnails, sizeof(DWORD));
+	s_OpaqueThumbnails = (dwOpaqueThumbnails != 0);
 }

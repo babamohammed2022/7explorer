@@ -1,3 +1,4 @@
+import struct
 # -*- coding: utf-8 -*-
 """Tests for tools/analyze_mui.py — run with:  python3 tests/run_tests.py"""
 
@@ -42,20 +43,24 @@ class ReportTests(unittest.TestCase):
     LANG = 0x409
 
     def _fixture(self):
-        # Win32: block N covers ids (N-1)*16+1 .. (N-1)*16+16 -> here
-        # 5377..5392; slot i holds id (N-1)*16+i+1. Matches the real
-        # shell32.dll ids used by StartMenuPin.cpp: 5381/5382/5384/5385.
+        # Win32: block = (id >> 4) + 1, slot = id & 15 -> block 337 covers
+        # 5376..5391 and slot i holds id 5376+i. Real shell32.dll ids used
+        # by StartMenuPin.cpp: 5381/5382/5384/5385 (0x1505/06/08/09).
         block_id = 337
         strings = [""] * 16
-        strings[4] = "Attach to the Start Men&u"     # id 5381
-        strings[5] = "Detach from the Start Men&u"   # id 5382
-        strings[7] = "Adds %1!s! to the Start menu"  # id 5384
-        strings[8] = "Removes %1!s! from the Start menu"  # id 5385
+        strings[5] = "Attach to the Start Men&u"     # id 5381
+        strings[6] = "Detach from the Start Men&u"   # id 5382
+        strings[8] = "Adds %1!s! to the Start menu"  # id 5384
+        strings[9] = "Removes %1!s! from the Start menu"  # id 5385
 
-        menu = (_res_menu_classic([(0x10, "&Toolbars", None),
-                                   (0, "E&xit", 101)])
+        # Win32: a popup's body follows the popup item immediately.
+        menu = (struct.pack("<HH", 0, 0)
+                + struct.pack("<H", 0x10) + "&Toolbars".encode("utf-16-le")
+                + b"\0\0"
                 + _res_menu_classic([(0, "&Alpha", 201),
-                                     (0, "&Beta", 202)], header=False))
+                                     (0, "&Beta", 202)], header=False)
+                + struct.pack("<HH", 0x80, 101)
+                + "E&xit".encode("utf-16-le") + b"\0\0")
 
         dlg = _res_dialogex(
             "Opt&ions",

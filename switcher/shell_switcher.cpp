@@ -93,7 +93,7 @@ static const WCHAR* TR_EN[TR_COUNT] = {
     L"CreateProcess error %lu.\r\n\r\nAttempting to restore the native shell\u2026",
     L"CRITICAL: could not start ANY shell.\r\n"
     L"Native restore failed too (error %lu).\r\n\r\n"
-    L"Recovery: press Ctrl+Shift+Esc \u2192 Task Manager \u2192 Run new task \u2192 %s",
+    L"Recovery: Ctrl+Alt+Shift+S opens this switcher; or Ctrl+Shift+Esc \u2192 Task Manager \u2192 Run new task \u2192 %s",
     L"Failed to start the native shell:\r\n%s\r\n"
     L"CreateProcess error %lu.\r\n\r\nRetry starting %s?",
     L"Could not %ls the Startup-folder link (error %lu).",
@@ -135,7 +135,7 @@ static const WCHAR* TR_IT[TR_COUNT] = {
     L"CreateProcess errore %lu.\r\n\r\nTentativo di ripristino della shell nativa\u2026",
     L"CRITICO: impossibile avviare QUALSIASI shell.\r\n"
     L"Anche il ripristino nativo \u00e8 fallito (errore %lu).\r\n\r\n"
-    L"Ripristino: premi Ctrl+Shift+Esc \u2192 Gestione attivit\u00e0 \u2192 Esegui nuova attivit\u00e0 \u2192 %s",
+    L"Ripristino: Ctrl+Alt+Maiusc+S apre questo switcher; oppure Ctrl+Shift+Esc \u2192 Gestione attivit\u00e0 \u2192 Esegui nuova attivit\u00e0 \u2192 %s",
     L"Impossibile avviare la shell nativa:\r\n%s\r\n"
     L"CreateProcess errore %lu.\r\n\r\nRipetere l'avvio di %s?",
     L"Impossibile %ls il collegamento in Esecuzione automatica (errore %lu).",
@@ -834,6 +834,55 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
+// ------------------------------------------------------------- hotkey ---
+// Emergency shortcut Ctrl+Alt+Shift+S opens this switcher even when the
+// shell has crashed or hangs: a tiny resident instance (--hotkey) owns the
+// hotkey and is independent of explorer. Started by the GUI and by the
+// 7explorer wrapper (wrp64.dll) when found next to explorer.exe.
+static const WCHAR kHotkeyMutex[] = L"Local\\7explorer.ShellSwitcher.Hotkey";
+
+static void LaunchSelf(const WCHAR* args) {
+    WCHAR exe[MAX_PATH];
+    if (!GetModuleFileNameW(NULL, exe, MAX_PATH)) return;
+    WCHAR cmd[MAX_PATH + 64];
+    _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, L"\"%s\"%s%s", exe, args ? L" " : L"", args ? args : L"");
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi = {};
+    if (CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+    }
+}
+
+static void EnsureHotkeyResident() {
+    HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, kHotkeyMutex);
+    if (m) { CloseHandle(m); return; }
+    LaunchSelf(L"--hotkey");
+}
+
+static int RunHotkeyResident() {
+    HANDLE mutex = CreateMutexW(NULL, TRUE, kHotkeyMutex);
+    if (!mutex) return 1;
+    if (GetLastError() == ERROR_ALREADY_EXISTS) { CloseHandle(mutex); return 0; }
+    if (!RegisterHotKey(NULL, 1, MOD_CONTROL | MOD_ALT | MOD_SHIFT | 0x4000 /*MOD_NOREPEAT*/, 'S')) {
+        CloseHandle(mutex); return 3;
+    }
+    MSG msg;
+    while (GetMessageW(&msg, NULL, 0, 0) > 0) {
+        if (msg.message == WM_HOTKEY && msg.wParam == 1) {
+            HWND w = FindWindowW(L"Ex7ShellSwitcher", NULL);
+            if (w) {
+                if (IsIconic(w)) ShowWindow(w, SW_RESTORE);
+                SetForegroundWindow(w);
+            } else {
+                LaunchSelf(NULL);
+            }
+        }
+    }
+    UnregisterHotKey(NULL, 1);
+    CloseHandle(mutex);
+    return 0;
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     LPWSTR lpCmdLine, int nCmdShow) {
     (void)hPrevInstance; (void)nCmdShow;
@@ -871,11 +920,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             else if (!lstrcmpiW(argv[i], L"--apply-native"))   mode = 2;
             else if (!lstrcmpiW(argv[i], L"--install-login"))  mode = 3;
             else if (!lstrcmpiW(argv[i], L"--uninstall-login"))mode = 4;
+            else if (!lstrcmpiW(argv[i], L"--hotkey"))         mode = 5;
             else if (!lstrcmpiW(argv[i], L"--lang=it"))        g_uiItalian = TRUE;
             else if (!lstrcmpiW(argv[i], L"--lang=en"))        g_uiItalian = FALSE;
         }
         if (argv) LocalFree(argv);
 
+        if (mode == 5)
+            return RunHotkeyResident();
         if (mode == 1 || mode == 2)
             return DoSwitch(NULL, mode == 1 ? SHELL_EX7 : SHELL_NATIVE, TRUE);
         if (mode == 3 || mode == 4) {
@@ -893,6 +945,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             return 0;
         }
     }
+
+    EnsureHotkeyResident();
 
     WNDCLASSEXW wc;
     ZeroMemory(&wc, sizeof(wc));

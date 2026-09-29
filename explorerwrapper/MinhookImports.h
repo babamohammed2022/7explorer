@@ -5,6 +5,8 @@
 #include "OptionConfig.h"
 #include "OSVersion.h"
 #include "TypeDefinitions.h"
+#include "SafeGuards.h"
+#include "ShellFixes.h"
 #include "MinHook.h"
 #include "NscTree.h"
 
@@ -90,19 +92,32 @@ void CPniMainDlg_ShowFlyoutNEW() // don't bother with the parameters as we aren'
 
 void RenderThumbnail(PVOID This, int animoffset, int bNoRedraw)
 {
+	renderThumbnail_orig(This, animoffset, bNoRedraw);
+
+	// 7explorer fork: our post-processing reads private offsets of
+	// CTaskListThumbnailWnd; guard it so a layout change cannot kill explorer
+	__try
+	{
+	if (!This || !DwmpUpdateAccentBlurRect)
+		return;
 	RECT rc = *(RECT*)((PBYTE)This + 0x68);
 	HWND hwnd = *(HWND*)((PBYTE)This + 0x60);
 	HTHEME hthem = *(HTHEME*)((PBYTE)This + 0x98);
-
-	renderThumbnail_orig(This, animoffset, bNoRedraw);
+	if (!IsWindow(hwnd))
+		return;
 
 	MARGINS mar;
-	GetThemeMargins(hthem, NULL, 2, 0, TMT_CONTENTMARGINS, NULL, &mar);
+	if (FAILED(GetThemeMargins(hthem, NULL, 2, 0, TMT_CONTENTMARGINS, NULL, &mar)))
+		ZeroMemory(&mar, sizeof(mar));
 	rc.left += mar.cxLeftWidth;
 	rc.right -= mar.cxRightWidth;
 	rc.top += mar.cyTopHeight;
 	rc.bottom -= mar.cyBottomHeight;
 	DwmpUpdateAccentBlurRect(hwnd, &rc);
+	}
+	__except (ex7::SehFilter(L"RenderThumbnail", GetExceptionInformation()))
+	{
+	}
 }
 
 HICON GetUWPIcon(HWND a2)
@@ -576,6 +591,6 @@ void ChangeMinhookImports()
 	SetProgramListNscTreeAttributes(); // Restore the relevant contents to the program list
 	HandleThumbnailColorization(); // Thumbnail colorization to match
 	RenderStoreAppsOnTaskbar(); // UWP icon rendering for the taskbar
-	CreateImmersiveShell(); // Immersive shell initialisation
+	ex7::SafeInvoke(L"CreateImmersiveShell", CreateImmersiveShell); // Immersive shell initialisation (SEH-guarded)
 	_OnHShellTaskMan(); // Handling the immersive shell's impacts on the holographic shell and associated ShellHook messages
 }

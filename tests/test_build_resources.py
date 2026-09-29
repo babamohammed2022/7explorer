@@ -25,13 +25,21 @@ from tools.analyze_mui import (  # noqa: E402
 
 class TestStringBlocks(unittest.TestCase):
     def test_block_id_mapping(self):
-        # Win32: block N holds string ids (N-1)*16+1 .. (N-1)*16+16.
-        payload = build_string_block(19, {300: "hello", 304: "world"})
+        # Win32: block = (id >> 4) + 1 = 19 holds ids 288..303, slot = id & 15.
+        payload = build_string_block(19, {300: "hello", 303: "world"})
         back = parse_string_table(payload, 19)
         self.assertEqual(back.get(300), "hello")
-        self.assertEqual(back.get(304), "world")
+        self.assertEqual(back.get(303), "world")
         self.assertNotIn(299, back)
-        self.assertNotIn(305, back)
+        self.assertNotIn(301, back)
+        # byte-level check, independent of parse_string_table: slot 12
+        off = 0
+        for i in range(16):
+            ln = struct.unpack_from("<H", payload, off)[0]
+            if i == 12:
+                self.assertEqual(payload[off + 2:off + 2 + 2 * ln]
+                                 .decode("utf-16-le"), "hello")
+            off += 2 + 2 * ln
 
     def test_utf16_encoding_and_termination(self):
         s = "àèéìòù €"

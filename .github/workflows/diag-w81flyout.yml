@@ -1,0 +1,107 @@
+# Diagnostic only: downloads the Windows 8.1 stobject.dll / batmeter.dll from
+# the Microsoft symbol server on the CI runner, verifies hash + signature and
+# dumps their structure. Binaries are NOT committed; only the text report.
+name: diag-w81flyout
+on:
+  push:
+    branches: ["arena/**"]
+    paths: [".github/workflows/diag-w81flyout.yml", "tools/analyze_flyout.py", "tools/w81_compat_check.py", "tools/w81_mui_probe.py"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with: { arch: amd64 }
+      - name: Download + verify
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force work, ci-logs | Out-Null
+          $items = @(
+            @{n="stobject.dll"; u="https://msdl.microsoft.com/download/symbols/stobject.dll/54503A4356000/stobject.dll"; h="30737741f7131ff80706c7d12b2fe8ab8a6203aeaf9984d9a7c908c0f2565149"},
+            @{n="batmeter.dll"; u="https://msdl.microsoft.com/download/symbols/batmeter.dll/545054931f3000/batmeter.dll"; h="f32f18d44f9a6511c73ca1a9a4a6edad38aff23a15fd4c75d9aaaaf31526a506"}
+          )
+          foreach ($i in $items) {
+            $out = "work\w81-$($i.n)"
+            $code = curl.exe -s -L -o $out -w "%{http_code}" $i.u
+            $sz = (Get-Item $out -ErrorAction SilentlyContinue).Length
+            $hash = (Get-FileHash -Algorithm SHA256 $out -ErrorAction SilentlyContinue).Hash.ToLower()
+            $sig = Get-AuthenticodeSignature $out
+            "$($i.n): http=$code size=$sz sha256=$hash expected=$($i.h) match=$($hash -eq $i.h)" | Add-Content ci-logs\w81-download.txt
+            "  sig=$($sig.Status) signer=$($sig.SignerCertificate.Subject) issuer=$($sig.SignerCertificate.Issuer)" | Add-Content ci-logs\w81-download.txt
+          }
+          $v = [System.Environment]::OSVersion.Version
+          "runner OS: $v" | Add-Content ci-logs\w81-download.txt
+          Copy-Item C:\Windows\System32\stobject.dll work\cur-stobject.dll
+          Copy-Item C:\Windows\System32\batmeter.dll work\cur-batmeter.dll -ErrorAction SilentlyContinue
+          "--- registry SysTray CLSID" | Add-Content ci-logs\w81-download.txt
+          reg query "HKCR\CLSID\{35CEC8A3-2BE6-11D2-8773-92E220524153}" /s 2>&1 | Add-Content ci-logs\w81-download.txt
+      - name: Analyze
+        shell: cmd
+        continue-on-error: true
+        run: |
+          pip install pefile capstone > nul
+          python tools\analyze_flyout.py work\w81-stobject.dll work\w81-batmeter.dll > ci-logs\w81-analysis.txt 2>&1
+          python tools\analyze_flyout.py work\cur-stobject.dll work\cur-batmeter.dll > ci-logs\cur-analysis.txt 2>&1
+          dumpbin /nologo /imports /exports work\w81-stobject.dll work\w81-batmeter.dll > ci-logs\w81-dumpbin.txt 2>&1
+          dumpbin /nologo /headers work\w81-stobject.dll work\w81-batmeter.dll > ci-logs\w81-headers.txt 2>&1
+          dumpbin /nologo /disasm work\w81-stobject.dll > work\sto.asm 2>&1
+          dumpbin /nologo /disasm work\w81-batmeter.dll > work\bat.asm 2>&1
+          findstr /n /i "LoadLibrary batmeter CoCreateInstance DllGetClassObject" work\sto.asm > ci-logs\w81-sto-calls.txt 2>&1
+          python -c "import os;[print(f,os.path.getsize('work/'+f)) for f in os.listdir('work')]" >> ci-logs\w81-download.txt
+      - name: Runtime compatibility on this Windows build
+        shell: cmd
+        continue-on-error: true
+        run: |
+          pip install pefile > nul
+          python tools\w81_compat_check.py work\w81-stobject.dll work\w81-batmeter.dll > ci-logs\w81-compat.txt 2>&1
+          python tools\w81_compat_check.py --strings-only work\cache\stobject.dll >> ci-logs\w81-compat.txt 2>&1
+          python tools\w81_compat_check.py --strings-only work\cache\batmeter.dll >> ci-logs\w81-compat.txt 2>&1
+          python -c "import pefile;p=pefile.PE(r'work\w81-batmeter.dll');[print(t.id,t.name,len(t.directory.entries)) for t in p.DIRECTORY_ENTRY_RESOURCE.entries]" >> ci-logs\w81-compat.txt 2>&1
+          powershell -NoProfile -Command "(Get-Item C:\Windows\System32\twinapi.dll).VersionInfo.FileVersion; Test-Path C:\Windows\System32\settingsyncpolicy.dll; Test-Path C:\Windows\System32\dui70.dll" >> ci-logs\w81-compat.txt 2>&1
+      - name: MUI re-key probe
+        shell: cmd
+        continue-on-error: true
+        run: |
+          python tools\w81_mui_probe.py en-US > ci-logs\w81-mui.txt 2>&1
+      - name: Symbols (public PDB) for function names
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          pip install pefile > $null
+          python - <<'PY'
+          PY
+          $sym = "srv*work\sym*https://msdl.microsoft.com/download/symbols"
+          $dbh = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\symchk.exe" -ErrorAction SilentlyContinue
+          "symchk: $dbh" | Add-Content ci-logs\w81-download.txt
+          if ($dbh) {
+            & $dbh.FullName /r work\w81-stobject.dll work\w81-batmeter.dll /s $sym /v 2>&1 | Select-Object -Last 20 | Add-Content ci-logs\w81-download.txt
+          }
+          Get-ChildItem -Recurse work\sym -Filter *.pdb | ForEach-Object { $_.FullName + " " + $_.Length } | Add-Content ci-logs\w81-download.txt
+      - name: Dump PDB public symbols
+        shell: cmd
+        continue-on-error: true
+        run: |
+          for /r work\sym %%P in (*.pdb) do (
+            echo === %%P >> ci-logs\w81-publics.txt
+            "%VSINSTALLDIR%DIA SDK\bin\amd64\..\..\..\..\..\..\" 2>nul
+            dumpbin /nologo /symbols "%%P" >> ci-logs\w81-publics.txt 2>&1
+          )
+          pip install pdbparse > nul 2>&1
+          python -c "import glob,pdbparse;[ (lambda p: [print(s.name) for s in p.STREAM_GSYM.globals if hasattr(s,'name')])(pdbparse.parse(f)) for f in glob.glob('work/sym/**/*.pdb',recursive=True)]" > ci-logs\w81-pdb-names.txt 2>&1
+      - name: Commit report
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.email "ci@localhost"; git config user.name "ci-log-bot"
+          $br = "ci-logs/w81-" + $env:GITHUB_RUN_ID
+          git checkout -b $br
+          git add -f ci-logs
+          git commit -m "w81 flyout diag $env:GITHUB_RUN_ID"
+          git push -f origin $br
