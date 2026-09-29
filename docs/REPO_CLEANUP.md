@@ -10,22 +10,25 @@ riferimento**.
 
 ### Situazione di partenza
 
-401 branch su `origin` (escluso `HEAD`):
+405 branch su `origin` al momento della pulizia:
 
 | categoria | numero | contenuto |
 |---|---|---|
-| `ci-logs/*` (`sc-`, `locpipe-`, `rel-`, `theme-`, `updres-`, `w81-`, `diag`, `exit-`, `pnidui-`, `tray-`) | 397 | solo output di CI: log di build, `release.txt`, `pipe-upload/`, dump diagnostici. 1–2 commit ciascuno, zero sorgente (verificato con `git log main..<branch>` e `git diff --stat` su un campione significativo) |
+| `ci-logs/*` (`sc-`, `locpipe-`, `rel-`, `theme-`, `updres-`, `w81-`, `diag`, `diagloc`, `exit-`, `pnidui-`, `tray-`) | 401 | solo output di CI: log di build, `release.txt`, `pipe-upload/`, dump diagnostici. 1–2 commit ciascuno, zero sorgente (verificato con `git log main..<branch>` e `git diff --stat` su un campione significativo) |
 | `arena/01a0e6b6-7explorer` | 1 | sessione agente — **già mergiata** in main via PR #1 (0 commit non in main) |
 | `arena/01a0e9d8-7explorer` | 1 | sessione agente — **già mergiata** in main via PR #2 (0 commit non in main) |
+| `arena/01a0edc7-7explorer` | 1 | sessione agente attiva (PR #3) |
 | `main` | 1 | storia del progetto |
 
 ### Cosa è stato fatto
 
-- **397 branch `ci-logs/*` eliminati**: contenevano solo log di build, non
+- **401 branch `ci-logs/*` eliminati**: contenevano solo log di build, non
   sorgente. La CI ora pubblica i log come **artifact** della run (vedi
   sotto), quindi i branch non servono più. Nessun lavoro utile perso: per
   ognuno è stato verificato con `git rev-list --count main..<branch>` che i
-  commit aggiuntivi fossero solo i log (file `.txt`/.log).
+  commit aggiuntivi fossero solo i log (file `.txt`/.log). Nota: al primo
+  censimento erano 397; le ultime run CI precedenti al fix del workflow
+  ne avevano creati altri 4, tutti comunque di soli log.
 - **2 branch `arena/*` già mergiati eliminati** (PR #1 e PR #2: la loro
   storia resta in `main` tramite i merge commit).
 - **Rimane**: `main` + `arena/01a0edc7-7explorer` (branch di lavoro attivo
@@ -77,11 +80,13 @@ validati.
 
 ### Situazione di partenza
 
-38 release (tutte pre-release) `v0.0.1-test1` … `v0.0.3-test36`, una per
-ogni iterazione di test, più 6 tag senza release. Ogni release conteneva
+39 release (tutte pre-release): `v0.0.1-test1` … `v0.0.3-test36`, una per
+ogni iterazione di test, più la nuova `v0.3-test37`. Ogni release conteneva
 gli stessi asset (wrp64.dll, ex7selfcontained.exe,
 7explorer-shell-switcher.exe, ex7-test-bundle.zip, sorgenti windhawk,
-SHA256SUMS.txt).
+SHA256SUMS.txt). A 38 vecchi tag corrispondevano 38 vecchie release
+(verificato con `git ls-remote --tags` e l'API `/releases`: nessun tag
+orfano).
 
 ### Cosa è stato fatto
 
@@ -92,9 +97,9 @@ SHA256SUMS.txt).
   - asset: `ex7-test-bundle.zip` (bundle completo corrispondente al tag) +
     binari singoli + `SHA256SUMS.txt`.
 - **Le 38 release precedenti sono state eliminate** insieme ai rispettivi
-  tag: erano istantanee di test soprammesse, nessuna indicizzata da
+  tag: erano istantanee di test sovrapposte, nessuna indicizzata da
   documentazione. La sorgente di ogni release resta nella storia git.
-- Dei 44 tag complessivi ne resta **uno**: `v0.3-test37`.
+- Dei 39 tag complessivi ne resta **uno**: `v0.3-test37`.
 
 Tag nominativo `v0.3-test37`: `0.3` = maturazione della serie `0.0.x`
 (self-contained + switcher + fix logon), `test37` = prosecuzione diretta
