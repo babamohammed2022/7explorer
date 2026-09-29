@@ -184,6 +184,24 @@ jobs:
           if (Test-Path logs) { Copy-Item logs\* collect-logs\ -Force -ErrorAction SilentlyContinue }
           Get-ChildItem collect-logs | Select-Object Name,Length
 
+      - name: Surface build errors as annotations
+        if: failure()
+        shell: pwsh
+        run: |
+          # Compiler/linker errors as workflow annotations: readable from the
+          # API even when the full logs cannot be downloaded.
+          foreach ($log in Get-ChildItem msbuild-*.log -ErrorAction SilentlyContinue) {
+            $n = 0
+            Select-String -Path $log.FullName -Pattern ": (error|fatal error) " |
+              Select-Object -First 40 | ForEach-Object {
+                $n++
+                Write-Host ("::error title={0}:{1}::{2}" -f $log.Name, $_.LineNumber, $_.Line.Trim())
+              }
+            if ($n -eq 0) {
+              Write-Host ("::error title={0}::msbuild failed with no error lines - see artifact {1}" -f $log.Name, 'ex7selfcontained-binaries')
+            }
+          }
+
       - name: Upload artifacts (NO Microsoft binaries)
         if: always()  # anche in caso di fallimento: servono i log di build
         uses: actions/upload-artifact@v4
