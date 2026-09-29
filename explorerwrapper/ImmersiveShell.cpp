@@ -5,6 +5,7 @@
 #include "SafeGuards.h"
 #include "ImmersiveShell.h"
 #include "dbgprint.h"
+namespace ex7 { void LogText(const wchar_t* text); }
 
 typedef HWND(WINAPI* GetTaskmanWindow)();
 typedef BOOL(WINAPI* SetTaskmanWindow)(HWND handle);
@@ -141,6 +142,7 @@ void CreateTwinUI()
 		IImmersiveShellController* controller;
 		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
 		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
+		{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI CreateShell hr=0x%08X", (DWORD)ret); ex7::LogText(l); }
 		if (SUCCEEDED(ret))
 		{
 			//HRESULT ret = controller->Start();
@@ -167,18 +169,22 @@ void CreateTwinUI_UWP()
 	// 7explorer fork: the builder is released automatically (RAII); the
 	// controller is intentionally kept alive for the lifetime of the shell.
 	ex7::ComPtr<IImmersiveShellCreator> ImmersiveShellCreator;
-	if (SUCCEEDED(CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid())))
+	HRESULT hrB = CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid());
+	{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI ImmersiveShellBuilder hr=0x%08X", (DWORD)hrB); ex7::LogText(l); }
+	if (SUCCEEDED(hrB))
 	{
 		dbgprintf(L"TwinUI factory created!");
 
 		static IImmersiveShellController* controller = nullptr;
 		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
 		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
+		{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI CreateShell hr=0x%08X", (DWORD)ret); ex7::LogText(l); }
 		if (SUCCEEDED(ret))
 		{
 			HRESULT hr = controller->Start();
 
 			dbgprintf(L"Immersive Shell Controller Result: %x", hr);
+			{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI controller Start hr=0x%08X", (DWORD)hr); ex7::LogText(l); }
 		}
 	}
 }

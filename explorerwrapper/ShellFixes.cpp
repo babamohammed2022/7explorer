@@ -29,6 +29,7 @@
 #include "MinHook.h"
 #include "LegacyBatteryFlyout.h"
 #include "NetworkIcon.h"
+#include "FlyoutFrames.h"
 #include <shobjidl.h>
 #include "dbgprint.h"
 #include <shlwapi.h>
@@ -137,7 +138,7 @@ const Remap* FindRemap(const wchar_t* target)
 {
 	static const Remap notify = { L"shell:::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}", L"ms-settings:taskbar" };
 	static const Remap connect = { L"shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}", L"ms-settings:network" };
-	if (Contains(target, kNotifyIconsClsid)) return &notify;
+	if (Contains(target, kNotifyIconsClsid) || Contains(target, L"Microsoft.NotificationAreaIcons")) return &notify;
 	if (Contains(target, kConnectToClsid)) return &connect;
 	return nullptr;
 }
@@ -153,8 +154,39 @@ bool IdListName(PCIDLIST_ABSOLUTE pidl, wchar_t* out, size_t cch)
 	return SUCCEEDED(StringCchCopyW(out, cch, name.Str()));
 }
 
+bool ClsidRegistered(const wchar_t* clsidNoBraces)
+{
+	wchar_t key[96];
+	wnsprintfW(key, ARRAYSIZE(key), L"CLSID\\{%s}", clsidNoBraces);
+	HKEY k;
+	if (RegOpenKeyExW(HKEY_CLASSES_ROOT, key, 0, KEY_READ, &k) != ERROR_SUCCESS) return false;
+	RegCloseKey(k);
+	return true;
+}
+
+DWORD OsBuild();
+BOOL ActivateSettingsFallback(LPCWSTR uri);
+
+BOOL LaunchSettingsUri(const wchar_t* uri, HWND hwnd)
+{
+	SHELLEXECUTEINFOW fb = { sizeof(fb) };
+	fb.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+	fb.hwnd = hwnd; fb.lpFile = uri; fb.nShow = SW_SHOWNORMAL;
+	if (g_origShellExecuteExW(&fb)) { LogLine(L"[ex7] opened %s", uri); return TRUE; }
+	LogLine(L"[ex7] %s failed (%u): activation fallback", uri, GetLastError());
+	return ActivateSettingsFallback(uri);
+}
+
 BOOL LaunchRemap(const Remap* r, HWND hwnd, int nShow)
 {
+	// Windows 11 24H2 removed the Notification Area Icons page: explorer
+	// "succeeds" but nothing appears. Go straight to Settings there.
+	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid) &&
+		(OsBuild() >= 26100 || !ClsidRegistered(kNotifyIconsClsid) ||
+		 ReadAdvancedDword(L"NotifyIconsUseSettings", 0) == 1)) {
+		LogLine(L"[ex7] notification icons page unavailable on build %u: using %s", OsBuild(), r->fallbackUri);
+		return LaunchSettingsUri(r->fallbackUri, hwnd);
+	}
 	wchar_t explorer[MAX_PATH];
 	if (!ExpandEnvironmentStringsW(L"%SystemRoot%\\explorer.exe", explorer, MAX_PATH))
 		StringCchCopyW(explorer, MAX_PATH, L"explorer.exe");
@@ -175,7 +207,7 @@ BOOL LaunchRemap(const Remap* r, HWND hwnd, int nShow)
 	fb.hwnd = hwnd;
 	fb.lpFile = r->fallbackUri;
 	fb.nShow = SW_SHOWNORMAL;
-	return g_origShellExecuteExW(&fb);
+	return g_origShellExecuteExW(&fb) || ActivateSettingsFallback(r->fallbackUri);
 }
 
 struct ExecCtx {
@@ -183,6 +215,59 @@ struct ExecCtx {
 	BOOL handled;
 	BOOL result;
 };
+
+// ------------------------------------------------------------ UWP launch shim
+// Packaged apps in the Start menu are AppsFolder items whose parsing name is
+// the AppUserModelID ("<PackageFamilyName>!<AppId>"). Launching them through
+// the AppsFolder verb depends on shell state the Win7 explorer does not
+// fully provide; IApplicationActivationManager::ActivateApplication is the
+// documented way to start a packaged app from a desktop process
+// (learn.microsoft.com: IApplicationActivationManager). Opt-out UwpActivationShim=0.
+const CLSID kCLSID_AAM = { 0x45BA127D, 0x10A8, 0x46EA, { 0x8A, 0xB7, 0x56, 0xEA, 0x90, 0x78, 0x94, 0x3C } };
+
+bool ExtractAumid(const wchar_t* s, wchar_t* out, size_t cch)
+{
+	if (!s || !*s) return false;
+	static const wchar_t* prefixes[] = {
+		L"shell:AppsFolder\\", L"shell:::{4234d49b-0245-4df3-b780-3893943456e1}\\", L"::{4234d49b-0245-4df3-b780-3893943456e1}\\" };
+	const wchar_t* p = s;
+	for (const wchar_t* pre : prefixes) {
+		int n = lstrlenW(pre);
+		if (StrCmpNIW(s, pre, n) == 0) { p = s + n; break; }
+	}
+	if (p == s && StrChrW(s, L'\\')) return false; // a path, not an AUMID
+	int len = lstrlenW(p);
+	if (len < 3 || len >= (int)cch || !StrChrW(p, L'!')) return false;
+	for (const wchar_t* q = p; *q; ++q)
+		if (*q == L'\\' || *q == L'/' || *q == L':' || *q == L' ' || *q == L'"') return false;
+	lstrcpynW(out, p, (int)cch);
+	return true;
+}
+
+bool TryActivateAumid(const wchar_t* target, SHELLEXECUTEINFOW* sei, ExecCtx* c)
+{
+	wchar_t aumid[256];
+	if (!ExtractAumid(target, aumid, ARRAYSIZE(aumid))) return false;
+	if (ReadAdvancedDword(L"UwpActivationShim", 1) == 0) return false;
+	if (sei->lpVerb && *sei->lpVerb && lstrcmpiW(sei->lpVerb, L"open")) return false; // runas, properties...
+	HRESULT hi = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	IApplicationActivationManager* aam = nullptr;
+	DWORD pid = 0;
+	HRESULT hr = CoCreateInstance(kCLSID_AAM, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&aam));
+	if (SUCCEEDED(hr)) {
+		CoAllowSetForegroundWindow(aam, nullptr);
+		hr = aam->ActivateApplication(aumid, sei->lpParameters, AO_NONE, &pid);
+		aam->Release();
+	}
+	if (SUCCEEDED(hi)) CoUninitialize();
+	LogLine(L"[ex7] UWP shim: ActivateApplication(%s) hr=0x%08X pid=%u", aumid, (DWORD)hr, pid);
+	if (FAILED(hr)) return false; // let the normal path try
+	c->handled = TRUE; c->result = TRUE;
+	sei->hInstApp = (HINSTANCE)(INT_PTR)33;
+	if (sei->fMask & SEE_MASK_NOCLOSEPROCESS)
+		sei->hProcess = pid ? OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
+	return true;
+}
 
 void TryRemapExec(ExecCtx* c)
 {
@@ -199,7 +284,12 @@ void TryRemapExec(ExecCtx* c)
 		sei->lpFile ? sei->lpFile : L"", sei->lpParameters ? sei->lpParameters : L"",
 		(target == pidlName) ? pidlName : L"");
 
+	if (TryActivateAumid(target, sei, c) ||
+		(target != pidlName && sei->lpIDList && IdListName((PCIDLIST_ABSOLUTE)sei->lpIDList, pidlName, ARRAYSIZE(pidlName)) &&
+		 TryActivateAumid(pidlName, sei, c)))
+		return;
 	const Remap* r = FindRemap(target);
+	if (!r) r = FindRemap(sei->lpParameters); // e.g. explorer.exe shell:::{...} / control.exe /name ...
 	if (!r && target != pidlName && sei->lpIDList &&
 		IdListName((PCIDLIST_ABSOLUTE)sei->lpIDList, pidlName, ARRAYSIZE(pidlName)))
 		r = FindRemap(pidlName);
@@ -1211,6 +1301,35 @@ void InstallForceShell()
 	} else LogLine(L"[ex7] ForceShell: CreateDesktopAndTray prologue mismatch");
 }
 
+// Emergency shortcut: start "7explorer-shell-switcher.exe --hotkey" (a tiny
+// resident process, independent of explorer, owning Ctrl+Alt+Shift+S) if the
+// switcher sits next to explorer.exe or wrp64.dll. Opt-out SwitcherHotkey=0.
+void StartSwitcherHotkey()
+{
+	if (ReadAdvancedDword(L"SwitcherHotkey", 1) == 0) return;
+	HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, L"Local\\7explorer.ShellSwitcher.Hotkey");
+	if (m) { CloseHandle(m); return; }
+	wchar_t d1[MAX_PATH] = L"", d2[MAX_PATH] = L"";
+	GetModuleFileNameW(nullptr, d1, MAX_PATH); PathRemoveFileSpecW(d1);
+	GetModuleFileNameW(g_self, d2, MAX_PATH); PathRemoveFileSpecW(d2);
+	const wchar_t* dirs[] = { d1, d2 };
+	for (const wchar_t* d : dirs) {
+		if (!d[0]) continue;
+		wchar_t exe[MAX_PATH], cmd[MAX_PATH + 32];
+		wnsprintfW(exe, MAX_PATH, L"%s\\7explorer-shell-switcher.exe", d);
+		if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) continue;
+		wnsprintfW(cmd, ARRAYSIZE(cmd), L"\"%s\" --hotkey", exe);
+		STARTUPINFOW si = { sizeof(si) };
+		PROCESS_INFORMATION pi = {};
+		if (CreateProcessW(exe, cmd, nullptr, nullptr, FALSE, DETACHED_PROCESS, nullptr, d, &si, &pi)) {
+			CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+			LogLine(L"[ex7] switcher hotkey resident started (%s)", exe);
+		}
+		return;
+	}
+	LogLine(L"[ex7] 7explorer-shell-switcher.exe not found next to explorer/wrp64: no hotkey");
+}
+
 void InstallExplorerIsShellFix()
 {
 	InstallForceShell();
@@ -1278,12 +1397,14 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test24), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test27), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare);
-	SafeInvoke(L"pnidui prepare", ex7::net::StartBackgroundPrepare); // network icon on 24H2+ // real 8.1 flyout (cache/download)
+	SafeInvoke(L"pnidui prepare", ex7::net::StartBackgroundPrepare); // network icon on 24H2+
+	SafeInvoke(L"switcher hotkey", StartSwitcherHotkey); // Ctrl+Alt+Shift+S -> shell switcher
+	ex7::InstallFlyoutFrames(); // Aero borders on legacy flyouts (credits: aubymori)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
 	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
@@ -1297,6 +1418,7 @@ void InstallShellFixes(HMODULE hSelf)
 bool ImmersiveStartupAllowed()
 {
 	DWORD failures = ReadAdvancedDword(L"ImmersiveInitFailures", 0);
+	LogLine(L"[ex7] UWP sentinel ImmersiveInitFailures=%u", failures);
 	if (failures >= 2) {
 		LogLine(L"[ex7] UWP disabled for this session: %u failed start-ups "
 			L"(reset HKCU\\...\\Explorer\\Advanced\\ImmersiveInitFailures to 0)", failures);
@@ -1337,13 +1459,21 @@ DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def) { return ReadAdvan
 void OnSysTrayCreateBegin()
 {
 	LogLine(L"[ex7] SysTray: CoCreateInstance start");
-	if (InterlockedExchange(&g_trayReached, 1) == 0) WriteAdvancedDword(L"StartupFailures", 0);
+	if (InterlockedExchange(&g_trayReached, 1) == 0) {
+		WriteAdvancedDword(L"StartupFailures", 0);
+		// UWP sentinel: the shell came up fine, so give the immersive stack
+		// one more try next start (a stale counter left UWP off for good and
+		// new UWP apps could not open). A real crash raises it back to 2.
+		DWORD f = ReadAdvancedDword(L"ImmersiveInitFailures", 0);
+		if (f >= 2) { WriteAdvancedDword(L"ImmersiveInitFailures", 1); LogLine(L"[ex7] UWP sentinel %u -> 1: immersive stack retried next start", f); }
+	}
 }
 void OnSystemSysTrayCreated()
 {
 	LogLine(L"[ex7] SysTray: system stobject in use (8.1 active=%d)", ex7::w81::IsActive());
 	SafeInvoke(L"PatchStobjectRegistry", PatchStobjectRegistry);
 	if (!g_trayTimer) g_trayTimer = SetTimer(nullptr, 0, 2000, TrayTimerProc);
+	ex7::net::StartFallbackTrayIcon(); // own network icon if pnidui does not start
 	LogLine(L"[ex7] tray timer %p", (void*)g_trayTimer);
 }
 } // namespace ex7

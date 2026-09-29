@@ -18,6 +18,15 @@ void StartBackgroundPrepare();
 // Called whenever stobject.dll is (or may be) loaded. Idempotent.
 void OnStobjectLoaded(HMODULE stobject);
 
+// Path of the cached pnidui.dll (false if not downloaded yet).
+bool CachedDllPath(wchar_t* out);
+bool NetworkIconWanted();
+
+// Fallback (NetworkTrayIcon.cpp): if pnidui is still not running ~15 s after
+// the tray started, show our own notification icon (connectivity from the
+// Network List Manager, glyphs from the cached pnidui.dll resources).
+void StartFallbackTrayIcon();
+
 } // namespace net
 namespace w81 {
 bool Sha256OfFile(const wchar_t* path, char hex[65]);

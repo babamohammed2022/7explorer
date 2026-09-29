@@ -318,6 +318,15 @@ void StartBackgroundPrepare()
 	__except (EXCEPTION_EXECUTE_HANDLER) {}
 }
 
+bool CachedDllPath(wchar_t* out)
+{
+	if (!InitDir()) return false;
+	DllPath(out);
+	return GetFileAttributesW(out) != INVALID_FILE_ATTRIBUTES;
+}
+
+bool NetworkIconWanted() { return Enabled(); }
+
 void OnStobjectLoaded(HMODULE st)
 {
 	if (!st || InterlockedCompareExchange(&g_stobjectPatched, 1, 0) != 0) return;

@@ -212,6 +212,7 @@
     <ClInclude Include="ShellFixes.h" />
     <ClInclude Include="LegacyBatteryFlyout.h" />
     <ClInclude Include="NetworkIcon.h" />
+    <ClInclude Include="FlyoutFrames.h" />
     <ClInclude Include="MinHook.h" />
     <ClInclude Include="NscTree.h" />
     <ClInclude Include="PinnedList.h" />
@@ -264,6 +265,8 @@
     <ClCompile Include="ShellFixes.cpp" />
     <ClCompile Include="LegacyBatteryFlyout.cpp" />
     <ClCompile Include="NetworkIcon.cpp" />
+    <ClCompile Include="NetworkTrayIcon.cpp" />
+    <ClCompile Include="FlyoutFrames.cpp" />
     <ClCompile Include="minCRT.cpp">
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</WholeProgramOptimization>
     </ClCompile>
