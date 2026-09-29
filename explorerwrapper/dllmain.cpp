@@ -808,7 +808,8 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	{
 		dbgprintf(L"USE 10 AUTODESTLIST!!!!\n");
 		result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, IID_AutoDestList10, ppv);
-		*ppv = new CAutoDestWrapper((IAutoDestinationList10*)*ppv);
+		if (SUCCEEDED(result) && *ppv) *ppv = new CAutoDestWrapper((IAutoDestinationList10*)*ppv);
+		else { *ppv = nullptr; if (SUCCEEDED(result)) result = E_NOINTERFACE; }
 	}
 	if (riid == IID_CustomDestList && result != S_OK)
 	{
@@ -817,7 +818,8 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 		if (result != S_OK || !*ppv)
 		{
 			result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, IID_CustomDestList1507, ppv);
-			*ppv = new CCustomDestWrapper((IInternalCustomDestList1507*)*ppv);
+			if (SUCCEEDED(result) && *ppv) *ppv = new CCustomDestWrapper((IInternalCustomDestList1507*)*ppv);
+			else { *ppv = nullptr; if (SUCCEEDED(result)) result = E_NOINTERFACE; }
 		}
 		else
 			*ppv = new CCustomDestWrapper((IInternalCustomDestList10*)*ppv);

@@ -3,6 +3,12 @@
 #include "dbgprint.h"
 #include "PinnedList.h"
 #pragma function(memset)
+#include <shlwapi.h>
+
+namespace ex7 {
+void LogText(const wchar_t* text);
+DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
+}
 
 extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	__in   REFCLSID rclsid,
@@ -139,20 +145,80 @@ HRESULT STDMETHODCALLTYPE CStartMenuResolver::GetShortcutForProcess(ULONG_PTR p1
 	return m_resolver8->GetShortcutForProcess(p1, p2);
 }
 
+// ex7: UWP jump lists. The Win7 taskbar only builds a jump list when it can
+// resolve a "best shortcut" item for the window's AppID. Packaged apps have no
+// .lnk, so the Win8+ resolver fails and right-click shows nothing. As a
+// conservative fallback we hand out the shell:AppsFolder\<AUMID> item (the
+// same item the modern taskbar uses). Launching it goes through the existing
+// AUMID activation path in ShellFixes. Opt-out: HKCU\...\Advanced
+// UwpJumpLists=0 (restores the original behaviour).
+namespace {
+bool LooksLikeAumid(LPCWSTR s)
+{
+	if (!s || !*s) return false;
+	int len = lstrlenW(s);
+	if (len < 3 || len > 400 || !StrChrW(s, L'!')) return false;
+	for (LPCWSTR q = s; *q; ++q)
+		if (*q == L'\\' || *q == L'/' || *q == L':' || *q == L'"') return false;
+	return true;
+}
+
+HRESULT CreateAppsFolderItem(LPCWSTR aumid, IShellItem** ppsi)
+{
+	WCHAR path[520];
+	wnsprintfW(path, 520, L"shell:AppsFolder\\%s", aumid);
+	return SHCreateItemFromParsingName(path, nullptr, IID_IShellItem, (void**)ppsi);
+}
+
+// SEH-only helper (no objects with destructors in here).
+HRESULT SafeAppsFolderFallback(LPCWSTR aumid, IUnknown* out)
+{
+	HRESULT hr = E_FAIL;
+	__try
+	{
+		IShellItem** ppsi = (IShellItem**)out;
+		if (!ppsi) return E_POINTER;
+		*ppsi = nullptr;
+		IShellItem* psi = nullptr;
+		hr = CreateAppsFolderItem(aumid, &psi);
+		if (SUCCEEDED(hr) && psi) *ppsi = psi;
+		else if (SUCCEEDED(hr)) hr = E_FAIL;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		hr = E_UNEXPECTED;
+	}
+	return hr;
+}
+
+HRESULT SafeResolverCall(IAppResolver8* r, DWORD* p1, IUnknown* p2)
+{
+	HRESULT hr = E_FAIL;
+	__try { hr = r ? r->GetBestShortcutForAppID(p1, p2) : E_POINTER; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { hr = E_UNEXPECTED; }
+	return hr;
+}
+}
+
 HRESULT STDMETHODCALLTYPE CStartMenuResolver::GetBestShortcutForAppID(DWORD* p1, IUnknown* p2)
 {
 	dbgprintf(L"GetBestShortcutForAppID");
+	LPCWSTR appid = (LPCWSTR)p1;
+	bool isSettings = appid && lstrcmpiW(appid, L"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel") == 0;
 
-	// Ittr: Basically, immersive applications normally fail when calling this function
-	// Settings will only succeed, because of the existence of the extra shortcut in the start menu folders
-	// This ensures that it fails and is treated like all other immersive applications
-	// A more comprehensive solution will be shipped in Milestone 3
-	if (lstrcmp((LPWSTR)p1, L"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel") == 0)
-	{
-		return E_OUTOFMEMORY;
-	}
+	// Ittr: immersive applications normally fail here; Settings would only
+	// succeed through an extra shortcut in the start menu folders.
+	HRESULT hr = isSettings ? E_OUTOFMEMORY : SafeResolverCall(m_resolver8, p1, p2);
+	if (SUCCEEDED(hr) || !p2 || !LooksLikeAumid(appid))
+		return hr;
+	if (ex7::ReadAdvancedDwordPublic(L"UwpJumpLists", 1) == 0)
+		return hr;
 
-	return m_resolver8->GetBestShortcutForAppID(p1, p2);
+	HRESULT hr2 = SafeAppsFolderFallback(appid, p2);
+	WCHAR line[600];
+	wnsprintfW(line, 600, L"[ex7][jumplist] %s: resolver 0x%08X, AppsFolder fallback 0x%08X", appid, hr, hr2);
+	ex7::LogText(line);
+	return SUCCEEDED(hr2) ? hr2 : hr;
 }
 
 HRESULT STDMETHODCALLTYPE CStartMenuResolver::GetBestShortcutAndAppIDForAppPath(DWORD* p1, IUnknown* p2, DWORD* p3)
