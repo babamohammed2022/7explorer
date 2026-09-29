@@ -22,7 +22,8 @@ jobs:
           pip install pefile | Out-Null
           [System.Environment]::OSVersion.Version | Out-String | Add-Content ci-logs\pnidui.txt
           curl.exe -sS -L -w "HTTP %{http_code}`n" -o pnidui.dll "https://msdl.microsoft.com/download/symbols/pnidui.dll/F717CABC20B000/pnidui.dll" *>> ci-logs\pnidui.txt
-          python tools\pnidui_probe.py pnidui.dll *>> ci-logs\pnidui.txt
+          curl.exe -sS -L -o en.mui "https://raw.githubusercontent.com/valinet/ExplorerPatcher/0a88a6e0ef6b1752fea36e581cffff1097e862b0/ep_setup/resources/files/pnidui/en-US/pnidui.dll.mui"
+          python tools\pnidui_probe.py pnidui.dll en.mui *>> ci-logs\pnidui.txt
           reg query "HKCR\CLSID\{C2796011-81BA-4148-8FCA-C6643245113F}" /s *>> ci-logs\pnidui.txt
           Get-AuthenticodeSignature pnidui.dll | Format-List * | Out-String | Add-Content ci-logs\pnidui.txt
       - name: Commit report

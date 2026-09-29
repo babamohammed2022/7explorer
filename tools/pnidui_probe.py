@@ -23,7 +23,10 @@ for d in [e.dll.decode() for e in pe.DIRECTORY_ENTRY_IMPORT]:
     if not h: print("  MISSING import dll", d, ctypes.get_last_error())
 ole = ctypes.OleDLL('ole32')
 ole.CoInitializeEx(None, 2)
-h = k32.LoadLibraryExW(p, None, 0x8)
+if len(sys.argv) > 2:
+    os.makedirs(os.path.join(os.path.dirname(os.path.abspath(p)), "en-US"), exist_ok=True)
+    import shutil; shutil.copy(sys.argv[2], os.path.join(os.path.dirname(os.path.abspath(p)), "en-US", "pnidui.dll.mui"))
+h = k32.LoadLibraryExW(os.path.abspath(p), None, 0x8)
 print("LoadLibraryEx", hex(h or 0), ctypes.get_last_error())
 if not h: sys.exit(0)
 class GUID(ctypes.Structure):
@@ -58,7 +61,28 @@ if hr >= 0:
         r = qi(obj, ctypes.byref(g(s_)), ctypes.byref(o))
         print("  QI", name, hex(r & 0xffffffff))
 u32 = ctypes.WinDLL('user32')
-for rid in (1, 2, 3, 100, 200, 1000):
+for rid in list(range(1, 20)) + [100, 200, 1000] + list(range(2000, 2010)) + list(range(3000, 3010)):
     buf = ctypes.create_unicode_buffer(256)
     n = u32.LoadStringW(W.HMODULE(h), rid, buf, 256)
     print("LoadString", rid, n)
+
+# --- system stobject: EP-style SSO table lookup (WindowsToGo SSO entry)
+import struct, uuid
+sp = r"C:\Windows\System32\stobject.dll"
+if os.path.exists(sp):
+    st = pefile.PE(sp)
+    data = st.get_memory_mapped_image()
+    base = st.OPTIONAL_HEADER.ImageBase
+    wtg = uuid.UUID("4DC9C264-730E-4CF6-8374-70F079E4F82B").bytes_le
+    for sec in st.sections:
+        if sec.Name.startswith(b".rdata"):
+            a, n = sec.VirtualAddress, sec.Misc_VirtualSize
+            blob = data[a:a+n]
+            gi = blob.find(wtg)
+            print("stobject WindowsToGo GUID rva", hex(a+gi) if gi >= 0 else None)
+            if gi >= 0:
+                target = base + a + gi
+                for i in range(0, n - 24, 8):
+                    p, sh, fl, fn_ = struct.unpack_from("<QiIQ", blob, i)
+                    if p == target:
+                        print("  SSOEntry rva", hex(a+i), "sharedThread", sh, "flags", fl, "fn", hex(fn_))
