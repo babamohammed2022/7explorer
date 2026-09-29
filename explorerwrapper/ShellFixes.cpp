@@ -640,6 +640,142 @@ bool IsMsSettings(LPCWSTR f)
 	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 
+
+// ------------------------------------------------------------ injection guard
+// Third-party DLLs injected into explorer (e.g. Windhawk mods written for the
+// Windows 11 explorer) can crash the Win7 shell before it shows anything.
+// We cannot safely resume a thread that faulted inside foreign code, so:
+//  1) UnhandledExceptionFilter hook: when a crash is *really unhandled* and
+//     the faulting address lies in a foreign module (not in %SystemRoot%, not
+//     next to explorer/wrp64), its name is added to a quarantine list and
+//     the process dies as before (the shell is restarted);
+//  2) LdrLoadDll hook: quarantined modules are refused (STATUS_DLL_NOT_FOUND)
+//     at the next start, everything else loads normally.
+// Windhawk mod file names carry a per-compile suffix (name_ver_rand.dll), so
+// the key is the part before the first '_'. Opt-out: InjectionGuard=0.
+// List: Explorer\Advanced\InjectionQuarantine (REG_MULTI_SZ); delete to reset.
+typedef struct { USHORT Length, MaximumLength; PWSTR Buffer; } EX7_USTR;
+typedef LONG (NTAPI *LdrLoadDll_t)(PWSTR, PULONG, EX7_USTR*, PVOID*);
+typedef LONG (WINAPI *UEF_t)(EXCEPTION_POINTERS*);
+LdrLoadDll_t g_origLdrLoadDll = nullptr;
+UEF_t g_origUEF = nullptr;
+wchar_t g_quarantine[2048];   // MULTI_SZ
+DWORD g_quarantineCb = 0;
+wchar_t g_sysRoot[MAX_PATH], g_exeDir[MAX_PATH], g_selfDir[MAX_PATH];
+const wchar_t kQuarantine[] = L"InjectionQuarantine";
+
+void ModuleKey(const wchar_t* path, wchar_t* key, int cch)
+{
+	const wchar_t* f = PathFindFileNameW(path);
+	int i = 0;
+	bool windhawk = StrChrW(f, L'@') != nullptr;
+	for (; f[i] && i < cch - 1; ++i) {
+		if (windhawk && f[i] == L'_') break;
+		key[i] = f[i];
+	}
+	key[i] = 0;
+}
+
+bool IsQuarantined(const wchar_t* key)
+{
+	for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1)
+		if (lstrcmpiW(q, key) == 0) return true;
+	return false;
+}
+
+void LoadQuarantine()
+{
+	g_quarantineCb = sizeof(g_quarantine) - 2 * sizeof(wchar_t);
+	ZeroMemory(g_quarantine, sizeof(g_quarantine));
+	if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+		kQuarantine, RRF_RT_REG_MULTI_SZ, nullptr, g_quarantine, &g_quarantineCb) != ERROR_SUCCESS) {
+		ZeroMemory(g_quarantine, sizeof(g_quarantine)); g_quarantineCb = 0;
+	}
+}
+
+bool IsForeignModule(const wchar_t* path)
+{
+	return StrCmpNIW(path, g_sysRoot, lstrlenW(g_sysRoot)) != 0 &&
+		StrCmpNIW(path, g_exeDir, lstrlenW(g_exeDir)) != 0 &&
+		StrCmpNIW(path, g_selfDir, lstrlenW(g_selfDir)) != 0;
+}
+
+LONG NTAPI LdrLoadDll_Hook(PWSTR sp, PULONG ch, EX7_USTR* name, PVOID* h)
+{
+	__try {
+		if (name && name->Buffer && name->Length && g_quarantine[0]) {
+			wchar_t path[MAX_PATH], key[128];
+			int n = (int)(name->Length / sizeof(wchar_t)); if (n > MAX_PATH - 1) n = MAX_PATH - 1;
+			CopyMemory(path, name->Buffer, n * sizeof(wchar_t)); path[n] = 0;
+			ModuleKey(path, key, ARRAYSIZE(key));
+			if (IsQuarantined(key)) {
+				LogLine(L"[ex7] injection guard: refused quarantined module %s", path);
+				if (h) *h = nullptr;
+				return (LONG)0xC0000135; // STATUS_DLL_NOT_FOUND
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return g_origLdrLoadDll(sp, ch, name, h);
+}
+
+LONG WINAPI UEF_Hook(EXCEPTION_POINTERS* ep)
+{
+	__try {
+		HMODULE m = nullptr; wchar_t path[MAX_PATH] = {};
+		PVOID addr = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionAddress : nullptr;
+		if (addr && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+				(LPCWSTR)addr, &m) && GetModuleFileNameW(m, path, MAX_PATH) && IsForeignModule(path)) {
+			wchar_t key[128]; ModuleKey(path, key, ARRAYSIZE(key));
+			LogLine(L"[ex7] injection guard: unhandled 0x%08X in foreign module %s -> quarantined for next start",
+				ep->ExceptionRecord->ExceptionCode, path);
+			if (!IsQuarantined(key)) {
+				DWORD used = 0;
+				for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1) used = (DWORD)(q - g_quarantine) + lstrlenW(q) + 1;
+				int kl = lstrlenW(key) + 1;
+				if (used + kl + 1 < ARRAYSIZE(g_quarantine)) {
+					lstrcpyW(g_quarantine + used, key);
+					g_quarantine[used + kl] = 0;
+					RegSetKeyValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+						kQuarantine, REG_MULTI_SZ, g_quarantine, (used + kl + 1) * sizeof(wchar_t));
+				}
+			}
+		} else if (addr) {
+			LogLine(L"[ex7] unhandled 0x%08X at %p module %s (not foreign, not quarantined)",
+				ep->ExceptionRecord->ExceptionCode, addr, path[0] ? path : L"?");
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return g_origUEF(ep);
+}
+
+void DirOf(wchar_t* p) { PathRemoveFileSpecW(p); lstrcatW(p, L"\\"); }
+
+void InstallInjectionGuard()
+{
+	if (ReadAdvancedDword(L"InjectionGuard", 1) == 0) { LogLine(L"[ex7] injection guard off"); return; }
+	GetWindowsDirectoryW(g_sysRoot, MAX_PATH); lstrcatW(g_sysRoot, L"\\");
+	GetModuleFileNameW(nullptr, g_exeDir, MAX_PATH); DirOf(g_exeDir);
+	GetModuleFileNameW(g_self, g_selfDir, MAX_PATH); DirOf(g_selfDir);
+	LoadQuarantine();
+	for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1)
+		LogLine(L"[ex7] injection guard: quarantined %s", q);
+	MH_Initialize(); // MH_ERROR_ALREADY_INITIALIZED is fine
+	HMODULE nt = GetModuleHandleW(L"ntdll.dll"), kb = GetModuleHandleW(L"kernelbase.dll");
+	void* ldr = nt ? (void*)GetProcAddress(nt, "LdrLoadDll") : nullptr;
+	void* uef = kb ? (void*)GetProcAddress(kb, "UnhandledExceptionFilter") : nullptr;
+	if (ldr) {
+		MH_STATUS a = MH_CreateHook(ldr, (void*)LdrLoadDll_Hook, (void**)&g_origLdrLoadDll);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(ldr) : a;
+		LogLine(L"[ex7] injection guard LdrLoadDll hook %d/%d (0 = OK)", a, b);
+	}
+	if (uef) {
+		MH_STATUS a = MH_CreateHook(uef, (void*)UEF_Hook, (void**)&g_origUEF);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(uef) : a;
+		LogLine(L"[ex7] injection guard UnhandledExceptionFilter hook %d/%d (0 = OK)", a, b);
+	}
+}
+
 } // namespace
 
 // ------------------------------------------------------------ public
@@ -647,7 +783,8 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test17), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test18), pid %u ----", GetCurrentProcessId());
+	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
