@@ -14,9 +14,9 @@ Hash di tutti gli asset in `SHA256SUMS.txt`.
 
 | file | cosa è |
 |---|---|
-| **`ex7-test-bundle.zip`** | **il bundle completo** consigliato: `wrp64.dll` + `ex7selfcontained.exe` + `7explorer-shell-switcher.exe` + README (+ sorgenti dei mod Windhawk opzionali). Decomprimi in una cartella e segui il [quick start](../../#quick-start) |
+| **`Win7ExplorerRestorer-test-bundle.zip`** | **il bundle completo** consigliato: `wrp64.dll` + `Win7ExplorerRestorer.exe` + `7explorer-shell-switcher.exe` + README (+ sorgenti dei mod Windhawk opzionali). Decomprimi in una cartella e segui il [quick start](../../#quick-start) |
 | `wrp64.dll` | il wrapper (Release x64) — se preferisci i file singoli |
-| `ex7selfcontained.exe` | installer/bootstrap self-contained (Release x64) |
+| `Win7ExplorerRestorer.exe` | installer/bootstrap self-contained (Release x64) |
 | `7explorer-shell-switcher.exe` | switcher shell runtime + avvio al logon (CRT statica) |
 | `SHA256SUMS.txt` | SHA-256 di tutti gli asset |
 

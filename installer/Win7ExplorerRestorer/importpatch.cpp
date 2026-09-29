@@ -3,13 +3,13 @@
 // The algorithm is a 1:1 port of tools/patch_imports.py, which is covered by
 // tests/test_patch_imports.py; the C++ port must produce the same bytes on
 // the same input (determinism harness on the user's machine:
-//   ex7selfcontained.exe --selftest-importpatch <file> ).
+//   Win7ExplorerRestorer.exe --selftest-importpatch <file> ).
 #include "importpatch.h"
 #include "config.h"
 
 #include <cstring>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 namespace {
 
@@ -197,4 +197,4 @@ ImportPatchResult PatchImportsInPlace(std::vector<uint8_t>& image) {
     return r;
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

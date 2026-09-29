@@ -6,7 +6,7 @@
 // See LegacyBatteryFlyout.cpp for the full design notes.
 #include "common.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 namespace w81 {
 
 // Called once from DllMain (explorer only). Never blocks: starts a worker
@@ -26,4 +26,4 @@ bool WrapSysTray();
 bool IsActive();
 
 } // namespace w81
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

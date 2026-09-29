@@ -56,7 +56,7 @@
 #include "OSVersion.h"
 #include <shellapi.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 namespace w81 {
 namespace {
 
@@ -152,7 +152,7 @@ void Log(LPCWSTR fmt, ...)
 	wvnsprintfW(msg, ARRAYSIZE(msg), fmt, ap);
 	va_end(ap);
 	wchar_t line[1100];
-	wnsprintfW(line, ARRAYSIZE(line), L"[ex7][w81] %s", msg);
+	wnsprintfW(line, ARRAYSIZE(line), L"[Win7ExplorerRestorer][w81] %s", msg);
 	OutputDebugStringW(line);
 
 	if (!g_cacheDir[0]) return;
@@ -773,4 +773,4 @@ bool WrapSysTray() { return ReadDword(L"W81SysTrayWrapper", 1) != 0; }
 bool Sha256OfFile(const wchar_t* path, char hex[65]) { return Sha256File(path, hex); }
 
 } // namespace w81
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

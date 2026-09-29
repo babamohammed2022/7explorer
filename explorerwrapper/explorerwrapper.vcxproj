@@ -297,7 +297,7 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="wrapper.rc" />
-    <ResourceCompile Include="ex7_languages.rc" />
+    <ResourceCompile Include="Win7ExplorerRestorer_languages.rc" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\icon1.ico" />

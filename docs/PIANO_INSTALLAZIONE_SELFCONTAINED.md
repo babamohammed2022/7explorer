@@ -1,4 +1,4 @@
-# Piano: installazione completamente self-contained di explorer7
+# Piano: installazione completamente self-contained di Win7ExplorerRestorer
 
 > Nota: documento **storico/tecnico** (2026-09-28) — è il piano di
 > progettazione dell'installer, mantenuto per riferimento; lo stato
@@ -53,7 +53,7 @@ lista degli import — conferma così anche quali di `SHLWAPI.DLL`,
 `OLE32.DLL`, `EXPLORERFRAME.DLL` esistono davvero (EXPLORERFRAME è
 condizionale, vedi task 2).
 
-Implementato: `installer/ex7selfcontained/downloader.cpp` (WinInet con
+Implementato: `installer/Win7ExplorerRestorer/downloader.cpp` (WinInet con
 timeout per fase, deadline complessiva 120 s, cancellazione immediata a
 logoff/shutdown via `SetConsoleCtrlHandler`, 3 tentativi con backoff, cap
 16 MB, file temporaneo → hash → `MoveFileEx`), `winhash.cpp` (SHA-256 CNG
@@ -76,7 +76,7 @@ explorer.exe"): oggi l'utente deve sostituire a mano gli import
 `SHLWAPI.DLL`, `OLE32.DLL` e (se presente) `EXPLORERFRAME.DLL`.
 
 Implementazione: `tools/patch_imports.py` (riferimento multipiattaforma) e
-porting 1:1 `installer/ex7selfcontained/importpatch.cpp`.
+porting 1:1 `installer/Win7ExplorerRestorer/importpatch.cpp`.
 
 **È deterministica? Sì 🧪** — e lo dimostro così:
 
@@ -102,7 +102,7 @@ python tools\patch_imports.py explorer-pristine.exe out1.exe
 python tools\patch_imports.py explorer-pristine.exe out2.exe
 fc /b out1.exe out2.exe          :: identici = deterministico
 python tools\patch_imports.py out1.exe out1b.exe   :: "nothing to do" = idempotente
-ex7selfcontained --selftest-importpatch explorer-pristine.exe
+Win7ExplorerRestorer --selftest-importpatch explorer-pristine.exe
    :: (da implementare sul ramo: confronta byte-per-byte col risultato Python)
 ```
 
@@ -134,7 +134,7 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
    wrp64.dll stesso**. `wrapper.rc` contiene già le 4 stringhe inglesi.
    Contesto d'uso: testi "pin/unpin" del menu Start (serve perché su Win ≥ 8
    gli ID cambiarono; cf. anche README, nota Windows 8.1 "Customize Start
-   Menu"). Quindi: **tipologie davvero usate da explorer7 solo queste 4
+   Menu"). Quindi: **tipologie davvero usate da Win7ExplorerRestorer solo queste 4
    stringhe** — niente menu/dialog di shell32.
 2. **explorer.exe.mui** — caricato dal **gestore MUI del kernel**: il
    Win7 `explorer.exe` è un PE language-neutral con risorsa `RCDATA "MUI"`;
@@ -159,7 +159,7 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
 > **payload generati dal progetto** (`tools/build_resources.py` da
 > `localization/catalog` + `localization/templates`): nessun `.mui` serve più
 > in nessun punto della pipeline. `--allow-partial-localization` rimosso.
-> Vedi `installer/ex7selfcontained/README.md` e `localizer.h`.
+> Vedi `installer/Win7ExplorerRestorer/README.md` e `localizer.h`.
 
 - **explorer.exe (copia privata)**: neutralizzazione della risorsa
   `MUI` → `CUI` (stesso trucco della tua mod B) e **iniezione** nel binario
@@ -173,10 +173,10 @@ wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
   shell resterebbe mezza localizzata) — `--allow-partial-localization`
   per test espliciti.
 - **shell32**: **zero file generati**: `tools/embed_catalog.py` produce
-  `explorerwrapper/ex7_languages.rc` (aggiunto al vcxproj) con le
+  `explorerwrapper/Win7ExplorerRestorer_languages.rc` (aggiunto al vcxproj) con le
   STRINGTABLE in tutte le lingue del catalogo; il fallback già esistente in
   `StartMenuPin.cpp` le serve automaticamente nella lingua UI.
-  `ex7selfcontained` può anche generare un `shell32.dll.mui` ridotto
+  `Win7ExplorerRestorer` può anche generare un `shell32.dll.mui` ridotto
   (PE solo risorse) — il wrapper lo caricherebbe come datafile senza
   validazione incrociata (🌐: nessun checksum MUI coinvolto su quel path) —
   lasciato come miglioria futura non necessaria.
@@ -237,7 +237,7 @@ di RC) — dimmelo tu.
 | Mai bloccare logon/shell | timeout WinInet per fase + deadline 120 s + cancellazione su CTRL_LOGOFF/SHUTDOWN; nessuna attesa utente | ✅ implementato (non compilabile qui) |
 | Rete assente / riuso offline | cache `.pris` riverificata con hash a ogni run; `--offline` forza | ✅ implementato |
 | Niente MAX_PATH | prefisso `\\?\` su path lunghi (`OpenForReadShared`) | ✅ implementato |
-| Log leggibili | `log\ex7setup.log` UTF-16 BOM + stdout | ✅ implementato |
+| Log leggibili | `log\Win7ExplorerRestorerSetup.log` UTF-16 BOM + stdout | ✅ implementato |
 | Non toccare file di sistema | tutto sotto `--app-dir`; nessun accesso a `%SystemRoot%` | ✅ per costruzione |
 | Nessun binario MS nel repo | solo struttura JSON + testo originale | ✅ |
 | Test target | Windows 10/11: da eseguire (⚠️ checklist sotto) | 🧪 suite logica OK qui |
@@ -264,7 +264,7 @@ di RC) — dimmelo tu.
   dimensione 2.872.320 byte, SHA-256, TimeDateStamp, SizeOfImage.
 - 🔄 Nel CI (`selfcontained-ci.yml`): ricontrollo identity sul file reale,
   patch Python↔C++ byte-per-byte, import risultanti verso wrp64.dll; build
-  MSVC di wrp64.dll e ex7selfcontained.exe; test Python.
+  MSVC di wrp64.dll e Win7ExplorerRestorer.exe; test Python.
 - ⚠️ Ancora aperti: elenco ID `explorer.exe.mui` (stringhe/menu/dialog/
   acceleratori) — in arrivo dall'utente; test comportamentali Win10/11 su
   macchina reale; integrazione shell (fuori scope per questa tappa).

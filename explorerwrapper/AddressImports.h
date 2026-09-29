@@ -140,7 +140,7 @@ UINT WINAPI SetErrorModeNEW(UINT uMode)
 	SetCurrentProcessExplicitAppUserModelID(L"Microsoft.Windows.Explorer");
 
 	if (s_EnableImmersiveShellStack == 1)
-		ex7::SafeCreateTwinUI_UWP(); // SEH + crash sentinel (ShellFixes.cpp)
+		Win7ExplorerRestorer::SafeCreateTwinUI_UWP(); // SEH + crash sentinel (ShellFixes.cpp)
 
 	return SetErrorMode(uMode);
 }

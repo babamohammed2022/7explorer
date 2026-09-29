@@ -7,11 +7,11 @@
 | `%TEMP%\7explorer-shellfix.log` | `wrp64.dll` (la shell) | avvio della shell, hook installati, tray, rete, jump list, guardia anti-iniezione. Cap 256 KB con rotazione. Disattivabile con `ShellFixLog=0`. |
 | `%TEMP%\7explorer-switcher.log` | `7explorer-shell-switcher.exe` | switch runtime, avvio automatico al logon (registro, link, task), recovery. Indispensabile per diagnosticare il logon. |
 | `%LocalAppData%\7explorer\theme.log` | tema (ThemeManager) | caricamento/estrazione del tema, fallback. |
-| `<cartella bundle>\log\ex7setup.log` | `ex7selfcontained.exe` | download, verifica hash, patch, risorse. |
+| `<cartella bundle>\log\Win7ExplorerRestorerSetup.log` | `Win7ExplorerRestorer.exe` | download, verifica hash, patch, risorse. |
 
 In più, tutto viene inviato a `OutputDebugString`: con
 [DebugView](https://learn.microsoft.com/sysinternals/downloads/debugview)
-si vede in tempo reale (filtra per `[ex7]`).
+si vede in tempo reale (filtra per `[Win7ExplorerRestorer]`).
 
 Allega **questi log** quando segnali un problema.
 
@@ -31,7 +31,7 @@ next start after a successful download)`.
 
 **Soluzione**: nessuna, è by-design — riavvia la shell una seconda volta
 (`Ctrl+Alt+Shift+S` → Cambia). Se dopo il secondo avvio manca ancora,
-controlla nel log le righe `[ex7][net]` (download fallito? hash?) e che
+controlla nel log le righe `[Win7ExplorerRestorer][net]` (download fallito? hash?) e che
 `%LocalAppData%\7explorer\pnidui-F717CABC20B000\pnidui.dll` esista.
 
 ### Tema "embedded" diverso dall'Aero originale
@@ -91,7 +91,7 @@ automatica. Tutti i valori possibili in [opzioni.md](opzioni.md).
   per gli AUMID, quindi il progetto fornisce in fallback l'elemento
   `shell:AppsFolder\<AUMID>` (lo stesso che usa la taskbar moderna).
   Attivo di default (`UwpJumpLists=1`).
-- **Se una jump list UWP non appare**: cerca `[ex7][jumplist]` in
+- **Se una jump list UWP non appare**: cerca `[Win7ExplorerRestorer][jumplist]` in
   `%TEMP%\7explorer-shellfix.log` — ogni risoluzione logga il risultato
   del resolver e del fallback (`resolver 0x…, AppsFolder fallback 0x…`).
   Se il fallback è `0x…` ≠ 0, l'app non espone un elemento AppsFolder
@@ -121,8 +121,8 @@ scritto/ripristinato, link, task di recovery, switch verificati,
 
 La shell privata usa en-US (fallback) o it-IT a seconda della lingua del
 sistema. Lo switcher permette di forzare la lingua UI per gli avvii da
-esso gestiti (combo "Lingua UI di Explorer7"); per l'avvio da logon vale
-la variabile d'ambiente `EX7_UI_LANG` utente (vedi
+esso gestiti (combo "Lingua UI di Win7ExplorerRestorer"); per l'avvio da logon vale
+la variabile d'ambiente `WIN7EXPLORERRESTORER_UI_LANG` utente (vedi
 [avvio-al-login.md](avvio-al-login.md#dettagli-tecnici-e-limiti-noti)).
 
 ### Mod Windhawk che non si carica
@@ -130,5 +130,5 @@ la variabile d'ambiente `EX7_UI_LANG` utente (vedi
 La shell privata ha una **guardia anti-iniezione**: i mod che hanno
 crashato l'avvio finiscono in quarantena (`InjectionQuarantine`) e i mod
 non fidati possono essere bloccati in safe mode o con policy ≥2. Nel log:
-`[ex7] injection guard: ...`. Policy, allow-list e quarantena sono
+`[Win7ExplorerRestorer] injection guard: ...`. Policy, allow-list e quarantena sono
 documentati in [opzioni.md](opzioni.md#guardia-anti-iniezione-windhawk).

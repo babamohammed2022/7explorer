@@ -13,7 +13,7 @@
 #include "common.h"
 #include "dbgprint.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 // ---------------------------------------------------------------- RAII
 class ScopedRegKey {
@@ -80,7 +80,7 @@ inline int SehFilter(const wchar_t* where, EXCEPTION_POINTERS* ep)
 	// Do not swallow fatal/stack conditions that must reach the OS.
 	if (code == EXCEPTION_STACK_OVERFLOW || code == 0xC0000374 /* STATUS_HEAP_CORRUPTION */)
 		return EXCEPTION_CONTINUE_SEARCH;
-	dbgprintf(L"[ex7] SEH 0x%08X at %p caught in %s", code, addr, where ? where : L"?");
+	dbgprintf(L"[Win7ExplorerRestorer] SEH 0x%08X at %p caught in %s", code, addr, where ? where : L"?");
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -98,4 +98,4 @@ inline bool SafeInvokeCtx(const wchar_t* where, void (*fn)(Ctx*), Ctx* ctx)
 	__except (SehFilter(where, GetExceptionInformation())) { return false; }
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

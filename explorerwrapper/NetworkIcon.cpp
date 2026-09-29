@@ -8,7 +8,7 @@
 
 #include "dbgprint.h"
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);                       // ShellFixes.cpp
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def); // ShellFixes.cpp
 namespace net {
@@ -20,7 +20,7 @@ void Log(const wchar_t* fmt, ...)
 	va_list ap; va_start(ap, fmt);
 	wvnsprintfW(msg, ARRAYSIZE(msg), fmt, ap);
 	va_end(ap);
-	wnsprintfW(line, ARRAYSIZE(line), L"[ex7][net] %s", msg);
+	wnsprintfW(line, ARRAYSIZE(line), L"[Win7ExplorerRestorer][net] %s", msg);
 	LogText(line);
 }
 DWORD ReadAdvancedDword(const wchar_t* n, DWORD d) { return ReadAdvancedDwordPublic(n, d); }
@@ -358,4 +358,4 @@ void OnStobjectLoaded(HMODULE st)
 }
 
 } // namespace net
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

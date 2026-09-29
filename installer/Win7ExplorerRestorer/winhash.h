@@ -9,7 +9,7 @@
 #include <windows.h>
 #include <string>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 // Opens `path` read-only with share-read+share-delete and long-path support.
 // Returns INVALID_HANDLE_VALUE on failure.
@@ -42,4 +42,4 @@ TrustStatus CheckAuthenticode(const std::wstring& path, std::wstring& diag);
 // copy to prove it maps the bytes we verified on disk).
 bool SameFileById(HANDLE h1, HANDLE h2, bool& same);
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

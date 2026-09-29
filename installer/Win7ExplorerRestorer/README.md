@@ -1,6 +1,6 @@
-# ex7selfcontained
+# Win7ExplorerRestorer
 
-Bootstrap self-contained per explorer7: scarica **una sola volta** il binario
+Bootstrap self-contained per Win7ExplorerRestorer: scarica **una sola volta** il binario
 Microsoft (`explorer.exe` Win7 SP1 x64) dal symbol server, lo verifica con
 SHA-256 fissato nel codice, patcha gli import verso `wrp64.dll` e **inietta
 risorse UI generate dal progetto** (stringhe, menu, dialoghi, acceleratori).
@@ -10,7 +10,7 @@ Offline dal secondo avvio.
 >
 > L'utente **non deve procurarsi nessun `explorer.exe.mui`**: non serve
 > copiarlo accanto all'installer, non esiste più la variabile
-> `EX7_REFERENCE_MUI`, non c'è più nessun controllo di identità sul `.mui` e
+> `WIN7EXPLORERRESTORER_REFERENCE_MUI`, non c'è più nessun controllo di identità sul `.mui` e
 > non si interroga alcun symbol server per i `.mui`. Il vecchio meccanismo di
 > "trapianto" (v0.0.2) è stato rimosso dopo i test reali (root cause in
 > `localizer.h` e nei log CI: `UpdateResource` rifiuta le scritture nel
@@ -30,7 +30,7 @@ Offline dal secondo avvio.
 >                 |                             e li RIVALIDA parsandoli indietro
 >        tools/embed_catalog.py                <- embed in lang_catalog.h (blob)
 >                 |
->        ex7selfcontained.exe                  <- a install time: riscrittura
+>        Win7ExplorerRestorer.exe                  <- a install time: riscrittura
 >                                                 atomica della tabella risorse
 >                                                 della copia privata (tutte le
 >                                                 risorse esistenti copiate,
@@ -73,13 +73,13 @@ stato di verifica di ogni costante.
 
 ```bat
 python tools\embed_catalog.py
-msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64
+msbuild installer\Win7ExplorerRestorer\Win7ExplorerRestorer.vcxproj /p:Configuration=Release /p:Platform=x64
 ```
 
 oppure da "x64 Native Tools Command Prompt":
 
 ```bat
-cd installer\ex7selfcontained
+cd installer\Win7ExplorerRestorer
 cl /std:c++17 /utf-8 /O2 /W4 /EHsc main.cpp downloader.cpp winhash.cpp importpatch.cpp localizer.cpp /link bcrypt.lib wintrust.lib crypt32.lib wininet.lib
 ```
 
@@ -106,7 +106,7 @@ Se qualunque valore differisce, NON eseguire l'installer e segnalalo.
 ## Esecuzione
 
 ```bat
-ex7selfcontained.exe [--app-dir "X:\Program Files\explorer7"] [--offline] [--skip-signature]
+Win7ExplorerRestorer.exe [--app-dir "X:\Program Files\Win7ExplorerRestorer"] [--offline] [--skip-signature]
 ```
 
 - primo avvio: scarica + verifica + patch + riscrittura risorse localizzate;

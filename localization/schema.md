@@ -63,5 +63,5 @@ Controlli con id duplicato nel dialog: chiavi `<id>#N` in ordine di
 template. Voci di menu: chiavi `<livello>/<indice>`. Dettagli operativi in
 `localization/METODO_CATALOGO_EXPLORER_MUI.md`.
 
-`tools/embed_catalog.py` genera da qui `installer/ex7selfcontained/lang_catalog.h`
-e `explorerwrapper/ex7_languages.rc` e rifiuta di emettere se la verifica fallisce.
+`tools/embed_catalog.py` genera da qui `installer/Win7ExplorerRestorer/lang_catalog.h`
+e `explorerwrapper/Win7ExplorerRestorer_languages.rc` e rifiuta di emettere se la verifica fallisce.

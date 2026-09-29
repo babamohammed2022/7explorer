@@ -2,15 +2,15 @@
 
 Small native Win32 GUI application that switches the **running** shell
 process between the native Windows Explorer and the private 7explorer
-Explorer7 — **no logout, no reboot**.
+Win7ExplorerRestorer — **no logout, no reboot**.
 
 Technical notes (design is intentionally conservative):
 
 - **Shell identification**: the shell process is the owner of
   `GetShellWindow()` (the shell desktop window). Its executable path is
   read with `QueryFullProcessImageNameW` — kernel-provided, so it is
-  **not affected** by the Windhawk `ex7-fake-explorer-path` spoof (which
-  only hooks `GetModuleFileNameW` inside Explorer7). Only the identified
+  **not affected** by the Windhawk `win7explorerestorer-fake-explorer-path` spoof (which
+  only hooks `GetModuleFileNameW` inside Win7ExplorerRestorer). Only the identified
   shell PID is ever stopped — never `taskkill /f /im explorer.exe`, never
   unrelated explorer instances.
 - **Stop**: `WM_QUIT` to the shell window (graceful), then
@@ -35,7 +35,7 @@ Technical notes (design is intentionally conservative):
 | shell | path |
 |---|---|
 | Native | `%SystemRoot%\explorer.exe` |
-| 7explorer | first hit of: ① env var `EX7_EXPLORER_PATH` (expands `%VAR%`) → ② `explorer.exe` **next to the switcher exe** (the bundle-zip layout: one folder for everything) → ③ legacy fallback `C:\ex7test\explorer.exe` |
+| 7explorer | first hit of: ① env var `WIN7EXPLORERRESTORER_EXPLORER_PATH` (expands `%VAR%`) → ② `explorer.exe` **next to the switcher exe** (the bundle-zip layout: one folder for everything) → ③ legacy fallback `C:\Win7ExplorerRestorerTest\explorer.exe` |
 
 A **Browse…** button lets you point anywhere else.
 
@@ -52,7 +52,7 @@ three cooperating mechanisms (full details in
    **byte-for-byte** on removal. `explorer.exe` **and** `wrp64.dll` are
    validated before anything is written.
 2. **Startup-folder link** (fallback, `7explorer-shell.lnk` →
-   `--apply-ex7 --logon`): verifies the switch really happened (retry with
+   `--apply-win7explorerestorer --logon`): verifies the switch really happened (retry with
    backoff, ~60 s) and restarts the `--hotkey` resident on success.
 3. **Recovery task** (`7explorer Shell Recovery`, per-user scheduled task):
    ~30 s after each logon, if the private shell is not alive it restores
@@ -67,9 +67,9 @@ removes everything, like unchecking the box.
 
 ```
 7explorer-shell-switcher.exe              # GUI
---apply-ex7        # switch to Explorer7 (verified + retry ~60 s + hotkey restart;
+--apply-win7explorerestorer        # switch to Win7ExplorerRestorer (verified + retry ~60 s + hotkey restart;
                    #   exit code 0/2)
---apply-ex7 --logon  # as above, from the logon link: fully silent (log only)
+--apply-win7explorerestorer --logon  # as above, from the logon link: fully silent (log only)
 --apply-native     # switch back to the native shell
 --install-login    # create ONLY the Startup-folder link (zero registry changes)
 --uninstall-login  # remove the whole logon auto-start (restore Shell value,
@@ -89,7 +89,7 @@ the switcher GUI — even when the shell has crashed or hangs. It is started:
 - by `wrp64.dll` when the private shell starts (so it is alive right after
   every logon with the auto-start enabled — see `StartSwitcherHotkey` in
   `explorerwrapper/ShellFixes.cpp`);
-- by `--apply-ex7`/`--apply-native`/`--recover-login` after a successful
+- by `--apply-win7explorerestorer`/`--apply-native`/`--recover-login` after a successful
   switch/recovery.
 
 If no instance is running (e.g. native shell after a failed logon start and
@@ -98,7 +98,7 @@ bring it back.
 
 ## Relationship with the Windhawk mods
 
-The Windhawk `ex7-fake-explorer-path` mod is now redundant (the path spoof
-is built into `wrp64.dll`) and `ex7-userinit-shell` is superseded by the
+The Windhawk `win7explorerestorer-fake-explorer-path` mod is now redundant (the path spoof
+is built into `wrp64.dll`) and `win7explorerestorer-userinit-shell` is superseded by the
 per-user `Shell` value (test37). Both mods remain in `windhawk/` as
 optional source. The switcher itself does not depend on Windhawk.

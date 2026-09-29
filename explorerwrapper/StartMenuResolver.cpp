@@ -5,7 +5,7 @@
 #pragma function(memset)
 #include <shlwapi.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
 }
@@ -145,7 +145,7 @@ HRESULT STDMETHODCALLTYPE CStartMenuResolver::GetShortcutForProcess(ULONG_PTR p1
 	return m_resolver8->GetShortcutForProcess(p1, p2);
 }
 
-// ex7: UWP jump lists. The Win7 taskbar only builds a jump list when it can
+// Win7ExplorerRestorer: UWP jump lists. The Win7 taskbar only builds a jump list when it can
 // resolve a "best shortcut" item for the window's AppID. Packaged apps have no
 // .lnk, so the Win8+ resolver fails and right-click shows nothing. As a
 // conservative fallback we hand out the shell:AppsFolder\<AUMID> item (the
@@ -211,13 +211,13 @@ HRESULT STDMETHODCALLTYPE CStartMenuResolver::GetBestShortcutForAppID(DWORD* p1,
 	HRESULT hr = isSettings ? E_OUTOFMEMORY : SafeResolverCall(m_resolver8, p1, p2);
 	if (SUCCEEDED(hr) || !p2 || !LooksLikeAumid(appid))
 		return hr;
-	if (ex7::ReadAdvancedDwordPublic(L"UwpJumpLists", 1) == 0)
+	if (Win7ExplorerRestorer::ReadAdvancedDwordPublic(L"UwpJumpLists", 1) == 0)
 		return hr;
 
 	HRESULT hr2 = SafeAppsFolderFallback(appid, p2);
 	WCHAR line[600];
-	wnsprintfW(line, 600, L"[ex7][jumplist] %s: resolver 0x%08X, AppsFolder fallback 0x%08X", appid, hr, hr2);
-	ex7::LogText(line);
+	wnsprintfW(line, 600, L"[Win7ExplorerRestorer][jumplist] %s: resolver 0x%08X, AppsFolder fallback 0x%08X", appid, hr, hr2);
+	Win7ExplorerRestorer::LogText(line);
 	return SUCCEEDED(hr2) ? hr2 : hr;
 }
 

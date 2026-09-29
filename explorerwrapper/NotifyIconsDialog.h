@@ -9,7 +9,7 @@
 // 0 = auto -> system page when registered, built-in otherwise; 3 = always
 // built-in, recommended on 24H2). Runs on its own STA thread; SEH-guarded.
 #include "common.h"
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 // true if the window was started (or already open and brought to front).
 bool ShowNotifyIconsDialog();
 }

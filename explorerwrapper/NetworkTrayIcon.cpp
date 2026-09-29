@@ -11,7 +11,7 @@
 #include <netlistmgr.h>
 #include <ocidl.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
 namespace net {
@@ -23,7 +23,7 @@ void Log(const wchar_t* fmt, ...)
 	va_list ap; va_start(ap, fmt);
 	wvnsprintfW(msg, ARRAYSIZE(msg), fmt, ap);
 	va_end(ap);
-	wnsprintfW(line, ARRAYSIZE(line), L"[ex7][net-icon] %s", msg);
+	wnsprintfW(line, ARRAYSIZE(line), L"[Win7ExplorerRestorer][net-icon] %s", msg);
 	LogText(line);
 }
 
@@ -530,7 +530,7 @@ DWORD WINAPI IconThread(LPVOID)
 	if (!g_res) { Log(L"cannot map %s (%u)", dll, GetLastError()); return 0; }
 	HRESULT hrCo = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 	WNDCLASSW wc = {};
-	wchar_t cls[40] = L"Ex7NetworkTrayIcon";
+	wchar_t cls[40] = L"Win7ExplorerRestorerNetworkTrayIcon";
 	if (((ULONG_PTR)g_res & 3) == 0) // real module (datafile handles have low bits set)
 		wnsprintfW(cls, ARRAYSIZE(cls), L"ATL:%p", (void*)((BYTE*)g_res + 0x1000));
 	wc.lpfnWndProc = WndProc; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = cls;
@@ -566,4 +566,4 @@ void StartFallbackTrayIcon()
 }
 
 } // namespace net
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

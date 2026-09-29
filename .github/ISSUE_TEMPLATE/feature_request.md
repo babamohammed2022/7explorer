@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for anything explorer7 related
+about: Suggest an idea for anything Win7ExplorerRestorer related
 title: 'Suggestion:'
 labels: suggestion
 assignees: ''

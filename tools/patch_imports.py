@@ -16,7 +16,7 @@ Properties:
   * safe: refuses to patch anything that is not a well-formed PE32+
     for AMD64, or whose import directory is malformed
 
-The C++ installer (installer/ex7selfcontained) ports this logic 1:1 and
+The C++ installer (installer/Win7ExplorerRestorer) ports this logic 1:1 and
 must byte-match this implementation on the same input file (see
 docs/PIANO_INSTALLAZIONE_SELFCONTAINED.md, task 2).
 

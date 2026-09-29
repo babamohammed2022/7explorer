@@ -3,7 +3,7 @@ name: selfcontained-ci
 # CI del bootstrap self-contained:
 #  - test Python (patcher/analyzer/verifier) sempre;
 #  - build MSVC di wrp64.dll (con MinHook clonato, come da README) e di
-#    ex7selfcontained.exe;
+#    Win7ExplorerRestorer.exe;
 #  - verifica SUL FILE REALE scaricato dai server Microsoft: hash, header,
 #    patch Python vs C++ byte-per-byte, import risultanti verso wrp64.dll;
 #  - su tag "v*-test*": pre-release con gli eseguibili compilati QUI.
@@ -45,7 +45,7 @@ jobs:
         run: |
           python tools\embed_catalog.py
           python tools\embed_catalog.py
-          git diff --exit-code -- explorerwrapper/ex7_languages.rc installer/ex7selfcontained/lang_catalog.h
+          git diff --exit-code -- explorerwrapper/Win7ExplorerRestorer_languages.rc installer/Win7ExplorerRestorer/lang_catalog.h
 
       - name: Clone and build MinHook (libMinHook.x64.lib, non committata)
         shell: cmd
@@ -59,9 +59,9 @@ jobs:
         shell: cmd
         run: msbuild explorerwrapper.sln /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-wrp64.log
 
-      - name: Build ex7selfcontained.exe (Release x64)
+      - name: Build Win7ExplorerRestorer.exe (Release x64)
         shell: cmd
-        run: msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-ex7selfcontained.log
+        run: msbuild installer\Win7ExplorerRestorer\Win7ExplorerRestorer.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-Win7ExplorerRestorer.log
 
       - name: Build 7explorer-shell-switcher.exe (Release x64, static CRT)
         shell: cmd
@@ -114,26 +114,26 @@ jobs:
       - name: Patch imports with the C++ build and compare byte-for-byte
         shell: cmd
         run: |
-          installer\ex7selfcontained\bin\ex7selfcontained.exe --selftest-importpatch work\explorer-ref.exe > logs\selftest.txt 2>&1
+          installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe --selftest-importpatch work\explorer-ref.exe > logs\selftest.txt 2>&1
           if errorlevel 1 exit /b 1
-          fc /b work\explorer-ref.exe.ex7patched work\explorer-py.exe >> logs\selftest.txt 2>&1
+          fc /b work\explorer-ref.exe.win7explorerestorerpatched work\explorer-py.exe >> logs\selftest.txt 2>&1
           if errorlevel 1 exit /b 1
 
       - name: Verify the patched imports resolve to wrp64.dll
         shell: cmd
-        run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers | findstr /i "wrp64.dll"
+        run: python tools\analyze_mui.py work\explorer-ref.exe.win7explorerestorerpatched --dump-headers | findstr /i "wrp64.dll"
 
       - name: Inspect the C++-patched imports once more (log evidence)
-        run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers
+        run: python tools\analyze_mui.py work\explorer-ref.exe.win7explorerestorerpatched --dump-headers
 
       # ---- v0.0.3: generated-resource pipeline, END-TO-END on real Windows
       - name: "E2E run — installer download/patch/localize (no .mui anywhere)"
         shell: cmd
         run: |
           mkdir e2e
-          copy /Y installer\ex7selfcontained\bin\ex7selfcontained.exe e2e\
+          copy /Y installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe e2e\
           cd e2e
-          ex7selfcontained.exe > run.out 2>&1
+          Win7ExplorerRestorer.exe > run.out 2>&1
           if errorlevel 1 (type run.out & exit /b 1)
           type run.out
       - name: "E2E proof — generated resources verified in the REAL PE"
@@ -147,7 +147,7 @@ jobs:
         shell: cmd
         run: |
           cd e2e
-          ex7selfcontained.exe --offline > run2.out 2>&1
+          Win7ExplorerRestorer.exe --offline > run2.out 2>&1
           if errorlevel 1 (type run2.out & exit /b 1)
           cd ..
           python tools\check_pe_resources.py e2e\explorer.exe
@@ -158,20 +158,20 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force bundle | Out-Null
           Copy-Item Release\wrp64.dll bundle\
-          Copy-Item installer\ex7selfcontained\bin\ex7selfcontained.exe bundle\
+          Copy-Item installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe bundle\
           Copy-Item switcher\bin\7explorer-shell-switcher.exe bundle\
           New-Item -ItemType Directory -Force bundle\windhawk | Out-Null
           Copy-Item windhawk\*.cpp bundle\windhawk\
-          Copy-Item installer\ex7selfcontained\README.md bundle\BOOTSTRAP-README.md
+          Copy-Item installer\Win7ExplorerRestorer\README.md bundle\BOOTSTRAP-README.md
           Copy-Item windhawk\README.md bundle\WINDHAWK-README.md
           Copy-Item switcher\README.md bundle\SWITCHER-README.md
-          Compress-Archive -Path bundle\* -DestinationPath ex7-test-bundle.zip -Force
-          Get-Item ex7-test-bundle.zip | Select-Object Name,Length
+          Compress-Archive -Path bundle\* -DestinationPath Win7ExplorerRestorer-test-bundle.zip -Force
+          Get-Item Win7ExplorerRestorer-test-bundle.zip | Select-Object Name,Length
 
       - name: Produce SHA256SUMS for the CI-built binaries
         shell: pwsh
         run: |
-          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe", "switcher\bin\7explorer-shell-switcher.exe", "ex7-test-bundle.zip")
+          $items = @("Release\wrp64.dll", "installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe", "switcher\bin\7explorer-shell-switcher.exe", "Win7ExplorerRestorer-test-bundle.zip")
           $lines = foreach ($i in $items) { $h=(Get-FileHash -Algorithm SHA256 $i).Hash.ToLower(); "$h  $(Split-Path $i -Leaf)" }
           $lines | Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
@@ -199,7 +199,7 @@ jobs:
                 Write-Host ("::error title={0}:{1}::{2}" -f $log.Name, $_.LineNumber, $_.Line.Trim())
               }
             if ($n -eq 0) {
-              Write-Host ("::error title={0}::msbuild failed with no error lines - see artifact {1}" -f $log.Name, 'ex7selfcontained-binaries')
+              Write-Host ("::error title={0}::msbuild failed with no error lines - see artifact {1}" -f $log.Name, 'Win7ExplorerRestorer-binaries')
             }
           }
 
@@ -207,15 +207,15 @@ jobs:
         if: always()  # anche in caso di fallimento: servono i log di build
         uses: actions/upload-artifact@v4
         with:
-          name: ex7selfcontained-binaries
+          name: Win7ExplorerRestorer-binaries
           path: |
             Release/wrp64.dll
-            installer/ex7selfcontained/bin/ex7selfcontained.exe
+            installer/Win7ExplorerRestorer/bin/Win7ExplorerRestorer.exe
             switcher/bin/7explorer-shell-switcher.exe
-            ex7-test-bundle.zip
+            Win7ExplorerRestorer-test-bundle.zip
             SHA256SUMS.txt
             msbuild-wrp64.log
-            msbuild-ex7selfcontained.log
+            msbuild-Win7ExplorerRestorer.log
             msbuild-switcher.log
             msbuild-minhook.log
             collect-logs/
@@ -230,7 +230,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ex7selfcontained-binaries
+          name: Win7ExplorerRestorer-binaries
       - name: Publish pre-release with CI-built binaries
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -242,11 +242,11 @@ jobs:
             --title "7explorer $env:TAG (reference test build)" `
             --notes-file docs/RELEASE_NOTES_test.md `
             "Release/wrp64.dll#wrp64.dll" `
-            "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
+            "installer/Win7ExplorerRestorer/bin/Win7ExplorerRestorer.exe#Win7ExplorerRestorer.exe" `
             "switcher/bin/7explorer-shell-switcher.exe#7explorer-shell-switcher.exe" `
-            "ex7-test-bundle.zip#ex7-test-bundle.zip" `
-            "windhawk/ex7-userinit-shell.cpp#ex7-userinit-shell.wh.cpp" `
-            "windhawk/ex7-fake-explorer-path.cpp#ex7-fake-explorer-path.wh.cpp" `
+            "Win7ExplorerRestorer-test-bundle.zip#Win7ExplorerRestorer-test-bundle.zip" `
+            "windhawk/win7explorerestorer-userinit-shell.cpp#win7explorerestorer-userinit-shell.wh.cpp" `
+            "windhawk/win7explorerestorer-fake-explorer-path.cpp#win7explorerestorer-fake-explorer-path.wh.cpp" `
             "windhawk/README.md#windhawk-POC-README.md" `
             "SHA256SUMS.txt"
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }

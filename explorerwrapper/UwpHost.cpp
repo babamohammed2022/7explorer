@@ -5,7 +5,7 @@
 #include <shobjidl.h>
 #include <tlhelp32.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
 namespace uwp {
@@ -17,7 +17,7 @@ void Log(const wchar_t* fmt, ...)
 	va_list ap; va_start(ap, fmt);
 	wvnsprintfW(msg, ARRAYSIZE(msg), fmt, ap);
 	va_end(ap);
-	wnsprintfW(line, ARRAYSIZE(line), L"[ex7][uwp-host] %s", msg);
+	wnsprintfW(line, ARRAYSIZE(line), L"[Win7ExplorerRestorer][uwp-host] %s", msg);
 	LogText(line);
 }
 
@@ -226,4 +226,4 @@ void WatchActivation(int kind, const wchar_t* target, const wchar_t* args, int w
 	if (t) CloseHandle(t); else delete w;
 }
 
-}} // namespace ex7::uwp
+}} // namespace Win7ExplorerRestorer::uwp

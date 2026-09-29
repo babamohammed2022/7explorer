@@ -3,14 +3,14 @@
 """
 embed_catalog.py — turns the repo localization sources into build artifacts:
 
-  1. installer/ex7selfcontained/lang_catalog.h
+  1. installer/Win7ExplorerRestorer/lang_catalog.h
      PRE-BUILT PE resource payloads (STRINGTABLE / MENU / DIALOGEX /
      ACCELERATOR byte blobs) produced by tools/build_resources.py from
      localization/catalog/*.json (texts) + localization/templates/
      explorer.exe.templates.json (structure). The installer injects them
      into the private explorer.exe copy — no external .mui is ever read.
 
-  2. explorerwrapper/ex7_languages.rc
+  2. explorerwrapper/Win7ExplorerRestorer_languages.rc
      Multilingual STRINGTABLE for the wrapper's own resources. The existing
      fallback in StartMenuPin.cpp (LoadStringW(g_hInstance, ...)) then
      serves every catalog language automatically — no .mui file needed for
@@ -70,10 +70,10 @@ def gen_header(catalogs: dict, templates: dict, explorer_ids: set) -> str:
         "",
         "// One PE-resource payload (type = RT_MENU 4, RT_DIALOG 5,",
         "// RT_STRING 6, RT_ACCELERATOR 9) ready for UpdateResourceW.",
-        "struct Ex7ResBlob { unsigned int type; unsigned int id;",
+        "struct Win7ExplorerRestorerResBlob { unsigned int type; unsigned int id;",
         "                    const unsigned char* data; unsigned int size; };",
-        "struct Ex7ResLang { unsigned int lcid; const wchar_t* name;",
-        "                    const Ex7ResBlob* blobs; unsigned int blobCount; };",
+        "struct Win7ExplorerRestorerResLang { unsigned int lcid; const wchar_t* name;",
+        "                    const Win7ExplorerRestorerResBlob* blobs; unsigned int blobCount; };",
         "",
     ]
     tables = []
@@ -97,7 +97,7 @@ def gen_header(catalogs: dict, templates: dict, explorer_ids: set) -> str:
             blob_entries.append(
                 f"    {{ {b['type']}, {b['resId']}, {bvar}, sizeof({bvar}) }},")
         btab = f"g_blobs_{safe}"
-        out.append(f"static const Ex7ResBlob {btab}[] = {{")
+        out.append(f"static const Win7ExplorerRestorerResBlob {btab}[] = {{")
         out.extend(blob_entries)
         out.append("};")
         out.append("")
@@ -105,11 +105,11 @@ def gen_header(catalogs: dict, templates: dict, explorer_ids: set) -> str:
         tables.append(
             f'    {{ 0x{lcid:04X}, L"{c_escape(meta["mui_name"])}", '
             f'{btab}, sizeof({btab}) / sizeof({btab}[0]) }},')
-    out.append("static const Ex7ResLang g_ex7ResLangs[] = {")
+    out.append("static const Win7ExplorerRestorerResLang g_Win7ExplorerRestorerResLangs[] = {")
     out.extend(tables)
     out.append("};")
-    out.append("static const unsigned int g_ex7ResLangCount = "
-               "sizeof(g_ex7ResLangs) / sizeof(g_ex7ResLangs[0]);")
+    out.append("static const unsigned int g_Win7ExplorerRestorerResLangCount = "
+               "sizeof(g_Win7ExplorerRestorerResLangs) / sizeof(g_Win7ExplorerRestorerResLangs[0]);")
     out.append("")
     return "\n".join(out)
 
@@ -147,7 +147,7 @@ def load_catalogs(catdir: Path) -> dict:
     return out
 
 
-def patch_vcxproj(rc_rel: str = "ex7_languages.rc") -> bool:
+def patch_vcxproj(rc_rel: str = "Win7ExplorerRestorer_languages.rc") -> bool:
     vcx = ROOT / "explorerwrapper" / "explorerwrapper.vcxproj"
     text = vcx.read_text(encoding="utf-8")
     if rc_rel in text:
@@ -196,12 +196,12 @@ def main() -> int:
         print(f"embed_catalog: resource build FAILED: {exc}", file=sys.stderr)
         return 3
 
-    hdr = ROOT / "installer" / "ex7selfcontained" / "lang_catalog.h"
+    hdr = ROOT / "installer" / "Win7ExplorerRestorer" / "lang_catalog.h"
     hdr.parent.mkdir(parents=True, exist_ok=True)
     hdr.write_bytes(b"\xef\xbb\xbf" + header.encode("utf-8"))
     print(f"written {hdr}")
 
-    rc = ROOT / "explorerwrapper" / "ex7_languages.rc"
+    rc = ROOT / "explorerwrapper" / "Win7ExplorerRestorer_languages.rc"
     # rc.exe accetta in modo affidabile i file .rc in UTF-16LE con BOM
     # (UTF-8 fallisce su runner MSVC: è la stessa codifica di wrapper.rc).
     rc.write_bytes(gen_rc(catalogs).encode("utf-16"))

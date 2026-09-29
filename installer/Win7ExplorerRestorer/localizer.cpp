@@ -17,7 +17,7 @@
 #include "winhash.h"
 #include "importpatch.h"    // ComputePeChecksum
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 extern void (*g_log)(const wchar_t* fmt, ...);
 static void Log(const wchar_t* fmt, ...) {
@@ -159,10 +159,10 @@ bool LocalizeWithGeneratedResources(const std::wstring& exePath,
         ++copied;
     }
     unsigned injected = 0;
-    for (unsigned t = 0; t < g_ex7ResLangCount && ok; ++t) {
-        const Ex7ResLang& lang = g_ex7ResLangs[t];
+    for (unsigned t = 0; t < g_Win7ExplorerRestorerResLangCount && ok; ++t) {
+        const Win7ExplorerRestorerResLang& lang = g_Win7ExplorerRestorerResLangs[t];
         for (unsigned i = 0; i < lang.blobCount; ++i) {
-            const Ex7ResBlob& b = lang.blobs[i];
+            const Win7ExplorerRestorerResBlob& b = lang.blobs[i];
             if (!UpdateResourceW(h, MAKEINTRESOURCEW(b.type),
                                  MAKEINTRESOURCEW(b.id), (WORD)lang.lcid,
                                  (LPVOID)b.data, (DWORD)b.size)) {
@@ -189,7 +189,7 @@ bool LocalizeWithGeneratedResources(const std::wstring& exePath,
     }
     if (ok)
         Log(L"resource rewrite committed: %u preserved + %u generated "
-            L"(%u languages) into %s%s", copied, injected, g_ex7ResLangCount,
+            L"(%u languages) into %s%s", copied, injected, g_Win7ExplorerRestorerResLangCount,
             exePath.c_str(), muiSave.empty() ? L"" : L", MUI->CUI parked");
     return ok;
 }
@@ -244,4 +244,4 @@ bool RefreshPeChecksum(const std::wstring& exePath, std::wstring& error) {
     return true;
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

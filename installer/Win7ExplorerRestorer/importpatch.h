@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 
 struct ImportPatchResult {
     bool ok = false;
@@ -28,4 +28,4 @@ ImportPatchResult PatchImportsInPlace(std::vector<uint8_t>& image);
 uint32_t ComputePeChecksum(const std::vector<uint8_t>& image,
                            size_t checksumFieldOffset);
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

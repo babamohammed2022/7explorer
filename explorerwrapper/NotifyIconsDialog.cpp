@@ -4,7 +4,7 @@
 #include <shellapi.h>
 #include <shlwapi.h>
 
-namespace ex7 {
+namespace Win7ExplorerRestorer {
 bool OpenNotifyIconsPage();
 void LogText(const wchar_t* text);
 namespace {
@@ -161,7 +161,7 @@ HWND Ctl(HWND p, DWORD ex, const wchar_t* cls, const wchar_t* text, DWORD style,
 void RunUnsafe()
 {
 	HRESULT hr = CoCreateInstance(kClsidTrayNotify, nullptr, CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER, kIidTrayNotify7, (void**)&g_tn);
-	wchar_t l[160]; wnsprintfW(l, 160, L"[ex7][notifyicons] TrayNotify hr=0x%08X", (DWORD)hr); LogText(l);
+	wchar_t l[160]; wnsprintfW(l, 160, L"[Win7ExplorerRestorer][notifyicons] TrayNotify hr=0x%08X", (DWORD)hr); LogText(l);
 	if (FAILED(hr) || !g_tn) {
 		g_tn = nullptr;
 		OpenNotifyIconsPage();
@@ -173,7 +173,7 @@ void RunUnsafe()
 	InitCommonControlsEx(&icc);
 	WNDCLASSW wc = {}; wc.lpfnWndProc = WndProc; wc.hInstance = GetModuleHandleW(nullptr);
 	wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1); wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-	wc.lpszClassName = L"Ex7NotifyIconsWnd";
+	wc.lpszClassName = L"Win7ExplorerRestorerNotifyIconsWnd";
 	RegisterClassW(&wc);
 	NONCLIENTMETRICSW ncm = { sizeof(ncm) };
 	SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
@@ -231,7 +231,7 @@ DWORD WINAPI Thread(LPVOID)
 bool ShowNotifyIconsDialog()
 {
 	if (InterlockedCompareExchange(&g_open, 1, 0) != 0) {
-		HWND h = FindWindowW(L"Ex7NotifyIconsWnd", nullptr);
+		HWND h = FindWindowW(L"Win7ExplorerRestorerNotifyIconsWnd", nullptr);
 		if (h) SetForegroundWindow(h);
 		return true;
 	}
@@ -241,4 +241,4 @@ bool ShowNotifyIconsDialog()
 	return true;
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer

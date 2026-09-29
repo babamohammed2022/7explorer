@@ -399,8 +399,8 @@ __int64 ShouldAddWindowToTray(HWND hwnd)
 // Generic crash error
 void CrashError()
 {
-	WCHAR errorText[71] = L"An unexpected error occurred and explorer7 needs to quit. We're sorry!"; // Funny brick game message go haha
-	WCHAR errorTitle[16] = L"explorer7 Crash";
+	WCHAR errorText[96] = L"An unexpected error occurred and Win7ExplorerRestorer needs to quit. We're sorry!"; // Funny brick game message go haha
+	WCHAR errorTitle[32] = L"Win7ExplorerRestorer Crash";
 
 	MessageBoxW(NULL, errorText, errorTitle, MB_ICONERROR); // the actual error box lol
 }
@@ -436,7 +436,7 @@ void FirstRunCompatibilityWarning()
 		RegGetDWORD(HKEY_CURRENT_USER, c_szSubkey, L"FirstRunVersionCheck", &value);
 		if (value != 1)
 		{
-			MessageBoxW(NULL, L"This build of Windows is not currently supported.\n\nYou may encounter usability issues.", L"explorer7", MB_ICONEXCLAMATION);
+			MessageBoxW(NULL, L"This build of Windows is not currently supported.\n\nYou may encounter usability issues.", L"Win7ExplorerRestorer", MB_ICONEXCLAMATION);
 			DWORD newValue = 1;
 			RegSetDWORD(HKEY_CURRENT_USER, c_szSubkey, L"FirstRunVersionCheck", &newValue);
 		}
@@ -451,7 +451,7 @@ void FirstRunPrereleaseWarning()
 	RegGetDWORD(HKEY_CURRENT_USER, c_szSubkey, L"FirstRunPrereleaseCheck", &value);
 	if (value != 1)
 	{
-		MessageBoxW(NULL, L"Evaluation copy.\nFor testing purposes only.", L"explorer7", MB_ICONEXCLAMATION);
+		MessageBoxW(NULL, L"Evaluation copy.\nFor testing purposes only.", L"Win7ExplorerRestorer", MB_ICONEXCLAMATION);
 		DWORD newValue = 1;
 		RegSetDWORD(HKEY_CURRENT_USER, c_szSubkey, L"FirstRunPrereleaseCheck", &newValue);
 	}
@@ -502,7 +502,7 @@ HWND WINAPI CreateWindowInBandNew(DWORD dwExStyle,
 		if (ret)
 		{
 			SetProp(ret, L"UIA_WindowVisibilityOverriden", (HANDLE)2);
-			SetProp(ret, L"explorer7.WindowBand", (HANDLE)dwBand);
+			SetProp(ret, L"Win7ExplorerRestorer.WindowBand", (HANDLE)dwBand);
 		}
 		
 		return ret;
@@ -513,7 +513,7 @@ HWND WINAPI CreateWindowInBandNew(DWORD dwExStyle,
 		dwStyle = dwStyle | WS_EX_TOOLWINDOW;
 		HWND ret = CreateWindowInBandOrig(dwExStyle, (LPWSTR)lpClassName, (PVOID)lpWindowName, (PVOID)dwStyle, (PVOID)x, (PVOID)y, (PVOID)nWidth, (PVOID)nHeight, hwndParent, hMenu, hInstance, lpParam, dwBand & 1);
 		dbgprintf(L"%p: CreateWindowInBand %p %s %p %p %p %p %p %p %p %p %p %p %p = %p %p", p0, dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hwndParent, hMenu, hInstance, lpParam, dwBand, ret, GetLastError());
-		SetProp(ret, L"explorer7.WindowBand", (HANDLE)dwBand);
+		SetProp(ret, L"Win7ExplorerRestorer.WindowBand", (HANDLE)dwBand);
 		return ret;
 	}
 }
@@ -546,7 +546,7 @@ HWND WINAPI CreateWindowInBandExNew(DWORD exStyle, LPWSTR szClassName, PVOID p3,
 	dbgprintf(L"CreateWindowInBandExOrig %i", p13);
 
 	SetProp(ret, L"UIA_WindowVisibilityOverriden", (HANDLE)2);
-	SetProp(ret, L"explorer7.WindowBand", (HANDLE)p13);
+	SetProp(ret, L"Win7ExplorerRestorer.WindowBand", (HANDLE)p13);
 	return ret;
 }
 
@@ -561,7 +561,7 @@ BOOL WINAPI SetWindowBandNew(HWND hwnd, HWND hwndInsertAfter, DWORD flags)
 		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOREPOSITION);
 	}
 
-	SetProp(hwnd, L"explorer7.WindowBand", (HANDLE)flags);
+	SetProp(hwnd, L"Win7ExplorerRestorer.WindowBand", (HANDLE)flags);
 	dbgprintf(L"SetWindowBandNew %i", flags);
 	return TRUE;
 }

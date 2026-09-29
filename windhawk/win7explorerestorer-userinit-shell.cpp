@@ -1,7 +1,7 @@
 // ==WindhawkMod==
-// @id              ex7-userinit-shell
-// @name            Explorer7 shell launcher (7explorer private explorer.exe)
-// @description     Redirects the Winlogon "Shell" registry query that userinit.exe performs at logon to the private, patched+localized explorer.exe produced by ex7selfcontained (default: C:\ex7test\explorer.exe). Nothing is written to the registry; disabling the mod instantly restores the normal shell at the next logon.
+// @id              win7explorerestorer-userinit-shell
+// @name            Win7ExplorerRestorer shell launcher (7explorer private explorer.exe)
+// @description     Redirects the Winlogon "Shell" registry query that userinit.exe performs at logon to the private, patched+localized explorer.exe produced by Win7ExplorerRestorer (default: C:\Win7ExplorerRestorerTest\explorer.exe). Nothing is written to the registry; disabling the mod instantly restores the normal shell at the next logon.
 // @version         0.1.0
 // @author          7explorer bootstrap
 // @include         userinit.exe
@@ -10,10 +10,10 @@
 
 // ==WindhawkModReadme==
 /*
-# Explorer7 shell launcher (PoC)
+# Win7ExplorerRestorer shell launcher (PoC)
 
 Proof-of-concept for 7explorer: makes Windows launch the PRIVATE
-explorer.exe (patched + localized, produced by `ex7selfcontained.exe`)
+explorer.exe (patched + localized, produced by `Win7ExplorerRestorer.exe`)
 as the interactive shell, WITHOUT replacing C:\Windows\explorer.exe and
 WITHOUT writing anything to Winlogon in the registry.
 
@@ -24,9 +24,9 @@ If the private executable is missing, the query is passed through to the
 original API (fail-safe: the normal Windows shell starts).
 
 Test flow:
-  1. run ex7selfcontained.exe                          (creates C:\ex7test\explorer.exe)
+  1. run Win7ExplorerRestorer.exe                          (creates C:\Win7ExplorerRestorerTest\explorer.exe)
   2. enable this mod (check the "ExplorerPath" setting matches your --app-dir)
-  3. enable the companion mod "Explorer7 fake path"
+  3. enable the companion mod "Win7ExplorerRestorer fake path"
   4. sign out, sign back in
 Revert: disable this mod, sign out/in — the normal Windows shell returns.
 Recovery if the new shell crashes: Ctrl+Shift+Esc -> Task Manager ->
@@ -37,9 +37,9 @@ Safe Mode (Windhawk does not start there) and disable it.
 
 // ==WindhawkModSettings==
 /*
-- ExplorerPath: C:\ex7test\explorer.exe
-  $name: Explorer7 executable path
-  $description: Path to the private explorer.exe produced by ex7selfcontained.exe (environment variables like %SystemDrive% are expanded)
+- ExplorerPath: C:\Win7ExplorerRestorerTest\explorer.exe
+  $name: Win7ExplorerRestorer executable path
+  $description: Path to the private explorer.exe produced by Win7ExplorerRestorer.exe (environment variables like %SystemDrive% are expanded)
 */
 // ==/WindhawkModSettings==
 
@@ -65,26 +65,26 @@ static LONG WINAPI RegQueryValueExWHook(HKEY hKey, LPCWSTR lpValueName,
                                         LPBYTE lpData, LPDWORD lpcbData) {
     if (lpValueName && *lpValueName &&
         lstrcmpiW(lpValueName, L"Shell") == 0) {
-        Wh_Log(L"ex7-userinit-shell: Shell query intercepted (hKey=%p)", hKey);
+        Wh_Log(L"win7explorerestorer-userinit-shell: Shell query intercepted (hKey=%p)", hKey);
 
         WCHAR target[MAX_PATH * 2];
         DWORD chars = ExpandTarget(target, (DWORD)_countof(target));
         if (chars == 0 || chars >= _countof(target)) {
-            Wh_Log(L"ex7-userinit-shell: ERROR expanding '%s' -> "
+            Wh_Log(L"win7explorerestorer-userinit-shell: ERROR expanding '%s' -> "
                    L"original API fallback", g_settingPath);
             return pOriginalRegQueryValueExW(hKey, lpValueName, lpReserved,
                                              lpType, lpData, lpcbData);
         }
-        Wh_Log(L"ex7-userinit-shell: target Explorer path = %s", target);
+        Wh_Log(L"win7explorerestorer-userinit-shell: target Explorer path = %s", target);
 
         DWORD attr = GetFileAttributesW(target);
         if (attr == INVALID_FILE_ATTRIBUTES) {
-            Wh_Log(L"ex7-userinit-shell: target MISSING (%s) -> "
+            Wh_Log(L"win7explorerestorer-userinit-shell: target MISSING (%s) -> "
                    L"original API fallback", target);
             return pOriginalRegQueryValueExW(hKey, lpValueName, lpReserved,
                                              lpType, lpData, lpcbData);
         }
-        Wh_Log(L"ex7-userinit-shell: target exists -> returning it as Shell");
+        Wh_Log(L"win7explorerestorer-userinit-shell: target exists -> returning it as Shell");
 
         const DWORD need =
             (DWORD)((wcslen(target) + 1) * sizeof(wchar_t));  // incl. NUL
@@ -107,7 +107,7 @@ static LONG WINAPI RegQueryValueExWHook(HKEY hKey, LPCWSTR lpValueName,
             return ERROR_SUCCESS;
         }
         if (*lpcbData < need) {
-            Wh_Log(L"ex7-userinit-shell: caller buffer too small "
+            Wh_Log(L"win7explorerestorer-userinit-shell: caller buffer too small "
                    L"(%u < %u bytes) -> ERROR_MORE_DATA", *lpcbData, need);
             *lpcbData = need;
             return ERROR_MORE_DATA;
@@ -124,16 +124,16 @@ static LONG WINAPI RegQueryValueExWHook(HKEY hKey, LPCWSTR lpValueName,
 BOOL Wh_ModInit(void) {
     PCWSTR setting = Wh_GetStringSetting(L"ExplorerPath");
     const WCHAR* chosen =
-        (setting && *setting) ? setting : L"C:\\ex7test\\explorer.exe";
+        (setting && *setting) ? setting : L"C:\\Win7ExplorerRestorerTest\\explorer.exe";
     wcsncpy_s(g_settingPath, _countof(g_settingPath), chosen, _TRUNCATE);
     if (setting)
         Wh_FreeStringSetting(setting);
 
     WCHAR expanded[MAX_PATH * 2];
     if (ExpandTarget(expanded, (DWORD)_countof(expanded)))
-        Wh_Log(L"ex7-userinit-shell: init, Shell will point to %s", expanded);
+        Wh_Log(L"win7explorerestorer-userinit-shell: init, Shell will point to %s", expanded);
     else
-        Wh_Log(L"ex7-userinit-shell: init, WARNING: '%s' does not expand",
+        Wh_Log(L"win7explorerestorer-userinit-shell: init, WARNING: '%s' does not expand",
                g_settingPath);
 
     Wh_SetFunctionHook(
@@ -145,5 +145,5 @@ BOOL Wh_ModInit(void) {
 }
 
 void Wh_ModUninit(void) {
-    Wh_Log(L"ex7-userinit-shell: uninit, Shell redirection OFF");
+    Wh_Log(L"win7explorerestorer-userinit-shell: uninit, Shell redirection OFF");
 }
