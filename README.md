@@ -6,7 +6,7 @@ Windows 7 Explorer Restorer is a project that aims to restore the original Windo
 
 The project runs a private copy of the original Windows 7 SP1 `explorer.exe` together with a compatibility wrapper, allowing the Windows 7 Explorer shell to run on modern Windows versions without replacing Windows system files.
 
-The project is provided on a **best-effort basis**. Compatibility may vary depending on the Windows version, installed components, system configuration, and future Windows updates.
+**Note: The project is provided on a **best-effort basis** and is not affiliated with or endorsed by Microsoft nor the original explorer7. This is an unofficial project created solely to improve the user experience on modern Windows. Compatibility may vary depending on the Windows version, installed components, system configuration, and future Windows updates.**
 
 Windows 7 Explorer Restorer has been tested on:
 
@@ -17,7 +17,7 @@ It is intended to work on both Windows 10 and Windows 11, although not every fea
 
 ## Emergency Shell Switcher
 
-Because Explorer is responsible for the Windows shell, an incompatible configuration could potentially leave the desktop without a normal shell.
+Since Explorer is responsible for the Windows shell, an incompatible configuration could potentially leave the desktop without a normal shell.
 
 The project therefore includes an Emergency Shell Switcher that allows the user to switch between:
 
