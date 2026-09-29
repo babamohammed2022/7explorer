@@ -40,6 +40,7 @@
 #include <tlhelp32.h>
 
 void CreateTwinUI_UWP(); // ImmersiveShell.cpp
+namespace ex7 { void RetryDeferredTwinUI(); }
 
 namespace ex7 {
 namespace {
@@ -1571,7 +1572,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test33), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test34), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
@@ -1637,6 +1638,7 @@ DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def) { return ReadAdvan
 void OnSysTrayCreateBegin()
 {
 	LogLine(L"[ex7] SysTray: CoCreateInstance start");
+	SafeInvoke(L"RetryDeferredTwinUI", RetryDeferredTwinUI); // UWP: TwinUI on a thread with COM
 	if (InterlockedExchange(&g_trayReached, 1) == 0) {
 		WriteAdvancedDword(L"StartupFailures", 0);
 		// UWP sentinel: the shell came up fine, so give the immersive stack

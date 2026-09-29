@@ -114,8 +114,8 @@ void WatchUnsafe(Watch* w)
 	if (InterlockedCompareExchange(&g_hostStarted, 0, 0) || HostRunning()) {
 		// the late host did not help: next start the host is launched before
 		// the Win7 desktop (forum-reported working order). UwpEarlyHost=0 to undo.
-		Log(L"no window for %s even with the host: UwpEarlyHost=1 for the next start", w->target);
-		if (ReadAdvancedDwordPublic(L"UwpEarlyHost", 2) == 2) SetEarly(1);
+		Log(L"no window for %s even with the host (UwpHostRuntime=3 starts it before the desktop)", w->target);
+		/* test34: no automatic early host (it may take the tray icons) */
 		LastResort(w);
 		return;
 	}
@@ -129,7 +129,7 @@ void WatchUnsafe(Watch* w)
 	}
 	for (int i = 0; i < 28; ++i) { Sleep(250); if (CountAppWindows() > w->before) return; }
 	Log(L"still no window for %s after the host", w->target);
-	if (ReadAdvancedDwordPublic(L"UwpEarlyHost", 2) == 2) SetEarly(1);
+	/* test34: no automatic early host (it may take the tray icons) */
 	LastResort(w);
 }
 
@@ -199,7 +199,7 @@ void EarlyStart()
 {
 	__try {
 		DWORD m = Mode(), e = ReadAdvancedDwordPublic(L"UwpEarlyHost", 2);
-		if (m == 3 || (m != 0 && e == 1)) EnsureHost(L"early start (before the Win7 desktop)");
+		(void)e; if (m == 3) EnsureHost(L"early start (before the Win7 desktop)");
 	}
 	__except (SehFilter(L"uwp EarlyStart", GetExceptionInformation())) {}
 }
