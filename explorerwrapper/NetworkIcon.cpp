@@ -332,12 +332,18 @@ bool CachedDllPath(wchar_t* out)
 }
 
 bool NetworkIconWanted() { return Enabled(); }
+// test32: NetworkIconEngine 1 (default) = own icon driven by Network List
+// Manager (NetworkTrayIcon.cpp); the downloaded pnidui 22621 SSO is not
+// started because on 24H2 its state engine stays frozen (user report).
+// 0 = previous behaviour (pnidui SSO hosted by stobject).
+bool OwnIconEngine() { return ReadAdvancedDword(L"NetworkIconEngine", 1) != 0; }
 bool NetworkSsoCreated() { return g_ssoCreated != 0; }
 
 void OnStobjectLoaded(HMODULE st)
 {
 	if (!st || InterlockedCompareExchange(&g_stobjectPatched, 1, 0) != 0) return;
 	if (!Enabled()) return;
+	if (OwnIconEngine()) { Log(L"NetworkIconEngine=1: pnidui SSO not started, NLM icon used"); return; }
 	if (!InitDir()) return;
 	wchar_t dll[MAX_PATH]; DllPath(dll);
 	if (GetFileAttributesW(dll) == INVALID_FILE_ATTRIBUTES) { Log(L"pnidui not cached yet: network icon from the next start"); return; }

@@ -21,6 +21,7 @@ void OnStobjectLoaded(HMODULE stobject);
 // Path of the cached pnidui.dll (false if not downloaded yet).
 bool CachedDllPath(wchar_t* out);
 bool NetworkIconWanted();
+bool OwnIconEngine();     // NLM-driven icon instead of the pnidui SSO
 bool NetworkSsoCreated(); // pnidui SSO object running (real icon)
 
 // Fallback (NetworkTrayIcon.cpp): if pnidui is still not running ~15 s after

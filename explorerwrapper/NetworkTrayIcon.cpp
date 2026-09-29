@@ -473,7 +473,7 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 		case WM_TIMER:
 			if (w == kTimerDebounce) { KillTimer(h, kTimerDebounce); UpdateIcon(false); return 0; }
 			if (w == kTimer) {
-				if (NetworkSsoCreated()) { // the real icon started after all
+				if (!OwnIconEngine() && NetworkSsoCreated()) { // the real icon started after all
 					NOTIFYICONDATAW nid = { sizeof(nid) }; nid.hWnd = h; nid.uID = 1;
 					Shell_NotifyIconW(NIM_DELETE, &nid); g_added = false;
 					KillTimer(h, kTimer); Log(L"pnidui is running: fallback icon removed");
@@ -496,8 +496,9 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 
 DWORD WINAPI IconThread(LPVOID)
 {
-	Sleep(15000); // give the stobject-hosted pnidui time to start
-	if (NetworkSsoCreated()) { Log(L"pnidui running: no fallback needed"); return 0; }
+	const bool own = OwnIconEngine();
+	Sleep(own ? 2000 : 15000); // SSO mode: give the stobject-hosted pnidui time to start
+	if (!own && NetworkSsoCreated()) { Log(L"pnidui running: no fallback needed"); return 0; }
 	wchar_t dll[MAX_PATH];
 	if (!CachedDllPath(dll)) { Log(L"pnidui not cached: no icons for the fallback yet"); return 0; }
 	// Loaded as a real module (DllMain only; no SSO object is created): the
@@ -538,7 +539,7 @@ volatile LONG g_started = 0;
 void StartFallbackTrayIcon()
 {
 	if (InterlockedExchange(&g_started, 1)) return;
-	if (!NetworkIconWanted() && ReadAdvancedDwordPublic(L"LegacyNetworkIcon", 1) != 3) return;
+	if (!NetworkIconWanted() && !OwnIconEngine() && ReadAdvancedDwordPublic(L"LegacyNetworkIcon", 1) != 3) return;
 	__try {
 		HANDLE t = CreateThread(nullptr, 0, IconThread, nullptr, 0, nullptr);
 		if (t) CloseHandle(t);

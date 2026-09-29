@@ -8,6 +8,7 @@
 #include <shobjidl.h>
 
 namespace ex7 {
+bool OpenNotifyIconsPage();
 void LogText(const wchar_t* text);
 DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def);
 namespace {
@@ -183,6 +184,20 @@ void InstallUnsafe()
 // L"Microsoft.NotificationAreaIcons", ...). On 24H2 that item no longer
 // exists, Open fails silently and nothing appears: redirect it to the
 // built-in dialog.
+struct PageCtx { BOOL ok; };
+void OpenPageUnsafe(PageCtx* c)
+{
+	wchar_t exe[MAX_PATH];
+	if (!GetWindowsDirectoryW(exe, MAX_PATH) || !PathAppendW(exe, L"explorer.exe")) return;
+	SHELLEXECUTEINFOW sei = { sizeof(sei) };
+	sei.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
+	sei.lpFile = exe;
+	sei.lpParameters = L"shell:::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}";
+	sei.nShow = SW_SHOWNORMAL;
+	c->ok = ShellExecuteExW(&sei);
+	wchar_t l[160]; wnsprintfW(l, 160, L"[ex7][notifyicons] explorer shell:::{05D7B0F4-...} -> %d (%u)", c->ok, c->ok ? 0 : GetLastError());
+	LogText(l);
+}
 typedef HRESULT(STDMETHODCALLTYPE* Open_t)(IOpenControlPanel*, LPCWSTR, LPCWSTR, IUnknown*);
 Open_t g_origOpen = nullptr;
 
@@ -195,16 +210,16 @@ HRESULT STDMETHODCALLTYPE Open_Hook(IOpenControlPanel* self, LPCWSTR name, LPCWS
 		LogText(l);
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) { mine = false; }
-	// The system page is used when it exists (it does on 24H2/25H2); the
-	// built-in window only if Open fails or NotifyIconsUseSettings=3.
+	// Hardcoded (test32): the page is opened exactly as
+	// "explorer.exe shell:::{05D7B0F4-...}" - IOpenControlPanel::Open and the
+	// built-in window both fell back to ms-settings:taskbar on the user's PC.
 	DWORD mode = mine ? ReadAdvancedDwordPublic(L"NotifyIconsUseSettings", 0) : 0;
 	if (mine && mode == 3 && ShowNotifyIconsDialog()) return S_OK;
-	HRESULT hr = g_origOpen(self, name, page, site);
-	if (mine) {
-		wchar_t l[120]; wnsprintfW(l, 120, L"[ex7] IOpenControlPanel::Open hr=0x%08X", (DWORD)hr); LogText(l);
-		if (FAILED(hr) && mode == 0 && ShowNotifyIconsDialog()) return S_OK;
+	if (mine && mode != 1) {
+		if (OpenNotifyIconsPage()) return S_OK;
+		if (ShowNotifyIconsDialog()) return S_OK;
 	}
-	return hr;
+	return g_origOpen(self, name, page, site);
 }
 
 void InstallOpenUnsafe()
@@ -228,6 +243,12 @@ void InstallOpenUnsafe()
 DWORD WINAPI OpenThread(LPVOID) { SafeInvoke(L"IOpenControlPanel hook", InstallOpenUnsafe); return 0; }
 
 } // namespace
+
+bool OpenNotifyIconsPage()
+{
+	PageCtx c = { FALSE };
+	return SafeInvokeCtx<PageCtx>(L"OpenNotifyIconsPage", OpenPageUnsafe, &c) && c.ok;
+}
 
 void InstallTrayMenus() { SafeInvoke(L"InstallTrayMenus", InstallUnsafe); }
 

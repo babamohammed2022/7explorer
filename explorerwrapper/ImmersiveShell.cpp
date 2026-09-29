@@ -170,6 +170,16 @@ void CreateTwinUI_UWP()
 	// controller is intentionally kept alive for the lifetime of the shell.
 	ex7::ComPtr<IImmersiveShellCreator> ImmersiveShellCreator;
 	HRESULT hrB = CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid());
+	if (hrB == CO_E_NOTINITIALIZED) {
+		// test32: the user's log showed 0x800401F0 - this runs on explorer's
+		// main thread before it initialised COM, so TwinUI (the in-process
+		// immersive shell that UWP activation needs) never started. Join an
+		// STA (what explorer itself uses later: its own call then returns
+		// S_FALSE) and retry once. Not uninitialised on purpose.
+		HRESULT hi = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+		hrB = CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid());
+		wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI: COM was not initialised, CoInitializeEx=0x%08X, retry hr=0x%08X", (DWORD)hi, (DWORD)hrB); ex7::LogText(l);
+	}
 	{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI ImmersiveShellBuilder hr=0x%08X", (DWORD)hrB); ex7::LogText(l); }
 	if (SUCCEEDED(hrB))
 	{

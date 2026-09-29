@@ -13,5 +13,6 @@
 #include "common.h"
 namespace ex7 {
 void InstallTrayMenus();
-void InstallControlPanelOpenHook(); // IOpenControlPanel::Open("...NotificationAreaIcons")
+void InstallControlPanelOpenHook();
+bool OpenNotifyIconsPage(); // explorer.exe shell:::{05D7B0F4-...}, SEH-guarded // IOpenControlPanel::Open("...NotificationAreaIcons")
 }

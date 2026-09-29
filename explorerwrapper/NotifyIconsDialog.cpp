@@ -5,6 +5,7 @@
 #include <shlwapi.h>
 
 namespace ex7 {
+bool OpenNotifyIconsPage();
 void LogText(const wchar_t* text);
 namespace {
 
@@ -163,7 +164,7 @@ void RunUnsafe()
 	wchar_t l[160]; wnsprintfW(l, 160, L"[ex7][notifyicons] TrayNotify hr=0x%08X", (DWORD)hr); LogText(l);
 	if (FAILED(hr) || !g_tn) {
 		g_tn = nullptr;
-		ShellExecuteW(nullptr, nullptr, L"ms-settings:taskbar", nullptr, nullptr, SW_SHOWNORMAL);
+		OpenNotifyIconsPage();
 		return;
 	}
 	g_count = 0;
