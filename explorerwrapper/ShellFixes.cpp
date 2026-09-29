@@ -522,58 +522,167 @@ RegGetValueW_t g_origRegGetValueW = nullptr;
 RegQueryValueExW_t g_origRegQueryValueExW = nullptr;
 const wchar_t kWin32Flyout[] = L"UseWin32BatteryFlyout";
 
-bool IsWin32FlyoutValue(LPCWSTR v)
+// test25: same mechanism for SndVolSSO.dll (volume flyout). On 26100 it
+// reads HKLM\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC\EnableMTCUVC:
+// non-zero = immersive "Windows.Internal.ShellExperience.MtcUvc" flyout
+// (never appears under 7explorer), 0 = classic "SndVol.exe -f" flyout.
+volatile LONG g_mtcuvcQueried = 0;
+
+// -1 = not ours, else the DWORD to answer
+int OverrideFor(LPCWSTR v)
 {
-	__try { return v && lstrcmpiW(v, kWin32Flyout) == 0; }
-	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+	__try {
+		if (!v) return -1;
+		if (lstrcmpiW(v, kWin32Flyout) == 0) {
+			if (InterlockedExchange(&g_win32FlyoutQueried, 1) == 0)
+				LogLine(L"[ex7] stobject queried UseWin32BatteryFlyout -> 1 (Win32 flyout)");
+			return 1;
+		}
+		if (lstrcmpiW(v, L"EnableMTCUVC") == 0) {
+			if (InterlockedExchange(&g_mtcuvcQueried, 1) == 0)
+				LogLine(L"[ex7] SndVolSSO queried EnableMTCUVC -> 0 (classic volume flyout)");
+			return 0;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return -1;
 }
 
-LSTATUS ReturnDwordOne(LPDWORD type, PVOID data, LPDWORD cb)
+LSTATUS ReturnDword(DWORD val, LPDWORD type, PVOID data, LPDWORD cb)
 {
-	if (InterlockedExchange(&g_win32FlyoutQueried, 1) == 0)
-		LogLine(L"[ex7] stobject queried UseWin32BatteryFlyout -> 1 (Win32 flyout)");
-	if (type) *type = REG_DWORD;
-	if (!cb) return data ? ERROR_INVALID_PARAMETER : ERROR_SUCCESS;
-	if (!data) { *cb = sizeof(DWORD); return ERROR_SUCCESS; }
-	if (*cb < sizeof(DWORD)) { *cb = sizeof(DWORD); return ERROR_MORE_DATA; }
-	*(DWORD*)data = 1; *cb = sizeof(DWORD);
-	return ERROR_SUCCESS;
+	__try {
+		if (type) *type = REG_DWORD;
+		if (!cb) return data ? ERROR_INVALID_PARAMETER : ERROR_SUCCESS;
+		if (!data) { *cb = sizeof(DWORD); return ERROR_SUCCESS; }
+		if (*cb < sizeof(DWORD)) { *cb = sizeof(DWORD); return ERROR_MORE_DATA; }
+		*(DWORD*)data = val; *cb = sizeof(DWORD);
+		return ERROR_SUCCESS;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) { return ERROR_INVALID_PARAMETER; }
 }
 
 LSTATUS WINAPI RegGetValueW_Hook(HKEY k, LPCWSTR sub, LPCWSTR val, DWORD flags, LPDWORD type, PVOID data, LPDWORD cb)
 {
-	if (IsWin32FlyoutValue(val)) return ReturnDwordOne(type, data, cb);
+	int o = OverrideFor(val);
+	if (o >= 0) return ReturnDword((DWORD)o, type, data, cb);
 	return g_origRegGetValueW(k, sub, val, flags, type, data, cb);
 }
 
 LSTATUS WINAPI RegQueryValueExW_Hook(HKEY k, LPCWSTR val, LPDWORD res, LPDWORD type, LPBYTE data, LPDWORD cb)
 {
-	if (IsWin32FlyoutValue(val)) return ReturnDwordOne(type, data, cb);
+	int o = OverrideFor(val);
+	if (o >= 0) return ReturnDword((DWORD)o, type, data, cb);
 	return g_origRegQueryValueExW(k, val, res, type, data, cb);
 }
 
-void PatchStobjectRegistry()
+HMODULE g_patched[8] = {};
+
+void PatchModuleRegistry(HMODULE m, const wchar_t* what)
 {
-	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) == 0) { LogLine(L"[ex7] Win32BatteryFlyout=0: not patched"); return; }
-	HMODULE st = GetModuleHandleW(L"stobject.dll");
+	if (!m) return;
+	for (HMODULE p : g_patched) if (p == m) return;
 	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
-	if (!st || !kb) { LogLine(L"[ex7] Win32 flyout: stobject=%p kernelbase=%p", st, kb); return; }
-	if (st == g_stobject && g_origRegGetValueW) return; // already done
-	g_stobject = st;
-	g_origRegGetValueW = (RegGetValueW_t)GetProcAddress(kb, "RegGetValueW");
-	g_origRegQueryValueExW = (RegQueryValueExW_t)GetProcAddress(kb, "RegQueryValueExW");
+	if (!kb) return;
+	if (!g_origRegGetValueW) g_origRegGetValueW = (RegGetValueW_t)GetProcAddress(kb, "RegGetValueW");
+	if (!g_origRegQueryValueExW) g_origRegQueryValueExW = (RegQueryValueExW_t)GetProcAddress(kb, "RegQueryValueExW");
 	HMODULE adv = GetModuleHandleW(L"advapi32.dll");
 	static const char* dlls[] = { "api-ms-win-core-registry-l1-1-0.dll", "api-ms-win-core-registry-l1-1-1.dll", "ADVAPI32.dll", "KERNELBASE.dll" };
 	for (const char* d : dlls) {
-		if (g_origRegGetValueW) ChangeImportedAddress(st, (LPSTR)d, (FARPROC)g_origRegGetValueW, (FARPROC)RegGetValueW_Hook);
-		if (g_origRegQueryValueExW) ChangeImportedAddress(st, (LPSTR)d, (FARPROC)g_origRegQueryValueExW, (FARPROC)RegQueryValueExW_Hook);
-		if (adv) { // advapi32 exports may be distinct stubs
+		if (g_origRegGetValueW) ChangeImportedAddress(m, (LPSTR)d, (FARPROC)g_origRegGetValueW, (FARPROC)RegGetValueW_Hook);
+		if (g_origRegQueryValueExW) ChangeImportedAddress(m, (LPSTR)d, (FARPROC)g_origRegQueryValueExW, (FARPROC)RegQueryValueExW_Hook);
+		if (adv) {
 			FARPROC a1 = GetProcAddress(adv, "RegGetValueW"), a2 = GetProcAddress(adv, "RegQueryValueExW");
-			if (a1 && a1 != (FARPROC)g_origRegGetValueW) ChangeImportedAddress(st, (LPSTR)d, a1, (FARPROC)RegGetValueW_Hook);
-			if (a2 && a2 != (FARPROC)g_origRegQueryValueExW) ChangeImportedAddress(st, (LPSTR)d, a2, (FARPROC)RegQueryValueExW_Hook);
+			if (a1 && a1 != (FARPROC)g_origRegGetValueW) ChangeImportedAddress(m, (LPSTR)d, a1, (FARPROC)RegGetValueW_Hook);
+			if (a2 && a2 != (FARPROC)g_origRegQueryValueExW) ChangeImportedAddress(m, (LPSTR)d, a2, (FARPROC)RegQueryValueExW_Hook);
 		}
 	}
-	LogLine(L"[ex7] Win32 flyout: stobject %p registry imports patched", st);
+	for (HMODULE& p : g_patched) if (!p) { p = m; break; }
+	LogLine(L"[ex7] %s %p registry imports patched", what, m);
+}
+
+struct PatchCtx { HMODULE m; const wchar_t* what; };
+void PatchModuleRegistryCtx(PatchCtx* c) { PatchModuleRegistry(c->m, c->what); }
+
+// Called for every module load (LdrLoadDll hook) and at SysTray creation.
+void PatchTrayModules()
+{
+	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) != 0) {
+		PatchCtx c = { GetModuleHandleW(L"stobject.dll"), L"Win32 flyout: stobject" };
+		if (c.m) { g_stobject = c.m; SafeInvokeCtx<PatchCtx>(L"patch stobject", PatchModuleRegistryCtx, &c); }
+	}
+	if (ReadAdvancedDword(L"ClassicVolumeFlyout", 1) != 0) {
+		PatchCtx c = { GetModuleHandleW(L"SndVolSSO.dll"), L"classic volume flyout: SndVolSSO" };
+		if (c.m) SafeInvokeCtx<PatchCtx>(L"patch SndVolSSO", PatchModuleRegistryCtx, &c);
+	}
+}
+
+void PatchStobjectRegistry() { PatchTrayModules(); }
+
+// ------------------------------------------------------------ network icon
+// The network icon lives in pnidui.dll, started as a shell service object
+// listed in HKLM\...\Explorer\ShellServiceObjects. The Win7 explorer only
+// knows ShellServiceObjectDelayLoad, so if nobody else starts it we do:
+// for each listed SSO whose server is pnidui.dll, CoCreate + Exec(open).
+const GUID kCGID_SSO = { 0x000214D2, 0, 0, { 0xC0, 0, 0, 0, 0, 0, 0, 0x46 } };
+IOleCommandTarget* g_netSso[4] = {};
+
+void StartSsoIfPnidui(const wchar_t* clsidStr)
+{
+	wchar_t key[160], dll[MAX_PATH] = L"";
+	wnsprintfW(key, ARRAYSIZE(key), L"CLSID\\%s\\InprocServer32", clsidStr);
+	DWORD cb = sizeof(dll) - sizeof(wchar_t);
+	RegGetValueW(HKEY_CLASSES_ROOT, key, nullptr, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, dll, &cb);
+	wchar_t exp[MAX_PATH] = L"";
+	ExpandEnvironmentStringsW(dll, exp, MAX_PATH);
+	bool pni = StrStrIW(exp, L"pnidui.dll") != nullptr;
+	bool exists = exp[0] && GetFileAttributesW(exp) != INVALID_FILE_ATTRIBUTES;
+	LogLine(L"[ex7] SSO %s -> %s (exists=%d)", clsidStr, exp[0] ? exp : L"?", exists);
+	if (!pni || !exists) return;
+	if (GetModuleHandleW(L"pnidui.dll")) { LogLine(L"[ex7] network SSO: pnidui already loaded"); return; }
+	CLSID clsid;
+	if (FAILED(CLSIDFromString(clsidStr, &clsid))) return;
+	IOleCommandTarget* ct = nullptr;
+	HRESULT hr = CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER, IID_IOleCommandTarget, (void**)&ct);
+	HRESULT hx = E_FAIL;
+	if (SUCCEEDED(hr) && ct) {
+		hx = ct->Exec(&kCGID_SSO, 2 /*SSOCMDID_OPEN*/, 0, nullptr, nullptr);
+		for (auto& p : g_netSso) if (!p) { p = ct; ct = nullptr; break; }
+		if (ct) ct->Release();
+	}
+	LogLine(L"[ex7] network SSO %s started: create 0x%08X exec 0x%08X", clsidStr, hr, hx);
+}
+
+void StartNetworkSso()
+{
+	if (ReadAdvancedDword(L"StartNetworkIcon", 1) == 0) { LogLine(L"[ex7] StartNetworkIcon=0"); return; }
+	wchar_t sys[MAX_PATH];
+	GetSystemDirectoryW(sys, MAX_PATH); lstrcatW(sys, L"\\pnidui.dll");
+	LogLine(L"[ex7] network icon: %s exists=%d loaded=%p", sys,
+		GetFileAttributesW(sys) != INVALID_FILE_ATTRIBUTES, GetModuleHandleW(L"pnidui.dll"));
+	HKEY k;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellServiceObjects", 0, KEY_READ, &k) != ERROR_SUCCESS) {
+		LogLine(L"[ex7] network icon: no ShellServiceObjects key"); return;
+	}
+	for (DWORD i = 0; i < 64; i++) {
+		wchar_t name[64]; DWORD cch = ARRAYSIZE(name);
+		if (RegEnumKeyExW(k, i, name, &cch, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) break;
+		struct C { const wchar_t* n; } c = { name };
+		SafeInvokeCtx<C>(L"StartSsoIfPnidui", [](C* x) { StartSsoIfPnidui(x->n); }, &c);
+	}
+	RegCloseKey(k);
+}
+
+UINT_PTR g_trayTimer = 0;
+int g_trayTicks = 0;
+void CALLBACK TrayTimerProc(HWND, UINT, UINT_PTR id, DWORD)
+{
+	__try {
+		++g_trayTicks;
+		PatchTrayModules();
+		if (g_trayTicks == 4) SafeInvoke(L"StartNetworkSso", StartNetworkSso); // ~8 s after SysTray
+		if (g_trayTicks >= 15) { KillTimer(nullptr, id); g_trayTimer = 0; }
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) { KillTimer(nullptr, id); }
 }
 
 // ------------------------------------------------------------ Connect To
@@ -750,7 +859,15 @@ LONG NTAPI LdrLoadDll_Hook(PWSTR sp, PULONG ch, EX7_USTR* name, PVOID* h)
 		}
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {}
-	return g_origLdrLoadDll(sp, ch, name, h);
+	LONG st = g_origLdrLoadDll(sp, ch, name, h);
+	if (st >= 0) {
+		__try {
+			if (name && name->Buffer && (GetModuleHandleW(L"SndVolSSO.dll") || GetModuleHandleW(L"stobject.dll")))
+				PatchTrayModules();
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {}
+	}
+	return st;
 }
 
 bool g_swallow = true;
@@ -1218,5 +1335,7 @@ void OnSystemSysTrayCreated()
 {
 	LogLine(L"[ex7] SysTray: system stobject in use (8.1 active=%d)", ex7::w81::IsActive());
 	SafeInvoke(L"PatchStobjectRegistry", PatchStobjectRegistry);
+	if (!g_trayTimer) g_trayTimer = SetTimer(nullptr, 0, 2000, TrayTimerProc);
+	LogLine(L"[ex7] tray timer %p", (void*)g_trayTimer);
 }
 } // namespace ex7
