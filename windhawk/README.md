@@ -1,11 +1,17 @@
-# windhawk/ — PoC shell Explorer7 (mod OPZIONALI da v0.0.3-test4)
+# windhawk/ — PoC shell Explorer7 (mod OPZIONALI)
 
-> **Aggiornamento test4**: la funzione `ex7-fake-explorer-path` (spoof di
-> `GetModuleFileNameW`) è ora **integrata in `wrp64.dll`** — non serve più
-> Windhawk per il runtime. Il mod `ex7-userinit-shell` (redirect Shell al
-> login) resta disponibile come alternativa login-time, insieme alla nuova
-> opzione file-based (Startup folder) dello switcher. Questi sorgenti restano
-> per trasparenza/ispezione e per chi preferisce Windhawk.
+> **Stato attuale (test37)**: entrambe le funzioni dei mod sono ora
+> coperte dal progetto stesso e i mod sono **opzionali/supplementari**:
+>
+> - `ex7-fake-explorer-path` (spoof di `GetModuleFileNameW`) è **integrato
+>   in `wrp64.dll`** fin da test4 — il mod è **ridondante**;
+> - `ex7-userinit-shell` (redirect della query `Shell` di userinit) è
+>   **soppiantato** dall'avvio al logon dello switcher (test37: valore
+>   `Shell` per-utente in HKCU + fallback + recovery automatico, vedi
+>   `docs/avvio-al-login.md`), che non richiede Windhawk.
+>
+> Questi sorgenti restano per trasparenza/ispezione e per chi preferisce
+> gestire il logon tramite Windhawk.
 
 
 Due mod Windhawk **sorgente** (Windhawk compila localmente quando li abiliti)

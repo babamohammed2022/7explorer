@@ -5,8 +5,11 @@
 //        ::{26EE0668-A00A-44D7-9371-BEB064C98683}\0\::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}
 //      (Control Panel category view \ Notification Area Icons). Windows 10/11
 //      no longer resolve that category path ("file not found"); the item
-//      itself is still reachable as shell:::{05D7B0F4-...}. If that fails too
-//      (newer Windows 11 builds), fall back to ms-settings:taskbar.
+//      itself is still reachable as shell:::{05D7B0F4-...} - and the page
+//      STILL EXISTS on 24H2/25H2 (test31: CLSID registered, window opens),
+//      although on 24H2 it renders EMPTY. Routing (incl. the built-in
+//      recreation, NotifyIconsDialog) is decided by NotifyIconsUseSettings,
+//      see LaunchRemap below; final fallback is ms-settings:taskbar.
 //    * "Connect To" uses ::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B} (Win7 network
 //      "Connect To" pop-up), which does not exist any more. Redirect to
 //      Network Connections shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E},
