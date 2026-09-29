@@ -95,6 +95,19 @@ print("SysTray CreateInstance", hex(ci(cf, None, ctypes.byref(IID_CT), ctypes.by
 cvt = ctypes.cast(ctypes.cast(ct, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
 Exec = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(GUID), W.DWORD, W.DWORD, ctypes.c_void_p, ctypes.c_void_p)(cvt[4])
 u32 = ctypes.WinDLL('user32')
+WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, W.HWND, W.UINT, W.WPARAM, W.LPARAM)
+u32.DefWindowProcW.argtypes = [W.HWND, W.UINT, W.WPARAM, W.LPARAM]; u32.DefWindowProcW.restype = ctypes.c_ssize_t
+def wp(h, m, w, l): return u32.DefWindowProcW(h, m, w, l)
+wpc = WNDPROC(wp); keep.append(wpc)
+class WNDCLASSW(ctypes.Structure):
+    _fields_ = [("style", W.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int), ("hInstance", W.HINSTANCE), ("hIcon", W.HICON), ("hCursor", ctypes.c_void_p), ("hbrBackground", W.HBRUSH), ("lpszMenuName", W.LPCWSTR), ("lpszClassName", W.LPCWSTR)]
+u32.CreateWindowExW.restype = W.HWND
+u32.CreateWindowExW.argtypes = [W.DWORD, W.LPCWSTR, W.LPCWSTR, W.DWORD, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, W.HWND, W.HMENU, W.HINSTANCE, ctypes.c_void_p]
+for c in ("Shell_TrayWnd", "TrayNotifyWnd"):
+    wc = WNDCLASSW(); wc.lpfnWndProc = wpc; wc.lpszClassName = c; u32.RegisterClassW(ctypes.byref(wc))
+tw = u32.CreateWindowExW(0, "Shell_TrayWnd", "", 0x80000000, 0, 0, 100, 30, None, None, None, None)
+tn = u32.CreateWindowExW(0, "TrayNotifyWnd", "", 0x40000000, 0, 0, 50, 30, tw, None, None, None)
+print("fake tray", tw, tn, flush=True)
 for cmd in (2, 4):
     print("Exec", cmd, hex(Exec(ct, ctypes.byref(CGID), cmd, 0, None, None) & 0xffffffff), flush=True)
     t0 = time.time(); msg = W.MSG()
