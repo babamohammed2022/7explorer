@@ -184,7 +184,7 @@
         "65535#2": "Taskbar &buttons:",
         "65535#3": "Taskbar appearance",
         "65535#4": "Choose which icons and notifications show up in the notification area.",
-        "1140": "&Customize...",
+        "1140": "&Customize..",
         "65535#5": "Notification area",
         "1144": "Point to the Show Desktop button at the far end of the taskbar to peek at the desktop.",
         "1141": "Use Aero &Peek to preview the desktop",
@@ -195,7 +195,7 @@
     "10/lang:0409": {
       "title": "Toolbars",
       "controls": {
-        "1106": "Pick which toolbars appear on the taskbar:",
+        "1106": "Pick toolbars to show on the taskbar:",
         "1137": "DeskBandList",
         "1138": "Dummy"
       }

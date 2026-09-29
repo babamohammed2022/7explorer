@@ -203,7 +203,7 @@
         "65535#2": "Compor&tamento dei pulsanti:",
         "65535#3": "Aspetto della barra delle applicazioni",
         "65535#4": "Scegliere le icone e le notifiche da visualizzare nell'area di notifica.",
-        "1140": "Personali&zza...",
+        "1140": "Personali&zza..",
         "65535#5": "Area di notifica",
         "1144": "Portare il puntatore su Mostra desktop per visualizzare l'anteprima del desktop.",
         "1141": "Attiva Aero &Peek per l'anteprima del desktop",
@@ -214,7 +214,7 @@
     "10/lang:0409": {
       "title": "Barre degli strumenti",
       "controls": {
-        "1106": "Selezionare le barre degli strumenti da visualizzare sulla barra delle applicazioni:",
+        "1106": "Scegliere le barre degli strumenti da mostrare sulla barra:",
         "1137": "DeskBandList",
         "1138": "Dummy"
       }
