@@ -362,6 +362,9 @@ UINT g_taskbarCreated = 0;
 bool g_added = false;
 Snapshot g_last = { (State)-1 };
 HICON g_icon = nullptr;
+// Win7 system tray icon GUIDs: clock 7820AE72, volume 7820AE73, network 7820AE74, power 7820AE75.
+const GUID kNetworkIconGuid = { 0x7820AE74, 0x23E3, 0x4229, { 0x82, 0xC1, 0xE4, 0x1C, 0xB6, 0x7D, 0x5B, 0x9C } };
+bool g_useGuid = true; // read in IconThread (no dynamic initialisers without CRT)
 
 WORD IconFor(const Snapshot& s)
 {
@@ -392,6 +395,12 @@ void UpdateIcon(bool force)
 	NOTIFYICONDATAW nid = { sizeof(nid) };
 	nid.hWnd = g_wnd; nid.uID = 1;
 	nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP;
+	// test35: registered with the Win7 system "Network" icon GUID, so the
+	// Win7 tray treats it as the system icon (always shown, like pnidui was)
+	// instead of a new app icon that auto-hide sends to the overflow area.
+	// Falls back to the plain id if the tray refuses the GUID. Opt-out
+	// NetworkIconSystemGuid=0.
+	if (g_useGuid) { nid.uFlags |= NIF_GUID; nid.guidItem = kNetworkIconGuid; }
 	nid.uCallbackMessage = WM_TRAYCB;
 	HICON ico = (HICON)LoadImageW(g_res, MAKEINTRESOURCEW(IconFor(s)), IMAGE_ICON,
 		GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
@@ -401,6 +410,13 @@ void UpdateIcon(bool force)
 	if (!g_added || force) {
 		Shell_NotifyIconW(NIM_DELETE, &nid);
 		ok = Shell_NotifyIconW(NIM_ADD, &nid);
+		if (!ok && g_useGuid) {
+			Log(L"NIM_ADD with the system network GUID refused (%u): plain icon", GetLastError());
+			g_useGuid = false;
+			nid.uFlags &= ~NIF_GUID; nid.guidItem = GUID();
+			Shell_NotifyIconW(NIM_DELETE, &nid);
+			ok = Shell_NotifyIconW(NIM_ADD, &nid);
+		}
 		nid.uVersion = NOTIFYICON_VERSION_4;
 		if (ok) Shell_NotifyIconW(NIM_SETVERSION, &nid);
 		g_added = ok != FALSE;
@@ -475,6 +491,7 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 			if (w == kTimer) {
 				if (!OwnIconEngine() && NetworkSsoCreated()) { // the real icon started after all
 					NOTIFYICONDATAW nid = { sizeof(nid) }; nid.hWnd = h; nid.uID = 1;
+					if (g_useGuid) { nid.uFlags = NIF_GUID; nid.guidItem = kNetworkIconGuid; }
 					Shell_NotifyIconW(NIM_DELETE, &nid); g_added = false;
 					KillTimer(h, kTimer); Log(L"pnidui is running: fallback icon removed");
 					return 0;
@@ -496,6 +513,7 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 
 DWORD WINAPI IconThread(LPVOID)
 {
+	g_useGuid = ReadAdvancedDwordPublic(L"NetworkIconSystemGuid", 1) != 0;
 	const bool own = OwnIconEngine();
 	Sleep(own ? 2000 : 15000); // SSO mode: give the stobject-hosted pnidui time to start
 	if (!own && NetworkSsoCreated()) { Log(L"pnidui running: no fallback needed"); return 0; }
