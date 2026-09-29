@@ -32,6 +32,7 @@
 #include "FlyoutFrames.h"
 #include "ImmersiveMenus.h"
 #include "NotifyIconsDialog.h"
+#include "TrayMenus.h"
 #include <shobjidl.h>
 #include "dbgprint.h"
 #include <shlwapi.h>
@@ -1495,10 +1496,12 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test28), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test29), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
+	SafeInvoke(L"InstallTrayMenus", ex7::InstallTrayMenus);             // Win32 tray menus + volume actions
+	SafeInvoke(L"OpenControlPanel hook", ex7::InstallControlPanelOpenHook); // "Customize..." -> built-in dialog
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare);
 	SafeInvoke(L"pnidui prepare", ex7::net::StartBackgroundPrepare); // network icon on 24H2+
 	SafeInvoke(L"settings hotkey", StartSettingsHotkey); // Win+I
