@@ -917,8 +917,21 @@ void CallerName(void* ret, wchar_t* out, int cch)
 	wnsprintfW(out, cch, L"%s+0x%X", PathFindFileNameW(mp), (DWORD)((DWORD64)ret - (DWORD64)m));
 }
 
+void LogStackHere(const wchar_t* what)
+{
+	CONTEXT c = {}; RtlCaptureContext(&c);
+	DWORD64 pcs[24] = {}; int n = 0;
+	__try { for (; n < 24 && c.Rip; ) { pcs[n++] = c.Rip; if (!UnwindOnce(&c)) break; } }
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	for (int i = 0; i < n; ++i) {
+		wchar_t f[300]; CallerName((void*)pcs[i], f, 300);
+		LogLine(L"[ex7]   %s frame %d: %s", what, i, f);
+	}
+}
+
 VOID NTAPI Exit_Hook(LONG code)
 {
+	LogStackHere(L"exit");
 	wchar_t c[300]; CallerName(_ReturnAddress(), c, 300);
 	LogLine(L"[ex7] process exit requested: code=0x%08X caller=%s tray reached=%d", code, c, g_trayReached);
 	g_origExit(code);
@@ -964,6 +977,21 @@ void InstallExitTracing()
 	LogLine(L"[ex7] start-up: existing Shell_TrayWnd=%p owner pid=%u %s (a running taskbar makes the Win7 explorer act as a folder window)", tray, pid, exe);
 	wchar_t shell[MAX_PATH] = L""; DWORD cb = sizeof(shell);
 	RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", L"Shell", RRF_RT_REG_SZ, nullptr, shell, &cb);
+	HWND sw = GetShellWindow(); DWORD swPid = 0; if (sw) GetWindowThreadProcessId(sw, &swPid);
+	HWND prog = FindWindowW(L"Progman", nullptr);
+	LogLine(L"[ex7] start-up: GetShellWindow=%p (pid %u) Progman=%p", sw, swPid, prog);
+	{
+		HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		PROCESSENTRY32W pe = { sizeof(pe) };
+		if (snap != INVALID_HANDLE_VALUE) {
+			for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe))
+				if (pe.th32ProcessID != GetCurrentProcessId() &&
+					(!lstrcmpiW(pe.szExeFile, L"explorer.exe") || !lstrcmpiW(pe.szExeFile, L"sihost.exe") ||
+					 !lstrcmpiW(pe.szExeFile, L"StartMenuExperienceHost.exe") || !lstrcmpiW(pe.szExeFile, L"userinit.exe")))
+					LogLine(L"[ex7] start-up: running %s pid %u parent %u", pe.szExeFile, pe.th32ProcessID, pe.th32ParentProcessID);
+			CloseHandle(snap);
+		}
+	}
 	LogLine(L"[ex7] start-up: cmdline=%s winlogon Shell=%s", GetCommandLineW(), shell);
 	HMODULE ep = GetModuleHandleW(L"dxgi.dll");
 	wchar_t dp[MAX_PATH] = L"-"; if (ep) GetModuleFileNameW(ep, dp, MAX_PATH);
@@ -1022,7 +1050,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test21), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test22), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
