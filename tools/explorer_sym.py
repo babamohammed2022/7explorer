@@ -63,3 +63,25 @@ def disasm_func(name_or_rva, maxlen=0x1800):
         print("  %X: %-8s %-40s %s" % (ins.address - BASE, ins.mnemonic, ins.op_str, note))
 for f in ["wWinMain"] + [x for x in sys.argv[4:] if not all(c in "0123456789abcdefABCDEF" for c in x)]:
     disasm_func(f)
+
+def disasm_range(a, b):
+    print("\n==== range RVA 0x%X-0x%X" % (a, b))
+    md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+    for ins in md.disasm(pe.get_data(a, b - a), BASE + a):
+        note = ""
+        import re
+        m = re.search(r"rip ([+-]) (0x[0-9a-f]+)", ins.op_str)
+        tgt = int(ins.op_str, 16) if ins.op_str.startswith("0x") else None
+        if m:
+            off = int(m.group(2), 16); tgt = ins.address + ins.size + (off if m.group(1) == "+" else -off)
+        if tgt:
+            note = imports.get(tgt) or "%s+0x%X" % sym(tgt)[:2]
+        print("  %X: %-8s %-40s %s" % (ins.address - BASE, ins.mnemonic, ins.op_str, note))
+    # who jumps into this range from wWinMain body
+    md2 = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+    for ins in md2.disasm(pe.get_data(0x202DC, 0x1400), BASE + 0x202DC):
+        if ins.op_str.startswith("0x") and a <= int(ins.op_str, 16) - BASE < b:
+            print("  ref from %X: %s %s" % (ins.address - BASE, ins.mnemonic, ins.op_str))
+disasm_range(0x5AD00, 0x5B040)
+disasm_func("ShouldStartDesktopAndTray", 0x400)
+disasm_func("IsDesktopWindowAlreadyPresent", 0x200)
