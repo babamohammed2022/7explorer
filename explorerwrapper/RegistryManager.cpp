@@ -28,13 +28,11 @@ CRegistryManager::CRegistryManager()
 {
 }
 
-// 7explorer fork: release the lazily opened keys (previously held raw with
-// no destructor; behavior is unchanged, the handles are just closed now).
-CRegistryManager::~CRegistryManager()
-{
-	if (m_hKeyMachine) { RegCloseKey(m_hKeyMachine); m_hKeyMachine = NULL; }
-	if (m_hKeyUser) { RegCloseKey(m_hKeyUser); m_hKeyUser = NULL; }
-}
+// NOTE: no destructor by design (see RegistryManager.h): with /ENTRY:DllMain
+// there is no CRT termination pass, so a dtor could never run; worse, the
+// atexit() references it emits break the static-CRT link (LNK2001
+// __vcrt_initialize et al). The lazily opened keys are process-lifetime
+// handles reclaimed by the OS at exit.
 
 LSTATUS CRegistryManager::QueryValue(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType)
 {

@@ -11,7 +11,11 @@ private:
 
 public:
 	CRegistryManager();
-	~CRegistryManager();
+	// NOTE: intentionally NO destructor. This DLL links with /ENTRY:DllMain
+	// (no CRT startup/termination), so a non-trivial dtor would only emit
+	// atexit() references that break the static-CRT link (LNK2001) and could
+	// never run anyway. The two lazily opened keys below are process-lifetime
+	// handles by design (opened once each, reclaimed by the OS at exit).
 
 	LSTATUS QueryValue(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType = nullptr);
 	HRESULT QueryValueWithFallback(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType = nullptr, DWORD dwDefault = 0);
