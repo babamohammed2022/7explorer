@@ -239,7 +239,7 @@ This project would not be possible without the reverse-engineering work, compati
 
 Windows 7 Explorer Restorer is currently an **alpha / work-in-progress project**.
 
-It is functional on supported configurations, but compatibility is not guaranteed.
+It is functional on supported configurations, but compatibility is not guaranteed on every configuration.
 
 The project is provided on a **best-effort basis** and should be tested carefully before being used as the primary Windows shell.
 
