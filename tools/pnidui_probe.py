@@ -42,9 +42,21 @@ print("DllGetClassObject hr", hex(hr & 0xffffffff))
 if hr < 0: sys.exit(0)
 vt = ctypes.cast(ctypes.cast(cf, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
 ci = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))(vt[3])
+iid_unk = g("{00000000-0000-0000-C000-000000000046}")
 obj = ctypes.c_void_p()
-hr = ci(cf, None, ctypes.byref(iid_ct), ctypes.byref(obj))
-print("CreateInstance(IOleCommandTarget) hr", hex(hr & 0xffffffff))
+hr = ci(cf, None, ctypes.byref(iid_unk), ctypes.byref(obj))
+print("CreateInstance(IUnknown) hr", hex(hr & 0xffffffff))
+if hr >= 0:
+    ovt = ctypes.cast(ctypes.cast(obj, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+    qi = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))(ovt[0])
+    for name, s_ in [("IOleCommandTarget","{B722BCCB-4E68-101B-A2BC-00AA00404770}"),("IObjectWithSite","{FC4801A3-2BA9-11CF-A229-00AA003D7352}"),
+                     ("IOleWindow","{00000114-0000-0000-C000-000000000046}"),("IServiceProvider","{6D5140C1-7436-11CE-8034-00AA006009FA}"),
+                     ("IPersist","{0000010C-0000-0000-C000-000000000046}"),("IMarshal","{00000003-0000-0000-C000-000000000046}"),
+                     ("IAgileObject","{94EA2B94-E9CC-49E0-C0FF-EE64CA8F5B90}"),("IInspectable","{AF86E2E0-B12D-4C6A-9C5A-D7AA65101E90}"),
+                     ("IShellServiceObject?","{D5E7D6E8-A7A1-4C75-A4C7-4C4B4E3C1E1A}"),("IDispatch","{00020400-0000-0000-C000-000000000046}")]:
+        o = ctypes.c_void_p()
+        r = qi(obj, ctypes.byref(g(s_)), ctypes.byref(o))
+        print("  QI", name, hex(r & 0xffffffff))
 u32 = ctypes.WinDLL('user32')
 for rid in (1, 2, 3, 100, 200, 1000):
     buf = ctypes.create_unicode_buffer(256)
