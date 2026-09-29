@@ -553,7 +553,7 @@ LSTATUS WINAPI RegQueryValueExW_Hook(HKEY k, LPCWSTR val, LPDWORD res, LPDWORD t
 
 void PatchStobjectRegistry()
 {
-	if (ReadAdvancedDword(L"Win32BatteryFlyout", 0) == 0) { LogLine(L"[ex7] Win32BatteryFlyout=0: not patched"); return; }
+	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) == 0) { LogLine(L"[ex7] Win32BatteryFlyout=0: not patched"); return; }
 	HMODULE st = GetModuleHandleW(L"stobject.dll");
 	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
 	if (!st || !kb) { LogLine(L"[ex7] Win32 flyout: stobject=%p kernelbase=%p", st, kb); return; }
@@ -583,9 +583,8 @@ void PatchStobjectRegistry()
 void RegisterConnectTo()
 {
 	const wchar_t key[] = L"Software\\Classes\\CLSID\\{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}";
-	if (ReadAdvancedDword(L"FixConnectTo", 0) == 0) {
-		// test16: opt-in. Remove the per-user key written by test15 (suspect
-		// of the black screen on 24H2).
+	if (ReadAdvancedDword(L"FixConnectTo", 1) == 0) {
+		// Opt-out: remove the per-user key.
 		LSTATUS d = RegDeleteTreeW(HKEY_CURRENT_USER, key);
 		LogLine(L"[ex7] Connect To: disabled (FixConnectTo=0), per-user key removed=%d", d);
 		return;
@@ -648,7 +647,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test16), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test17), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
