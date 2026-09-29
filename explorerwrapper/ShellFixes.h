@@ -18,4 +18,7 @@ void ImmersiveStartupSucceeded();
 // CreateTwinUI_UWP() under SEH + sentinel bookkeeping.
 void SafeCreateTwinUI_UWP();
 
+// Called after the system CLSID_SysTray object is created.
+void OnSystemSysTrayCreated();
+
 } // namespace ex7

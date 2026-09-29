@@ -694,6 +694,8 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	}
 	if (!w81SysTray)
 		result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	if (rclsid == CLSID_SysTray && !w81SysTray && SUCCEEDED(result))
+		ex7::OnSystemSysTrayCreated(); // Win32 battery flyout of the system stobject
 
 	if (rclsid == CLSID_PersonalStartMenu && riid == IID_IShellItemFilter && result != S_OK && g_osVersion.BuildNumber() >= 10074) //Ittr: as far as im aware doesnt cause crashing on 1507/11. needs further checking when im awake
 	{

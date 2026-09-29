@@ -737,7 +737,7 @@ void CreateUnsafe(CreateCtx* c)
 void StartBackgroundPrepare()
 {
 	if (InterlockedCompareExchange(&g_started, 1, 0) != 0) return;
-	if (ReadDword(L"LegacyBatteryFlyout", 1) == 0) return;
+	if (ReadDword(L"LegacyBatteryFlyout", 0) == 0) return;
 	LoadConfig();
 	if (!InitCacheDir()) return;
 	if (!BuildSupported()) return;
@@ -749,8 +749,12 @@ void StartBackgroundPrepare()
 
 bool TryCreateSysTray(LPUNKNOWN pUnkOuter, REFIID riid, void** ppv, HRESULT* phr)
 {
-	if (!g_started || !g_cacheDir[0] || !ppv) return false;
-	if (ReadDword(L"LegacyBatteryFlyout", 1) == 0 || !BuildSupported() || !HasBattery()) return false;
+	// test15: opt-in (LegacyBatteryFlyout=1). Default path is the Win32
+	// flyout of the system stobject (ShellFixes.cpp, UseWin32BatteryFlyout).
+	if (ReadDword(L"LegacyBatteryFlyout", 0) == 0) { Log(L"SysTray: 8.1 package not requested (LegacyBatteryFlyout=0), system stobject"); return false; }
+	if (!g_started || !g_cacheDir[0] || !ppv) { Log(L"SysTray: 8.1 skipped, started=%d cache=%s", g_started, g_cacheDir); return false; }
+	if (!BuildSupported()) { Log(L"SysTray: 8.1 skipped, build not supported"); return false; }
+	if (!HasBattery()) { Log(L"SysTray: 8.1 skipped, no battery"); return false; }
 	*ppv = nullptr;
 	CreateCtx c = { pUnkOuter, &riid, ppv, E_FAIL, false };
 	if (!SafeInvokeCtx<CreateCtx>(L"w81 CreateSysTray", CreateUnsafe, &c)) {

@@ -28,6 +28,9 @@
 #include <commctrl.h>
 #include "MinHook.h"
 #include "LegacyBatteryFlyout.h"
+#include <shobjidl.h>
+#include "dbgprint.h"
+#include <shlwapi.h>
 
 void CreateTwinUI_UWP(); // ImmersiveShell.cpp
 
@@ -216,7 +219,17 @@ BOOL WINAPI ShellExecuteExW_Hook(SHELLEXECUTEINFOW* sei)
 	if (!SafeInvokeCtx<ExecCtx>(L"ShellExecuteExW remap", TryRemapExec, &c))
 		c.handled = FALSE; // any fault in our code: behave exactly like before
 	if (c.handled) return c.result;
-	return g_origShellExecuteExW(sei);
+	BOOL ok = g_origShellExecuteExW(sei);
+	if (IsMsSettings(sei->lpFile)) {
+		DWORD err = ok ? 0 : GetLastError();
+		LogLine(L"[ex7] UWP activation uri=%s method=ShellExecuteEx(protocol) build=%u pid=%u result=%d err=%u",
+			sei->lpFile, OsBuild(), GetCurrentProcessId(), ok, err);
+		if (!ok && ActivateSettingsFallback(sei->lpFile)) {
+			sei->hInstApp = (HINSTANCE)(INT_PTR)33; return TRUE;
+		}
+		if (!ok) SetLastError(err);
+	}
+	return ok;
 }
 
 HINSTANCE WINAPI ShellExecuteW_Hook(HWND hwnd, LPCWSTR op, LPCWSTR file, LPCWSTR params, LPCWSTR dir, INT show)
@@ -244,13 +257,13 @@ void InstallExecHooks()
 	if (exw) {
 		MH_STATUS a = MH_CreateHook(exw, (void*)ShellExecuteExW_Hook, (void**)&g_origShellExecuteExW);
 		MH_STATUS b = MH_EnableHook(exw);
-		LogLine(L"[ex7] ShellExecuteExW minhook create=%d enable=%d", a, b);
+		LogLine(L"[ex7] ShellExecuteExW minhook create=%d enable=%d (0 = MH_OK, installed)", a, b);
 		if (a != MH_OK) g_origShellExecuteExW = (ShellExecuteExW_t)exw;
 	}
 	if (w) {
 		MH_STATUS a = MH_CreateHook(w, (void*)ShellExecuteW_Hook, (void**)&g_origShellExecuteW);
 		MH_STATUS b = MH_EnableHook(w);
-		LogLine(L"[ex7] ShellExecuteW minhook create=%d enable=%d", a, b);
+		LogLine(L"[ex7] ShellExecuteW minhook create=%d enable=%d (0 = MH_OK, installed)", a, b);
 		if (a != MH_OK) g_origShellExecuteW = (ShellExecuteW_t)w;
 	}
 }
@@ -356,7 +369,8 @@ void EnsureTransparencyEffects()
 // from Shell_NotifyIconW calls coming from stobject (tooltip contains the
 // current battery percentage), subclass its owner window and turn a left
 // click into ms-settings:batterysaver (fallback: Power Options).
-// Opt-out: BatteryFlyoutFallback = 0 (original behaviour).
+// Default (test15+): observe/log only. BatteryFlyoutFallback = 1 turns a
+// click into ms-settings:batterysaver (never Control Panel).
 typedef BOOL(WINAPI* Shell_NotifyIconW_t)(DWORD, PNOTIFYICONDATAW);
 Shell_NotifyIconW_t g_origNotifyIcon = nullptr;
 HMODULE g_stobject = nullptr;
@@ -365,6 +379,7 @@ volatile UINT g_battId = 0;
 volatile UINT g_battMsg = 0;
 volatile UINT g_battVersion = 0;
 volatile LONG g_battSubclassed = 0;
+volatile LONG g_win32FlyoutQueried = 0;
 const UINT_PTR kBattSubclassId = 0x37E7;
 
 bool LooksLikeBatteryTip(const wchar_t* tip)
@@ -377,22 +392,28 @@ bool LooksLikeBatteryTip(const wchar_t* tip)
 	return StrChrW(tip, L'%') != nullptr && StrStrW(tip, pct) != nullptr;
 }
 
-void LaunchBatterySettings()
+bool FallbackEnabled() { return ReadAdvancedDword(L"BatteryFlyoutFallback", 0) == 1; }
+
+DWORD TrayOwnerPid()
 {
+	DWORD pid = 0;
+	HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+	if (tray) GetWindowThreadProcessId(tray, &pid);
+	return pid;
+}
+
+// Opt-in fallback only (BatteryFlyoutFallback=1). test13 also fell back to
+// control.exe /name Microsoft.PowerOptions: that was the "Control Panel on
+// battery click" seen on the second start. Removed.
+void LaunchBatterySettings(const wchar_t* reason)
+{
+	LogLine(L"[ex7] battery flyout fallback requested target=ms-settings:batterysaver reason=%s", reason);
 	SHELLEXECUTEINFOW sei = { sizeof(sei) };
 	sei.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
 	sei.lpFile = L"ms-settings:batterysaver";
 	sei.nShow = SW_SHOWNORMAL;
 	BOOL ok = g_origShellExecuteExW ? g_origShellExecuteExW(&sei) : ShellExecuteExW(&sei);
-	if (!ok) {
-		SHELLEXECUTEINFOW fb = { sizeof(fb) };
-		fb.fMask = SEE_MASK_NOASYNC;
-		fb.lpFile = L"control.exe";
-		fb.lpParameters = L"/name Microsoft.PowerOptions";
-		fb.nShow = SW_SHOWNORMAL;
-		ok = g_origShellExecuteExW ? g_origShellExecuteExW(&fb) : ShellExecuteExW(&fb);
-	}
-	LogLine(L"[ex7] battery click -> settings launched=%d", ok);
+	LogLine(L"[ex7] battery fallback result=%d err=%u", ok, ok ? 0 : GetLastError());
 }
 
 LRESULT CALLBACK BatterySubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR)
@@ -403,12 +424,18 @@ LRESULT CALLBACK BatterySubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 		else { ev = (UINT)lParam; iconId = (UINT)wParam; }
 		if (iconId == g_battId) {
 			if (ev == NIN_SELECT || ev == NIN_KEYSELECT || (g_battVersion < 3 && ev == WM_LBUTTONUP)) {
-				LogLine(L"[ex7] battery icon event 0x%X", ev);
-				LaunchBatterySettings();
-				return 0;
+				LogLine(L"[ex7] battery flyout requested: event=0x%X explorer PID=%u tray owner PID=%u "
+					L"method=%s win32flyout=%d w81=%d", ev, GetCurrentProcessId(), TrayOwnerPid(),
+					ex7::w81::IsActive() ? L"Win8.1 stobject (cache)" : L"system stobject",
+					g_win32FlyoutQueried, ex7::w81::IsActive());
+				if (FallbackEnabled()) {
+					LaunchBatterySettings(L"BatteryFlyoutFallback=1");
+					return 0;
+				}
+				// default: let stobject show its own (Win32) flyout
 			}
-			if (ev == WM_LBUTTONDOWN || ev == WM_LBUTTONUP || ev == WM_LBUTTONDBLCLK)
-				return 0; // swallow: the original handler only opens the dead flyout
+			if (FallbackEnabled() && (ev == WM_LBUTTONDOWN || ev == WM_LBUTTONUP || ev == WM_LBUTTONDBLCLK))
+				return 0;
 		}
 	}
 	if (msg == WM_NCDESTROY) {
@@ -455,7 +482,7 @@ BOOL WINAPI Shell_NotifyIconW_Hook(DWORD msg, PNOTIFYICONDATAW nid)
 	HMODULE caller = nullptr;
 	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 		(LPCWSTR)_ReturnAddress(), &caller);
-	if (!ex7::w81::IsActive() && caller && caller == (g_stobject ? g_stobject : (g_stobject = GetModuleHandleW(L"stobject.dll")))) {
+	if (caller && caller == (g_stobject ? g_stobject : (g_stobject = GetModuleHandleW(L"stobject.dll")))) {
 		NotifyCtx c = { msg, nid };
 		SafeInvokeCtx<NotifyCtx>(L"Shell_NotifyIconW inspect", InspectNotify, &c);
 	}
@@ -464,15 +491,144 @@ BOOL WINAPI Shell_NotifyIconW_Hook(DWORD msg, PNOTIFYICONDATAW nid)
 
 void InstallBatteryFix()
 {
-	if (ReadAdvancedDword(L"BatteryFlyoutFallback", 1) == 0) return;
+	// Installed always: without the fallback it only logs battery clicks.
 	HMODULE shell32 = LoadLibraryW(L"shell32.dll");
 	void* fn = shell32 ? (void*)GetProcAddress(shell32, "Shell_NotifyIconW") : nullptr;
 	if (!fn) return;
 	MH_Initialize();
 	MH_STATUS a = MH_CreateHook(fn, (void*)Shell_NotifyIconW_Hook, (void**)&g_origNotifyIcon);
 	MH_STATUS b = MH_EnableHook(fn);
-	LogLine(L"[ex7] Shell_NotifyIconW minhook create=%d enable=%d", a, b);
+	LogLine(L"[ex7] Shell_NotifyIconW minhook create=%d enable=%d (0 = MH_OK, installed)", a, b);
 	if (a != MH_OK) g_origNotifyIcon = (Shell_NotifyIconW_t)fn;
+}
+
+
+// ------------------------------------------------------------ Win32 battery flyout
+// The system stobject.dll (checked on 26100: strings UseWin32BatteryFlyout,
+// Software\Microsoft\Windows\CurrentVersion\ImmersiveShell,
+// Windows.Internal.ShellExperience.TrayBatteryFlyout, BatMeterFlyout,
+// FlyoutElement) still contains the DirectUI Win32 flyout. By default it asks
+// ShellExperienceHost for the immersive flyout, which never appears under
+// 7explorer ("click does nothing"). We answer UseWin32BatteryFlyout=1 for
+// stobject only (IAT of stobject.dll, no registry write, no admin).
+typedef LSTATUS (WINAPI *RegGetValueW_t)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD);
+typedef LSTATUS (WINAPI *RegQueryValueExW_t)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+RegGetValueW_t g_origRegGetValueW = nullptr;
+RegQueryValueExW_t g_origRegQueryValueExW = nullptr;
+const wchar_t kWin32Flyout[] = L"UseWin32BatteryFlyout";
+
+bool IsWin32FlyoutValue(LPCWSTR v)
+{
+	__try { return v && lstrcmpiW(v, kWin32Flyout) == 0; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+LSTATUS ReturnDwordOne(LPDWORD type, PVOID data, LPDWORD cb)
+{
+	if (InterlockedExchange(&g_win32FlyoutQueried, 1) == 0)
+		LogLine(L"[ex7] stobject queried UseWin32BatteryFlyout -> 1 (Win32 flyout)");
+	if (type) *type = REG_DWORD;
+	if (!cb) return data ? ERROR_INVALID_PARAMETER : ERROR_SUCCESS;
+	if (!data) { *cb = sizeof(DWORD); return ERROR_SUCCESS; }
+	if (*cb < sizeof(DWORD)) { *cb = sizeof(DWORD); return ERROR_MORE_DATA; }
+	*(DWORD*)data = 1; *cb = sizeof(DWORD);
+	return ERROR_SUCCESS;
+}
+
+LSTATUS WINAPI RegGetValueW_Hook(HKEY k, LPCWSTR sub, LPCWSTR val, DWORD flags, LPDWORD type, PVOID data, LPDWORD cb)
+{
+	if (IsWin32FlyoutValue(val)) return ReturnDwordOne(type, data, cb);
+	return g_origRegGetValueW(k, sub, val, flags, type, data, cb);
+}
+
+LSTATUS WINAPI RegQueryValueExW_Hook(HKEY k, LPCWSTR val, LPDWORD res, LPDWORD type, LPBYTE data, LPDWORD cb)
+{
+	if (IsWin32FlyoutValue(val)) return ReturnDwordOne(type, data, cb);
+	return g_origRegQueryValueExW(k, val, res, type, data, cb);
+}
+
+void PatchStobjectRegistry()
+{
+	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) == 0) { LogLine(L"[ex7] Win32BatteryFlyout=0: not patched"); return; }
+	HMODULE st = GetModuleHandleW(L"stobject.dll");
+	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
+	if (!st || !kb) { LogLine(L"[ex7] Win32 flyout: stobject=%p kernelbase=%p", st, kb); return; }
+	if (st == g_stobject && g_origRegGetValueW) return; // already done
+	g_stobject = st;
+	g_origRegGetValueW = (RegGetValueW_t)GetProcAddress(kb, "RegGetValueW");
+	g_origRegQueryValueExW = (RegQueryValueExW_t)GetProcAddress(kb, "RegQueryValueExW");
+	HMODULE adv = GetModuleHandleW(L"advapi32.dll");
+	static const char* dlls[] = { "api-ms-win-core-registry-l1-1-0.dll", "api-ms-win-core-registry-l1-1-1.dll", "ADVAPI32.dll", "KERNELBASE.dll" };
+	for (const char* d : dlls) {
+		if (g_origRegGetValueW) ChangeImportedAddress(st, (LPSTR)d, (FARPROC)g_origRegGetValueW, (FARPROC)RegGetValueW_Hook);
+		if (g_origRegQueryValueExW) ChangeImportedAddress(st, (LPSTR)d, (FARPROC)g_origRegQueryValueExW, (FARPROC)RegQueryValueExW_Hook);
+		if (adv) { // advapi32 exports may be distinct stubs
+			FARPROC a1 = GetProcAddress(adv, "RegGetValueW"), a2 = GetProcAddress(adv, "RegQueryValueExW");
+			if (a1 && a1 != (FARPROC)g_origRegGetValueW) ChangeImportedAddress(st, (LPSTR)d, a1, (FARPROC)RegGetValueW_Hook);
+			if (a2 && a2 != (FARPROC)g_origRegQueryValueExW) ChangeImportedAddress(st, (LPSTR)d, a2, (FARPROC)RegQueryValueExW_Hook);
+		}
+	}
+	LogLine(L"[ex7] Win32 flyout: stobject %p registry imports patched", st);
+}
+
+// ------------------------------------------------------------ Connect To
+// The Win7 Start menu opens "Connect To" by invoking the regitem
+// ::{38A98528-...} directly (no ShellExecuteEx call was ever logged), and
+// that CLSID is not registered on Windows 10/11. Register a per-user
+// verb-only CLSID that opens Network Connections. Only if the system has none.
+void RegisterConnectTo()
+{
+	if (ReadAdvancedDword(L"FixConnectTo", 1) == 0) return;
+	const wchar_t key[] = L"Software\\Classes\\CLSID\\{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}";
+	HKEY h = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) == ERROR_SUCCESS) {
+		RegCloseKey(h); LogLine(L"[ex7] Connect To: system CLSID present, untouched"); return;
+	}
+	wchar_t cmdKey[200]; wnsprintfW(cmdKey, 200, L"%s\\shell\\open\\command", key);
+	wchar_t icoKey[200]; wnsprintfW(icoKey, 200, L"%s\\DefaultIcon", key);
+	const wchar_t cmd[] = L"%SystemRoot%\\explorer.exe shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}";
+	const wchar_t ico[] = L"%SystemRoot%\\system32\\netshell.dll,0";
+	LSTATUS a = RegSetKeyValueW(HKEY_CURRENT_USER, cmdKey, nullptr, REG_EXPAND_SZ, cmd, sizeof(cmd));
+	LSTATUS b = RegSetKeyValueW(HKEY_CURRENT_USER, icoKey, nullptr, REG_EXPAND_SZ, ico, sizeof(ico));
+	LogLine(L"[ex7] Connect To: per-user CLSID verb -> Network Connections (%d,%d)", a, b);
+}
+
+// ------------------------------------------------------------ ms-settings / UWP
+DWORD OsBuild()
+{
+	DWORD b = 0, cb = sizeof(b);
+	wchar_t s[16] = {}; DWORD cs = sizeof(s);
+	if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"CurrentBuildNumber",
+		RRF_RT_REG_SZ, nullptr, s, &cs) == ERROR_SUCCESS) b = (DWORD)StrToIntW(s);
+	(void)cb; return b;
+}
+
+// Fallback when the protocol launch of an ms-settings: URI fails:
+// IApplicationActivationManager on the Settings AUMID (opens Settings; the
+// page is passed as argument, which Settings may ignore).
+const CLSID kCLSID_AppActivationManager = { 0x45BA127D, 0x10A8, 0x46EA, { 0x8A, 0xB7, 0x56, 0xEA, 0x90, 0x78, 0x94, 0x3C } };
+BOOL ActivateSettingsFallback(LPCWSTR uri)
+{
+	HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	bool uninit = SUCCEEDED(hr);
+	IApplicationActivationManager* aam = nullptr;
+	DWORD pid = 0;
+	hr = CoCreateInstance(kCLSID_AppActivationManager, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&aam));
+	if (SUCCEEDED(hr)) {
+		hr = aam->ActivateApplication(L"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel",
+			uri, AO_NONE, &pid);
+		aam->Release();
+	}
+	LogLine(L"[ex7] UWP activation uri=%s method=IApplicationActivationManager build=%u pid=%u hr=0x%08X",
+		uri, OsBuild(), pid, hr);
+	if (uninit) CoUninitialize();
+	return SUCCEEDED(hr);
+}
+
+bool IsMsSettings(LPCWSTR f)
+{
+	__try { return f && StrCmpNIW(f, L"ms-settings:", 12) == 0; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 
 } // namespace
@@ -487,6 +643,7 @@ void InstallShellFixes(HMODULE hSelf)
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
+	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
 	SafeInvoke(L"EnsureTransparencyEffects", EnsureTransparencyEffects);
 }
 
@@ -527,4 +684,13 @@ void SafeCreateTwinUI_UWP()
 		LogLine(L"[ex7] TwinUI start-up faulted; failure counter left raised");
 }
 
+} // namespace ex7
+
+namespace ex7 {
+// dllmain: system CLSID_SysTray instance created (8.1 path not taken).
+void OnSystemSysTrayCreated()
+{
+	LogLine(L"[ex7] SysTray: system stobject in use (8.1 active=%d)", ex7::w81::IsActive());
+	SafeInvoke(L"PatchStobjectRegistry", PatchStobjectRegistry);
+}
 } // namespace ex7
