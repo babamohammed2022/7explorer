@@ -5,7 +5,7 @@ name: diag-w81flyout
 on:
   push:
     branches: ["arena/**"]
-    paths: [".github/workflows/diag-w81flyout.yml", "tools/analyze_flyout.py", "tools/w81_compat_check.py"]
+    paths: [".github/workflows/diag-w81flyout.yml", "tools/analyze_flyout.py", "tools/w81_compat_check.py", "tools/w81_mui_probe.py"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -65,6 +65,11 @@ jobs:
           python tools\w81_compat_check.py --strings-only work\cache\batmeter.dll >> ci-logs\w81-compat.txt 2>&1
           python -c "import pefile;p=pefile.PE(r'work\w81-batmeter.dll');[print(t.id,t.name,len(t.directory.entries)) for t in p.DIRECTORY_ENTRY_RESOURCE.entries]" >> ci-logs\w81-compat.txt 2>&1
           powershell -NoProfile -Command "(Get-Item C:\Windows\System32\twinapi.dll).VersionInfo.FileVersion; Test-Path C:\Windows\System32\settingsyncpolicy.dll; Test-Path C:\Windows\System32\dui70.dll" >> ci-logs\w81-compat.txt 2>&1
+      - name: MUI re-key probe
+        shell: cmd
+        continue-on-error: true
+        run: |
+          python tools\w81_mui_probe.py en-US > ci-logs\w81-mui.txt 2>&1
       - name: Symbols (public PDB) for function names
         shell: pwsh
         continue-on-error: true
