@@ -15,8 +15,15 @@ CSysTrayWrapper::~CSysTrayWrapper()
 
 HRESULT STDMETHODCALLTYPE CSysTrayWrapper::QueryInterface(REFIID riid,void **ppvObject)
 {
-	dbgprintf(L"CSysTrayWrapper::QueryInterface NOT IMPLEMENTED");
-	return E_NOTIMPL;
+	if (!ppvObject) return E_POINTER;
+	if (riid == IID_IUnknown || riid == IID_IOleCommandTarget)
+	{
+		*ppvObject = static_cast<IOleCommandTarget*>(this);
+		AddRef();
+		return S_OK;
+	}
+	// 7explorer fork: forward anything else to the wrapped object
+	return m_stobject8->QueryInterface(riid, ppvObject);
 }
 
 ULONG STDMETHODCALLTYPE CSysTrayWrapper::AddRef(void)

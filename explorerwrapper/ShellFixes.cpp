@@ -27,6 +27,7 @@
 #include <shellapi.h>
 #include <commctrl.h>
 #include "MinHook.h"
+#include "LegacyBatteryFlyout.h"
 
 void CreateTwinUI_UWP(); // ImmersiveShell.cpp
 
@@ -454,7 +455,7 @@ BOOL WINAPI Shell_NotifyIconW_Hook(DWORD msg, PNOTIFYICONDATAW nid)
 	HMODULE caller = nullptr;
 	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 		(LPCWSTR)_ReturnAddress(), &caller);
-	if (caller && caller == (g_stobject ? g_stobject : (g_stobject = GetModuleHandleW(L"stobject.dll")))) {
+	if (!ex7::w81::IsActive() && caller && caller == (g_stobject ? g_stobject : (g_stobject = GetModuleHandleW(L"stobject.dll")))) {
 		NotifyCtx c = { msg, nid };
 		SafeInvokeCtx<NotifyCtx>(L"Shell_NotifyIconW inspect", InspectNotify, &c);
 	}
@@ -483,7 +484,8 @@ void InstallShellFixes(HMODULE hSelf)
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
 	LogLine(L"[ex7] ---- 7explorer shell fixes, pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
-	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);
+	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
+	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
 	SafeInvoke(L"EnsureTransparencyEffects", EnsureTransparencyEffects);
 }

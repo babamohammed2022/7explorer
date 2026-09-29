@@ -210,6 +210,7 @@
     <ClInclude Include="ImmersiveShell.h" />
     <ClInclude Include="SafeGuards.h" />
     <ClInclude Include="ShellFixes.h" />
+    <ClInclude Include="LegacyBatteryFlyout.h" />
     <ClInclude Include="MinHook.h" />
     <ClInclude Include="NscTree.h" />
     <ClInclude Include="PinnedList.h" />
@@ -260,6 +261,7 @@
     <ClCompile Include="ImmersiveFactory.cpp" />
     <ClCompile Include="ImmersiveShell.cpp" />
     <ClCompile Include="ShellFixes.cpp" />
+    <ClCompile Include="LegacyBatteryFlyout.cpp" />
     <ClCompile Include="minCRT.cpp">
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</WholeProgramOptimization>
     </ClCompile>

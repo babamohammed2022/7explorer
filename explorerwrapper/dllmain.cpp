@@ -41,6 +41,7 @@
 #include "TypeDefinitions.h"
 #include "SafeGuards.h"
 #include "ShellFixes.h"
+#include "LegacyBatteryFlyout.h"
 
 LRESULT CALLBACK NewTrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -679,7 +680,20 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 )
 {
 	HRESULT result;
-	result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	// 7explorer fork: Windows 8.1 SysTray (battery flyout) from the verified
+	// local cache, see LegacyBatteryFlyout.cpp. Falls back to the system object.
+	bool w81SysTray = false;
+	if (rclsid == CLSID_SysTray)
+	{
+		w81SysTray = ex7::w81::TryCreateSysTray(pUnkOuter, riid, ppv, &result);
+		if (w81SysTray && riid == IID_IOleCommandTarget && *ppv && ex7::w81::WrapSysTray())
+		{
+			// Win8-era SSO protocol (command 2/4 differences), see TrayObject.cpp
+			*ppv = static_cast<IOleCommandTarget*>(new CSysTrayWrapper((IOleCommandTarget*)*ppv));
+		}
+	}
+	if (!w81SysTray)
+		result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
 
 	if (rclsid == CLSID_PersonalStartMenu && riid == IID_IShellItemFilter && result != S_OK && g_osVersion.BuildNumber() >= 10074) //Ittr: as far as im aware doesnt cause crashing on 1507/11. needs further checking when im awake
 	{
