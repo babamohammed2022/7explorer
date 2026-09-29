@@ -1,12 +1,12 @@
 # 7explorer — build di riferimento (fase di test)
 
 Questa è la **release di riferimento** del progetto: un'unica build che
-corrisponde **esattamente** al tag (`v0.3-test37`) ed è prodotta dalla CI
+corrisponde **esattamente** al tag (`v0.3-test38`) ed è prodotta dalla CI
 (GitHub Actions, `windows-latest`, MSVC) dallo stesso commit del tag.
 Hash di tutti gli asset in `SHA256SUMS.txt`.
 
 > **Sostituisce tutte le release precedenti** (`v0.0.1-test1` …
-> `v0.0.3-test36`), eliminate insieme ai relativi tag: erano istantanee
+> `v0.3-test37`), eliminate insieme ai relativi tag: erano istantanee
 > di test sovrapposte; la loro storia resta nei commit. Riepilogo della
 > riorganizzazione: `docs/REPO_CLEANUP.md`.
 
@@ -30,10 +30,15 @@ Documentazione: [docs/installazione.md](../../tree/main/docs/installazione.md)
 - La shell di Windows 7 gira **come shell di Windows 11 24H2/25H2**:
   taskbar, menu Start, tray, Esplora risorse.
 - **Cambio shell istantaneo** Win7 ⇄ Win11 senza logout
-  (`Ctrl+Alt+Shift+S` → Cambia).
-- **Avvio automatico al logon** (novità test37): valore `Shell`
+  (`Ctrl+Alt+Shift+S` → Usa …).
+- **Avvio automatico al logon** (test37): valore `Shell`
   per-utente, reversibile e con backup byte-per-byte, link di fallback
   robusto e task di recovery automatico ~30 s dopo il logon.
+- **Switcher UI unificata** (novità test38): vista Setup
+  (installa/reinstalla con un clic, barra di avanzamento, dettagli dal
+  log) + vista Main (scelta shell, Maggiori informazioni,
+  reinstalla/disinstalla, lingua della sola shell Win7 persistita
+  per-utente); DPI-aware, Enter/Esc come in un dialog.
 - Installer self-contained: download dell'`explorer.exe` Win7 SP1 dal
   symbol server Microsoft con verifica a più livelli, patch import,
   localizzazione **senza `.mui`** (risorse UI en-US + it-IT generate dal
@@ -48,6 +53,9 @@ Documentazione: [docs/installazione.md](../../tree/main/docs/installazione.md)
   file rimosso, disattivazione) è **in verifica su hardware reale**
   (test37); il meccanismo di recovery automatico è previsto per
   l'eventuale file mancante. Log: `%TEMP%\7explorer-switcher.log`.
+- **Switcher UI unificata** (test38): in questa build è verificata solo
+  staticamente — feedback benvenuto su layout/DPI e sui flussi
+  installa/reinstalla/disinstalla.
 - Icona di rete dal **secondo** avvio (download in background al primo).
 - Tema embedded **v0**: solo colori/metriche — usa il tuo `aero.msstyles`
   per il look completo.

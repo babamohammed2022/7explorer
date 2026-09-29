@@ -82,6 +82,14 @@ static WCHAR g_Win7ExplorerRestorerPath[1024];     // private Win7ExplorerRestor
 static HINSTANCE g_hInst;
 static HFONT g_hFont;
 
+// Unified setup UI (test38): the window shows exactly one view at a time
+// (Setup / Installing / Main). Declared here because the status helpers
+// below need the current view.
+enum UiView { VIEW_SETUP, VIEW_INSTALLING, VIEW_MAIN };
+static UiView g_view = VIEW_SETUP;
+static BOOL g_reinstall = FALSE;   // Setup shows the reinstall variant
+static BOOL g_installed = FALSE;   // private copy + state\install.json seen
+
 // ---- bilingual UI (English default; Italian for Italian systems, or
 // WIN7EXPLORERRESTORER_LANG/--lang override). The switcher itself must also work in English.
 typedef enum {
@@ -96,6 +104,18 @@ typedef enum {
     TR_BTN_THEME, TR_THEME_TITLE, TR_THEME_FILTER,
     TR_THEME_OK_FMT, TR_THEME_ERR_FMT,
     TR_ERR_LOGON_VALIDATE_FMT, TR_INFO_LOGON_OFF, TR_ERR_LOGON_TASK_FMT,
+    // Unified setup UI (test38): every new string lives here, EN + IT.
+    TR_SETUP_HEADING, TR_SETUP_DESC, TR_REINSTALL_HEADING, TR_REINSTALL_DESC,
+    TR_BTN_INSTALL, TR_BTN_REINSTALL, TR_BTN_ABORT,
+    TR_HINT_NOADMIN, TR_HINT_ONEMIN, TR_INST_STATUS,
+    TR_INST_FAILED_FMT, TR_INST_FAILED_SHORT,
+    TR_INST_ABORTED, TR_INST_MISSING_FMT, TR_INST_MISSING_SHORT,
+    TR_INST_SPAWN_FMT,
+    TR_MAIN_INTRO, TR_NATIVE_SUB, TR_INUSE_SUFFIX,
+    TR_CHK_LOGIN_SHORT, TR_LINK_INFO, TR_LINK_REINSTALL, TR_LINK_UNINSTALL,
+    TR_LANG_LABEL, TR_BTN_USE_E7, TR_BTN_USE_NATIVE, TR_HINT_RESTART,
+    TR_LOGIN_HELP_TEXT, TR_REINSTALL_ASKBACK, TR_UNINSTALL_CONFIRM,
+    TR_UNINSTALL_DONE,
     TR_COUNT
 } TRID;
 static const WCHAR* TR_EN[TR_COUNT] = {
@@ -135,10 +155,10 @@ static const WCHAR* TR_EN[TR_COUNT] = {
     L"Select the private Win7ExplorerRestorer (explorer.exe)",
     L"explorer.exe\0explorer.exe\0All files\0*.*\0",
     L"Startup-folder link operation failed (error %lu).",
-    L"Win7ExplorerRestorer UI language: System default",
-    L"Win7ExplorerRestorer UI language: English",
-    L"Win7ExplorerRestorer UI language: Italiano",
-    L"Theme\u2026",
+    L"System default",
+    L"English",
+    L"Italiano",
+    L"Customize theme\u2026",
     L"Select YOUR Windows 7 theme file (aero.msstyles)",
     L"Theme files\0*.msstyles\0All files\0*.*\0",
     L"Theme installed to:\r\n%s\r\n\r\nSwitch shell (e.g. native \u2192 Win7ExplorerRestorer) to apply it.\r\n"
@@ -155,6 +175,37 @@ static const WCHAR* TR_EN[TR_COUNT] = {
     L"be registered (error %lu).\r\n"
     L"Auto-start still works; you just have no automatic safety net\r\n"
     L"at logon (details: docs/avvio-al-login.md).",
+    L"Windows 7 Explorer Restorer is not installed yet",
+    L"To use it, a file must be downloaded from Microsoft, verified and prepared. An Internet connection is needed only the first time.",
+    L"Reinstall Windows 7 Explorer Restorer?",
+    L"The private explorer.exe copy will be downloaded and prepared again. If it is in use, you will be switched back to Windows Explorer first.",
+    L"Install",
+    L"Reinstall",
+    L"Abort",
+    L"No administrator rights needed.",
+    L"About a minute is needed.",
+    L"Installation running\u2026",
+    L"Installation failed (exit code %lu).\r\n\r\n%s",
+    L"Installation failed \u2014 see details.",
+    L"Installation aborted.",
+    L"The installer was not found:\r\n%s\r\n\r\nCopy Win7ExplorerRestorer.exe next to this switcher (same folder) and retry.",
+    L"Installer not found.",
+    L"Could not start the installer (error %lu):\r\n%s",
+    L"Choose which Explorer to use as the Windows shell. Switching is immediate and needs no logout.",
+    L"Default system shell",
+    L"  \u2013 in use",
+    L"Use Windows 7 Explorer Restorer at every logon",
+    L"More information",
+    L"Reinstall",
+    L"Uninstall",
+    L"Language",
+    L"Use Win7ExplorerRestorer",
+    L"Use native Explorer",
+    L"The desktop will restart briefly.",
+    L"Automatic logon start sets the per-user Shell value (HKCU) to the private explorer.exe \u2014 the standard Windows way, no elevation, fully reversible (the previous value is saved and restored byte-for-byte).\r\n\r\nIt also adds two safety nets: a link in your Startup folder and a scheduled task (\"7explorer Shell Recovery\") that checks the shell ~30 s after logon.\r\n\r\nUncheck the box to undo everything.",
+    L"Reinstallation completed.\r\n\r\nSwitch back to Windows 7 Explorer Restorer now?",
+    L"Windows 7 Explorer Restorer will be removed: you will be switched back to Windows Explorer and the private files will be deleted.\r\n\r\nProceed?",
+    L"Windows 7 Explorer Restorer was removed.",
 };
 static const WCHAR* TR_IT[TR_COUNT] = {
     L"Scambia al volo la shell Explorer attiva. Nessun logout richiesto.",
@@ -194,10 +245,10 @@ static const WCHAR* TR_IT[TR_COUNT] = {
     L"Seleziona l'Win7ExplorerRestorer privato (explorer.exe)",
     L"explorer.exe\0explorer.exe\0Tutti i file\0*.*\0",
     L"Operazione sul collegamento in Esecuzione automatica non riuscita (errore %lu).",
-    L"Lingua UI di Win7ExplorerRestorer: di sistema",
-    L"Lingua UI di Win7ExplorerRestorer: English",
-    L"Lingua UI di Win7ExplorerRestorer: Italiano",
-    L"Tema\u2026",
+    L"Predefinita di sistema",
+    L"English",
+    L"Italiano",
+    L"Personalizza tema\u2026",
     L"Seleziona il TUO file tema di Windows 7 (aero.msstyles)",
     L"File tema\0*.msstyles\0Tutti i file\0*.*\0",
     L"Tema installato in:\r\n%s\r\n\r\nCambia shell (es. nativa \u2192 Win7ExplorerRestorer) per applicarlo.\r\n"
@@ -214,6 +265,37 @@ static const WCHAR* TR_IT[TR_COUNT] = {
     L"non \u00e8 stato registrato (errore %lu).\r\n"
     L"L'avvio automatico funziona comunque; manca solo la rete di\r\n"
     L"sicurezza automatica al logon (dettagli: docs/avvio-al-login.md).",
+    L"Windows 7 Explorer Restorer non \u00e8 ancora installato",
+    L"Per usarlo occorre scaricare un file da Microsoft, verificarlo e prepararlo. Serve una connessione a Internet solo la prima volta.",
+    L"Reinstallare Windows 7 Explorer Restorer?",
+    L"La copia privata di explorer.exe verr\u00e0 scaricata e preparata di nuovo. Se \u00e8 in uso, si torner\u00e0 prima a Esplora risorse.",
+    L"Installa",
+    L"Reinstalla",
+    L"Interrompi",
+    L"Nessun permesso di amministratore.",
+    L"L'operazione richiede circa un minuto.",
+    L"Installazione in corso\u2026",
+    L"Installazione non riuscita (codice %lu).\r\n\r\n%s",
+    L"Installazione non riuscita \u2014 vedi dettagli.",
+    L"Installazione interrotta.",
+    L"Installer non trovato:\r\n%s\r\n\r\nCopia Win7ExplorerRestorer.exe nella stessa cartella dello switcher e riprova.",
+    L"Installer non trovato.",
+    L"Impossibile avviare l'installer (errore %lu):\r\n%s",
+    L"Scegli quale Explorer usare come shell di Windows. Il cambio \u00e8 immediato e non richiede la disconnessione.",
+    L"Shell predefinita del sistema",
+    L"  \u2013 in uso",
+    L"Usa Windows 7 Explorer Restorer a ogni accesso",
+    L"Maggiori informazioni",
+    L"Reinstalla",
+    L"Disinstalla",
+    L"Lingua",
+    L"Usa Win7ExplorerRestorer",
+    L"Usa Esplora risorse",
+    L"Il desktop si riavvier\u00e0 brevemente.",
+    L"L'avvio automatico imposta il valore Shell per-utente (HKCU) sull'explorer privato \u2014 il metodo standard di Windows, senza elevazione, completamente reversibile (il valore precedente \u00e8 salvato e ripristinato byte per byte).\r\n\r\nAggiunge anche due reti di sicurezza: un collegamento in Esecuzione automatica e un task pianificato (\"7explorer Shell Recovery\") che controlla la shell ~30 s dopo il logon.\r\n\r\nDeseleziona la casella per annullare tutto.",
+    L"Reinstallazione completata.\r\n\r\nTornare ora a Windows 7 Explorer Restorer?",
+    L"Windows 7 Explorer Restorer verr\u00e0 rimosso: si torner\u00e0 a Esplora risorse e i file privati verranno eliminati.\r\n\r\nProcedere?",
+    L"Windows 7 Explorer Restorer rimosso.",
 };
 static BOOL g_uiItalian;   // FALSE = English UI (default)
 static const WCHAR* TR(TRID id) { return (g_uiItalian ? TR_IT : TR_EN)[id]; }
@@ -408,23 +490,27 @@ static ShellKind DetectCurrentShell(LPWSTR outPath, DWORD outChars,
     return ClassifyPath(outPath);
 }
 
-// Update the "Current shell" status line.
+// Update the radio labels with the live "in use" marker (this replaces the
+// old "Current shell:" status line). Skipped when nothing changed so the
+// 1.5 s timer never flickers the labels.
 static void RefreshStatus(HWND hwnd) {
     WCHAR path[1024];
     DWORD pid = 0;
     ShellKind k = DetectCurrentShell(path, (DWORD)_countof(path), &pid);
-
+    static int s_lastK = -1;
+    if ((int)k == s_lastK) return;
+    s_lastK = (int)k;
+    HWND rN = GetDlgItem(hwnd, IDC_RADIO_NATIVE);
+    HWND rE = GetDlgItem(hwnd, IDC_RADIO_WIN7EXPLORERRESTORER);
+    if (!rN || !rE) return;
     WCHAR line[1200];
-    if (k == SHELL_NONE) {
-        _snwprintf_s(line, _countof(line), _TRUNCATE,
-                     TR(TR_STATUS_CURRENT_FMT), KindName(k),
-                     (unsigned long)0, L"-");
-    } else {
-        _snwprintf_s(line, _countof(line), _TRUNCATE,
-                     TR(TR_STATUS_CURRENT_FMT),
-                     KindName(k), (unsigned long)pid, path);
-    }
-    SetDlgItemTextW(hwnd, IDC_ST_CURRENT, line);
+    _snwprintf_s(line, _countof(line), _TRUNCATE, L"%s%s", TR(TR_NATIVE_NAME),
+                 (k == SHELL_NATIVE) ? TR(TR_INUSE_SUFFIX) : L"");
+    SetWindowTextW(rN, line);
+    _snwprintf_s(line, _countof(line), _TRUNCATE, L"%s%s",
+                 TR(TR_WIN7EXPLORERRESTORER_NAME),
+                 (k == SHELL_WIN7EXPLORERRESTORER) ? TR(TR_INUSE_SUFFIX) : L"");
+    SetWindowTextW(rE, line);
 }
 
 // Which radio (target) the user has selected.
@@ -434,13 +520,13 @@ static ShellKind SelectedTarget(HWND hwnd) {
     return SHELL_NATIVE;
 }
 
+// The explicit main-button label ("Use ...") replaces the old "Target:"
+// status line. Only meaningful on the Main view.
 static void UpdateTargetLabel(HWND hwnd) {
+    if (g_view != VIEW_MAIN) return;
     ShellKind t = SelectedTarget(hwnd);
-    WCHAR line[1100];
-    _snwprintf_s(line, _countof(line), _TRUNCATE,
-                 TR(TR_STATUS_TARGET_FMT), KindName(t),
-                 (t == SHELL_WIN7EXPLORERRESTORER) ? g_Win7ExplorerRestorerPath : g_nativePath);
-    SetDlgItemTextW(hwnd, IDC_ST_TARGET, line);
+    SetDlgItemTextW(hwnd, IDOK, (t == SHELL_WIN7EXPLORERRESTORER)
+                    ? TR(TR_BTN_USE_E7) : TR(TR_BTN_USE_NATIVE));
 }
 
 static void SetRadioForKind(HWND hwnd, ShellKind k) {
@@ -503,17 +589,25 @@ static BOOL LaunchExe(LPCWSTR path, DWORD* pErr, LPCWSTR envLang) {
 
 // UI-language selection for the Win7ExplorerRestorer launch: from the GUI combo (0/1/2) or
 // from the caller environment (headless CLI inherits WIN7EXPLORERRESTORER_UI_LANG as-is).
+// This is the language-application point (shell-only, via the child env in
+// LaunchExe): it never throws out; on any failure fall back to NULL
+// (system default for OUR shell; the OS language is never touched).
 static LPCWSTR SelectedShellUILang(HWND hwnd) {
-    if (!hwnd) {
-        WCHAR cur[32];
-        DWORD n = GetEnvironmentVariableW(L"WIN7EXPLORERRESTORER_UI_LANG", cur, 31);
-        return (n > 0 && n < 31) ? L"ENV" : NULL;  // handled inside LaunchExe
+    try {
+        if (!hwnd) {
+            WCHAR cur[32];
+            DWORD n = GetEnvironmentVariableW(L"WIN7EXPLORERRESTORER_UI_LANG", cur, 31);
+            return (n > 0 && n < 31) ? L"ENV" : NULL;  // handled inside LaunchExe
+        }
+        int sel = (int)SendMessageW(GetDlgItem(hwnd, IDC_CBO_SHLANG),
+                                    CB_GETCURSEL, 0, 0);
+        if (sel == 1) return L"en-US";
+        if (sel == 2) return L"it-IT";
+        return NULL;  // system default
+    } catch (...) {
+        SwLog(L"shell-lang: selection read failed, using system default");
+        return NULL;
     }
-    int sel = (int)SendMessageW(GetDlgItem(hwnd, IDC_CBO_SHLANG),
-                                CB_GETCURSEL, 0, 0);
-    if (sel == 1) return L"en-US";
-    if (sel == 2) return L"it-IT";
-    return NULL;  // system default
 }
 
 // ---------------------------------------------------------- switching ---
@@ -1343,6 +1437,555 @@ static void BrowseForWin7ExplorerRestorer(HWND hwnd) {
     }
 }
 
+// ==================================== unified setup UI (test38) ===
+// Two-view window modeled on the Windhawk prototype
+// "shell-switcher-ui-test.wh.cpp": a Setup view (installer launcher +
+// progress) and the Main view (shell choice + logon + language/theme).
+// Only UI + new flows live here; DoSwitch/logon/recovery logic above is
+// untouched. No new external dependencies (user32/gdi32/comctl32/comdlg32
+// were already linked).
+
+#define IDC_LINK_INFO       207
+#define IDC_LINK_REINSTALL  208
+#define IDC_LINK_UNINSTALL  209
+#define IDC_ST_NATSUB       305
+#define IDC_ST_LANG         306
+
+#define TID_REFRESH  1
+#define TID_INSTALL  2
+#define INSTALL_TIMER_MS 500
+
+static void ApplyView(HWND hwnd);  // defined with the window below
+
+// ---- tiny RAII guards (C++17, no STL; same conservative style) ---------
+struct RegKeyGuard {
+    HKEY h;
+    RegKeyGuard() : h(NULL) {}
+    ~RegKeyGuard() { Close(); }
+    void Close() { if (h) { RegCloseKey(h); h = NULL; } }
+    HKEY* Put() { Close(); return &h; }
+    RegKeyGuard(const RegKeyGuard&) = delete;
+    RegKeyGuard& operator=(const RegKeyGuard&) = delete;
+};
+
+struct ProcHandle {
+    HANDLE h;
+    ProcHandle() : h(NULL) {}
+    ~ProcHandle() { Close(); }
+    void Close() { if (h && h != INVALID_HANDLE_VALUE) { CloseHandle(h); h = NULL; } }
+    ProcHandle(const ProcHandle&) = delete;
+    ProcHandle& operator=(const ProcHandle&) = delete;
+};
+
+// ---- DPI scaling --------------------------------------------------------
+// No manifest: the process is DPI-virtualized by default. On the GUI path
+// wWinMain calls SetProcessDPIAware() (user32, Vista+) and every layout
+// coordinate below goes through Dpx(), so the window stays crisp at
+// 125%/150%/200% even though it is laid out in 96-DPI units.
+static int g_dpi = 96;
+static void DpiInit(void) {
+    HDC dc = GetDC(NULL);
+    if (dc) {
+        int v = GetDeviceCaps(dc, LOGPIXELSX);
+        if (v >= 96 && v <= 480) g_dpi = v;
+        ReleaseDC(NULL, dc);
+    }
+}
+static int Dpx(int px) { return MulDiv(px, g_dpi, 96); }
+
+// ---- UI fonts (system message font + bold + link) -----------------------
+static HFONT g_hFontBold = NULL;
+static HFONT g_hFontLink = NULL;
+
+static void CreateUiFonts(void) {
+    NONCLIENTMETRICSW ncm;
+    ZeroMemory(&ncm, sizeof(ncm));
+    ncm.cbSize = sizeof(ncm);
+    if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
+        return;  // keep g_hFont as-is (NULL -> system default rendering)
+    if (g_hFont) DeleteObject(g_hFont);
+    g_hFont = CreateFontIndirectW(&ncm.lfMessageFont);
+    LOGFONTW bold = ncm.lfMessageFont;
+    bold.lfWeight = FW_SEMIBOLD;
+    if (g_hFontBold) DeleteObject(g_hFontBold);
+    g_hFontBold = CreateFontIndirectW(&bold);
+    LOGFONTW link = ncm.lfMessageFont;
+    link.lfUnderline = TRUE;
+    if (g_hFontLink) DeleteObject(g_hFontLink);
+    g_hFontLink = CreateFontIndirectW(&link);
+}
+static void DestroyUiFonts(void) {
+    if (g_hFont) DeleteObject(g_hFont);
+    if (g_hFontBold) DeleteObject(g_hFontBold);
+    if (g_hFontLink) DeleteObject(g_hFontLink);
+    g_hFont = NULL;
+    g_hFontBold = NULL;
+    g_hFontLink = NULL;
+}
+
+// ---- view state + control panels ----------------------------------------
+static HWND g_setupCtrls[8];
+static int g_nSetup = 0;
+static HWND g_mainCtrls[20];
+static int g_nMain = 0;
+static HWND* g_panelDst = NULL;  // append target for MakeChild (or NULL)
+static int* g_panelCnt = NULL;
+static int g_panelCap = 0;
+
+static HWND g_heading = NULL;
+static HWND g_desc = NULL;
+static HWND g_progress = NULL;
+static HWND g_status = NULL;
+static HWND g_hint = NULL;
+static HWND g_natSub = NULL;
+static int g_marquee = 0;
+
+// ---- bundle paths -------------------------------------------------------
+static void SwitcherDir(LPWSTR out, DWORD cch) {
+    WCHAR exe[MAX_PATH];
+    DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    wcsncpy_s(out, cch, (n > 0 && n < MAX_PATH) ? exe : L".", _TRUNCATE);
+    WCHAR* bs = wcsrchr(out, L'\\');
+    if (bs) *bs = L'\0';
+}
+
+static void Join2(LPWSTR out, DWORD cch, LPCWSTR dir, LPCWSTR rest) {
+    _snwprintf_s(out, cch, _TRUNCATE, L"%s\\%s", dir, rest);
+}
+
+static void InstallerExePath(LPWSTR out, DWORD cch) {
+    WCHAR dir[MAX_PATH]; SwitcherDir(dir, MAX_PATH);
+    Join2(out, cch, dir, L"Win7ExplorerRestorer.exe");
+}
+static void InstallLogPath(LPWSTR out, DWORD cch) {
+    WCHAR dir[MAX_PATH]; SwitcherDir(dir, MAX_PATH);
+    Join2(out, cch, dir, L"log\\Win7ExplorerRestorerSetup.log");
+}
+static void SideExplorerPath(LPWSTR out, DWORD cch) {
+    WCHAR dir[MAX_PATH]; SwitcherDir(dir, MAX_PATH);
+    Join2(out, cch, dir, L"explorer.exe");
+}
+
+// Installed = the installer completed here: side-by-side explorer.exe (or
+// the ResolveShellPaths override/Browse path) AND state\install.json.
+static BOOL IsInstalled(void) {
+    WCHAR dir[MAX_PATH]; SwitcherDir(dir, MAX_PATH);
+    WCHAR json[MAX_PATH]; Join2(json, MAX_PATH, dir, L"state\\install.json");
+    if (!FileExists(json)) return FALSE;
+    WCHAR side[MAX_PATH]; Join2(side, MAX_PATH, dir, L"explorer.exe");
+    return FileExists(side) || FileExists(g_Win7ExplorerRestorerPath);
+}
+
+static void SetStatus(LPCWSTR text) {
+    if (g_status) SetWindowTextW(g_status, text);
+}
+
+// ---- shell UI language: OUR SHELL ONLY ----------------------------------
+// The combo selects the UI language of the PRIVATE explorer only. It is
+// persisted per-user under OUR OWN HKCU key and applied EXCLUSIVELY by
+// passing WIN7EXPLORERRESTORER_UI_LANG in the child process environment at
+// CreateProcess time (see LaunchExe: the child gets a COPY). This NEVER
+// touches system-wide language state: no SetThreadUILanguage /
+// SetProcessPreferredUILanguages, no HKLM, no MUI registry values.
+// Handles are RAII-guarded and every step is wrapped in try/catch with a
+// safe fallback (system default), as required.
+static const WCHAR kSwitcherRegKey[] = L"Software\\7explorer\\ShellSwitcher";
+static const WCHAR kShellLangValue[] = L"ShellUILang";  // REG_DWORD 0/1/2
+
+static int ShellLangLoad(void) {
+    try {
+        RegKeyGuard k;
+        if (RegOpenKeyExW(HKEY_CURRENT_USER, kSwitcherRegKey, 0,
+                          KEY_READ, k.Put()) != ERROR_SUCCESS)
+            return 0;
+        DWORD v = 0, cb = sizeof(v), type = 0;
+        if (RegQueryValueExW(k.h, kShellLangValue, NULL, &type,
+                             (LPBYTE)&v, &cb) != ERROR_SUCCESS ||
+            type != REG_DWORD || v > 2)
+            return 0;
+        return (int)v;
+    } catch (...) {
+        SwLog(L"shell-lang: load failed, using system default");
+        return 0;
+    }
+}
+
+static void ShellLangSave(int sel) {
+    if (sel < 0 || sel > 2) sel = 0;
+    try {
+        RegKeyGuard k;
+        if (RegCreateKeyExW(HKEY_CURRENT_USER, kSwitcherRegKey, 0, NULL, 0,
+                            KEY_SET_VALUE, NULL, k.Put(),
+                            NULL) != ERROR_SUCCESS)
+            return;
+        DWORD v = (DWORD)sel;
+        RegSetValueExW(k.h, kShellLangValue, 0, REG_DWORD,
+                       (const BYTE*)&v, sizeof(v));
+        SwLog(L"shell-lang: saved selection %d (HKCU, our shell only)", sel);
+    } catch (...) {
+        SwLog(L"shell-lang: save failed (kept for this session only)");
+    }
+}
+
+// ---- installer child process --------------------------------------------
+// Runs <switcher-dir>\Win7ExplorerRestorer.exe hidden and polls it with a
+// timer; the UI never blocks. No installer change was needed: cancel is
+// TerminateProcess (as specified) plus a snapshot check that deletes a
+// half-written private explorer.exe, so the state stays coherent.
+static ProcHandle g_installProc;
+static BOOL g_preSnapValid = FALSE;
+static DWORD g_preSizeLow = 0, g_preSizeHigh = 0;
+static FILETIME g_preWrite = { 0, 0 };
+
+// Snapshot of the side-by-side target before launching the installer, so
+// an abort/failure can tell "installer never touched it" (keep it) from
+// "half-written" (delete it). Never touches the native executable.
+static void SnapshotTarget(void) {
+    WCHAR t[MAX_PATH]; SideExplorerPath(t, MAX_PATH);
+    WIN32_FILE_ATTRIBUTE_DATA d;
+    if (GetFileAttributesExW(t, GetFileExInfoStandard, &d) &&
+        !(d.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        g_preSnapValid = TRUE;
+        g_preSizeLow = d.nFileSizeLow;
+        g_preSizeHigh = d.nFileSizeHigh;
+        g_preWrite = d.ftLastWriteTime;
+    } else {
+        g_preSnapValid = FALSE;
+    }
+}
+
+static BOOL IsNativePath(LPCWSTR p) {
+    return lstrcmpiW(p, g_nativePath) == 0;
+}
+
+static void MaybeCleanupSuspectTarget(void) {
+    WCHAR t[MAX_PATH]; SideExplorerPath(t, MAX_PATH);
+    if (IsNativePath(t)) {
+        SwLog(L"cleanup: refusing to touch the native path");
+        return;
+    }
+    WIN32_FILE_ATTRIBUTE_DATA d;
+    BOOL exists = GetFileAttributesExW(t, GetFileExInfoStandard, &d) &&
+                  !(d.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+    if (!g_preSnapValid) {
+        // No file before: anything there now is the installer's partial
+        // output -> remove it so a retry starts clean.
+        if (exists) {
+            SwLog(L"cleanup: deleting partial %s", t);
+            DeleteFileW(t);
+        }
+        return;
+    }
+    if (!exists) return;  // installer removed it; nothing to do
+    if (d.nFileSizeLow != g_preSizeLow || d.nFileSizeHigh != g_preSizeHigh ||
+        CompareFileTime(&d.ftLastWriteTime, &g_preWrite) != 0) {
+        SwLog(L"cleanup: target changed mid-run, deleting suspect %s", t);
+        DeleteFileW(t);
+    } else {
+        SwLog(L"cleanup: target untouched, keeping it");
+    }
+}
+
+static BOOL StartInstall(HWND hwnd) {
+    if (g_installProc.h) return FALSE;  // already running
+    WCHAR exe[MAX_PATH]; InstallerExePath(exe, MAX_PATH);
+    if (!FileExists(exe)) {
+        WCHAR m[1400];
+        _snwprintf_s(m, _countof(m), _TRUNCATE, TR(TR_INST_MISSING_FMT), exe);
+        SwLog(L"install: installer missing: %s", exe);
+        SetStatus(TR(TR_INST_MISSING_SHORT));
+        MessageBoxW(hwnd, m, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+    SnapshotTarget();
+    WCHAR cmd[MAX_PATH + 16];
+    _snwprintf_s(cmd, _countof(cmd), _TRUNCATE, L"\"%s\"", exe);
+    STARTUPINFOW si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&pi, sizeof(pi));
+    // CREATE_NO_WINDOW: the installer is a console tool; keep it hidden.
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE,
+                        CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
+                        NULL, NULL, &si, &pi)) {
+        DWORD e = GetLastError();
+        SwLog(L"install: CreateProcess failed (%lu)", e);
+        WCHAR m[1200];
+        _snwprintf_s(m, _countof(m), _TRUNCATE, TR(TR_INST_SPAWN_FMT), e, exe);
+        SetStatus(TR(TR_INST_FAILED_SHORT));
+        MessageBoxW(hwnd, m, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
+    CloseHandle(pi.hThread);
+    g_installProc.h = pi.hProcess;
+    g_marquee = 0;
+    g_view = VIEW_INSTALLING;
+    ApplyView(hwnd);
+    SetStatus(TR(TR_INST_STATUS));
+    SetTimer(hwnd, TID_INSTALL, INSTALL_TIMER_MS, NULL);
+    SwLog(L"install: launched %s (pid %u)", exe, (unsigned)pi.dwProcessId);
+    return TRUE;
+}
+
+// Last ~8 non-empty lines of the installer's UTF-16 log. Shared read: the
+// installer log is opened FILE_SHARE_READ, so this works even mid-run.
+static void ReadInstallerLogTail(LPWSTR out, DWORD cch) {
+    out[0] = L'\0';
+    if (cch < 16) return;
+    WCHAR log[MAX_PATH]; InstallLogPath(log, MAX_PATH);
+    HANDLE h = CreateFileW(log, GENERIC_READ,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                           NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return;
+    static WCHAR buf[4098];  // 8 KB window at the tail
+    DWORD rd = 0;
+    LONGLONG chunkOff = 0;
+    LARGE_INTEGER sz;
+    if (GetFileSizeEx(h, &sz) && sz.QuadPart > 0) {
+        LONGLONG bytes = sz.QuadPart > 8192 ? 8192 : sz.QuadPart;
+        bytes &= ~1LL;  // keep WCHAR alignment (log is UTF-16)
+        chunkOff = sz.QuadPart - bytes;
+        LARGE_INTEGER off;
+        off.QuadPart = chunkOff;
+        if (SetFilePointerEx(h, off, NULL, FILE_BEGIN) &&
+            ReadFile(h, buf, (DWORD)bytes, &rd, NULL))
+            buf[rd / 2] = L'\0';
+        else
+            rd = 0;
+    }
+    CloseHandle(h);
+    if (rd < 2) return;
+    // Split into lines (in place), then keep the last 8 non-empty ones.
+    WCHAR* lines[64];
+    int n = 0;
+    WCHAR* cur = buf;
+    if (chunkOff > 0) {
+        while (*cur && *cur != L'\r' && *cur != L'\n') cur++;  // partial 1st line
+    } else if (*cur == 0xFEFF) {
+        cur++;  // BOM
+    }
+    while (*cur && n < 64) {
+        while (*cur == L'\r' || *cur == L'\n') cur++;
+        if (!*cur) break;
+        lines[n++] = cur;
+        while (*cur && *cur != L'\r' && *cur != L'\n') cur++;
+        if (*cur) *cur++ = L'\0';
+    }
+    int first = n > 8 ? n - 8 : 0;
+    size_t used = 0;
+    for (int i = first; i < n; i++) {
+        size_t len = wcslen(lines[i]);
+        while (len > 0 && (lines[i][len - 1] == L' ' || lines[i][len - 1] == L'\t'))
+            lines[i][--len] = L'\0';
+        if (len == 0) continue;
+        if (used > 0 && used + 2 < cch) {
+            out[used++] = L'\r';
+            out[used++] = L'\n';
+        }
+        for (size_t k = 0; k < len && used + 1 < cch; k++)
+            out[used++] = lines[i][k];
+    }
+    out[used] = L'\0';
+}
+
+static void FinishInstall(HWND hwnd, DWORD exitCode) {
+    WCHAR tail[1600]; ReadInstallerLogTail(tail, _countof(tail));
+    SwLog(L"install: child exited with code %lu", exitCode);
+    if (exitCode != 0) MaybeCleanupSuspectTarget();
+    ResolveShellPaths();
+    g_installed = IsInstalled();
+    if (exitCode == 0 && g_installed) {
+        if (g_progress) SendMessageW(g_progress, PBM_SETPOS, 100, 0);
+        SwLog(L"install: success");
+        BOOL back = g_reinstall;
+        g_reinstall = FALSE;
+        g_view = VIEW_MAIN;
+        ApplyView(hwnd);
+        RefreshStatus(hwnd);
+        if (back &&
+            MessageBoxW(hwnd, TR(TR_REINSTALL_ASKBACK),
+                        L"7explorer Shell Switcher",
+                        MB_YESNO | MB_ICONQUESTION) == IDYES) {
+            (void)DoSwitch(hwnd, SHELL_WIN7EXPLORERRESTORER, FALSE, FALSE);
+            ApplyView(hwnd);
+        }
+        return;
+    }
+    // Failure: stay on Setup with the log tail as the message.
+    g_view = VIEW_SETUP;
+    ApplyView(hwnd);
+    WCHAR m[2200];
+    _snwprintf_s(m, _countof(m), _TRUNCATE, TR(TR_INST_FAILED_FMT),
+                 exitCode, tail[0] ? tail : L"-");
+    SetStatus(TR(TR_INST_FAILED_SHORT));
+    MessageBoxW(hwnd, m, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+}
+
+static void PollInstaller(HWND hwnd) {
+    if (!g_installProc.h) {
+        KillTimer(hwnd, TID_INSTALL);
+        return;
+    }
+    if (WaitForSingleObject(g_installProc.h, 0) != WAIT_OBJECT_0) {
+        // Alive: indeterminate animation (no real progress data exists).
+        g_marquee = (g_marquee + 11) % 111;
+        int pos = g_marquee > 100 ? 100 - (g_marquee - 100) : g_marquee;
+        if (g_progress) SendMessageW(g_progress, PBM_SETPOS, pos, 0);
+        return;
+    }
+    DWORD exitCode = 1;
+    GetExitCodeProcess(g_installProc.h, &exitCode);
+    g_installProc.Close();
+    KillTimer(hwnd, TID_INSTALL);
+    FinishInstall(hwnd, exitCode);
+}
+
+static void AbortInstall(HWND hwnd, BOOL silent) {
+    if (g_installProc.h) {
+        SwLog(L"install: aborting child process");
+        TerminateProcess(g_installProc.h, 1);
+        WaitForSingleObject(g_installProc.h, 3000);
+        g_installProc.Close();
+        MaybeCleanupSuspectTarget();
+    }
+    KillTimer(hwnd, TID_INSTALL);
+    ResolveShellPaths();
+    g_installed = IsInstalled();
+    g_view = VIEW_SETUP;  // keep g_reinstall: retry keeps the variant
+    ApplyView(hwnd);
+    SetStatus(TR(TR_INST_ABORTED));
+    if (!silent) SwLog(L"install: aborted by user");
+}
+
+// ---- reinstall: native first, install, optional switch back -------------
+static void EnterReinstall(HWND hwnd) {
+    WCHAR cur[1024]; DWORD pid = 0;
+    if (DetectCurrentShell(cur, _countof(cur), &pid) == SHELL_WIN7EXPLORERRESTORER) {
+        // Our shell is live: move to native FIRST (DoSwitch refuses
+        // anything unsafe by itself), then install into the quiet files.
+        SwLog(L"reinstall: switching to native first");
+        if (DoSwitch(hwnd, SHELL_NATIVE, FALSE, FALSE) != 0) {
+            SwLog(L"reinstall: pre-switch failed, staying on Main");
+            return;
+        }
+    }
+    g_reinstall = TRUE;
+    g_view = VIEW_SETUP;
+    ApplyView(hwnd);
+    SetStatus(L"");
+}
+
+// ---- uninstall: native shell, logon off, private files gone -------------
+// Only our own files under the switcher folder. NEVER the native
+// C:\Windows\explorer.exe and NEVER HKLM (untouched here by design).
+static BOOL IsUnderDir(LPCWSTR dir, LPCWSTR path) {
+    size_t n = wcslen(dir);
+    return _wcsnicmp(path, dir, n) == 0 &&
+           (path[n] == L'\\' || path[n] == L'\0');
+}
+
+static void DeleteDirTree(LPCWSTR dir) {
+    WCHAR spec[MAX_PATH];
+    _snwprintf_s(spec, _countof(spec), _TRUNCATE, L"%s\\*", dir);
+    WIN32_FIND_DATAW f;
+    HANDLE h = FindFirstFileW(spec, &f);
+    if (h == INVALID_HANDLE_VALUE) return;
+    do {
+        if (!lstrcmpW(f.cFileName, L".") || !lstrcmpW(f.cFileName, L".."))
+            continue;
+        WCHAR p[MAX_PATH];
+        _snwprintf_s(p, _countof(p), _TRUNCATE, L"%s\\%s", dir, f.cFileName);
+        if (f.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            DeleteDirTree(p);
+            RemoveDirectoryW(p);
+        } else {
+            SetFileAttributesW(p, FILE_ATTRIBUTE_NORMAL);
+            DeleteFileW(p);
+        }
+    } while (FindNextFileW(h, &f));
+    FindClose(h);
+}
+
+static void DoUninstall(HWND hwnd) {
+    if (MessageBoxW(hwnd, TR(TR_UNINSTALL_CONFIRM),
+                    L"7explorer Shell Switcher",
+                    MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES)
+        return;
+    WCHAR cur[1024]; DWORD pid = 0;
+    if (DetectCurrentShell(cur, _countof(cur), &pid) == SHELL_WIN7EXPLORERRESTORER) {
+        SwLog(L"uninstall: switching to native first");
+        if (DoSwitch(hwnd, SHELL_NATIVE, FALSE, FALSE) != 0) {
+            SwLog(L"uninstall: pre-switch failed, nothing removed");
+            return;
+        }
+    }
+    LogonAutoStartDisable();
+    WCHAR dir[MAX_PATH]; SwitcherDir(dir, MAX_PATH);
+    WCHAR t[MAX_PATH]; SideExplorerPath(t, MAX_PATH);
+    if (!IsNativePath(t) && IsUnderDir(dir, t)) {
+        SwLog(L"uninstall: deleting %s", t);
+        SetFileAttributesW(t, FILE_ATTRIBUTE_NORMAL);
+        DeleteFileW(t);
+    } else {
+        SwLog(L"uninstall: REFUSED to delete %s (safety guard)", t);
+    }
+    WCHAR sub[MAX_PATH];
+    Join2(sub, MAX_PATH, dir, L"cache");
+    if (IsUnderDir(dir, sub)) {
+        DeleteDirTree(sub);
+        RemoveDirectoryW(sub);
+    }
+    Join2(sub, MAX_PATH, dir, L"state");
+    if (IsUnderDir(dir, sub)) {
+        DeleteDirTree(sub);
+        RemoveDirectoryW(sub);
+    }
+    SwLog(L"uninstall: private explorer.exe + cache + state removed");
+    g_installed = FALSE;
+    g_reinstall = FALSE;
+    ResolveShellPaths();
+    g_view = VIEW_SETUP;
+    ApplyView(hwnd);
+    SetStatus(TR(TR_UNINSTALL_DONE));
+}
+
+// ---- "More information": shipped doc, else built-in equivalent -----------
+// The label never names a file; the doc lookup is an implementation detail.
+static void OpenLogonHelp(HWND hwnd) {
+    WCHAR dir[MAX_PATH]; SwitcherDir(dir, MAX_PATH);
+    WCHAR cand[MAX_PATH];
+    const WCHAR* subs[] = { L"docs\\avvio-al-login.md",
+                            L"avvio-al-login.md" };
+    for (int i = 0; i < 2; i++) {
+        Join2(cand, MAX_PATH, dir, subs[i]);
+        if (FileExists(cand)) {
+            SwLog(L"help: opening %s", cand);
+            HINSTANCE r = ShellExecuteW(hwnd, L"open", cand, NULL, NULL,
+                                        SW_SHOWNORMAL);
+            if ((INT_PTR)r > 32) return;
+            break;  // exists but no viewer: fall through to built-in text
+        }
+    }
+    // Repo/dev layout: <repo>\docs next to the <repo>\switcher folder.
+    WCHAR parent[MAX_PATH];
+    wcsncpy_s(parent, _countof(parent), dir, _TRUNCATE);
+    WCHAR* bs = wcsrchr(parent, L'\\');
+    if (bs) {
+        *bs = L'\0';
+        Join2(cand, MAX_PATH, parent, L"docs\\avvio-al-login.md");
+        if (FileExists(cand)) {
+            HINSTANCE r = ShellExecuteW(hwnd, L"open", cand, NULL, NULL,
+                                        SW_SHOWNORMAL);
+            if ((INT_PTR)r > 32) return;
+        }
+    }
+    MessageBoxW(hwnd, TR(TR_LOGIN_HELP_TEXT), TR(TR_LINK_INFO),
+                MB_OK | MB_ICONINFORMATION);
+}
+
 // ------------------------------------------------------------ window ----
 
 static HWND MakeChild(HWND parent, LPCWSTR cls, LPCWSTR text, DWORD style,
@@ -1353,73 +1996,164 @@ static HWND MakeChild(HWND parent, LPCWSTR cls, LPCWSTR text, DWORD style,
                              g_hInst, NULL);
     if (c && g_hFont)
         SendMessageW(c, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+    if (c && g_panelDst && g_panelCnt && *g_panelCnt < g_panelCap)
+        g_panelDst[(*g_panelCnt)++] = c;  // panel tracking for ApplyView
     return c;
 }
 
-static void OnCreate(HWND hwnd) {
-    g_hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+// ---- panels --------------------------------------------------------------
+// 96-DPI layout (every coordinate goes through Dpx()); client area 480x330,
+// modeled on the prototype. Deviation: progress/status sit 8px lower so the
+// 4-line description box never clips; the window is NOT topmost (the
+// prototype flag was test-only) and keeps its minimize box.
+static void BuildSetupPanel(HWND hwnd) {
+    g_panelDst = g_setupCtrls;
+    g_panelCnt = &g_nSetup;
+    g_panelCap = (int)_countof(g_setupCtrls);
+    g_nSetup = 0;
+    g_heading = MakeChild(hwnd, WC_STATICW, L"", 0,
+                          Dpx(16), Dpx(16), Dpx(448), Dpx(20), 0);
+    if (g_heading && g_hFontBold)
+        SendMessageW(g_heading, WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+    g_desc = MakeChild(hwnd, WC_STATICW, L"", 0,
+                       Dpx(16), Dpx(44), Dpx(448), Dpx(64), 0);
+    g_progress = MakeChild(hwnd, PROGRESS_CLASSW, L"", PBS_SMOOTH,
+                           Dpx(16), Dpx(122), Dpx(448), Dpx(18), 0);
+    if (g_progress) SendMessageW(g_progress, PBM_SETRANGE32, 0, 100);
+    g_status = MakeChild(hwnd, WC_STATICW, L"", 0,
+                         Dpx(16), Dpx(148), Dpx(448), Dpx(18), 0);
+    g_panelDst = NULL;
+    g_panelCnt = NULL;
+}
 
-    MakeChild(hwnd, WC_STATICW, L"7explorer Shell Switcher",
-              SS_CENTER, 10, 10, 540, 22, 0);
-    MakeChild(hwnd, WC_STATICW, TR(TR_SUBTITLE),
-              SS_CENTER, 10, 32, 540, 16, 0);
-
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_GROUPBOX),
-              BS_GROUPBOX, 10, 54, 540, 132, 0);
-
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_NATIVE_NAME),
-              BS_AUTORADIOBUTTON | WS_TABSTOP,
-              26, 76, 240, 20, IDC_RADIO_NATIVE);
-    MakeChild(hwnd, WC_STATICW, g_nativePath,
-              SS_LEFT, 44, 97, 490, 16, IDC_ST_NATPATH);
-
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_WIN7EXPLORERRESTORER_NAME),
-              BS_AUTORADIOBUTTON | WS_TABSTOP,
-              26, 122, 240, 20, IDC_RADIO_WIN7EXPLORERRESTORER);
-    MakeChild(hwnd, WC_STATICW, g_Win7ExplorerRestorerPath,
-              SS_LEFT, 44, 143, 420, 16, IDC_ST_WIN7EXPLORERRESTORERPATH);
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_BROWSE),
-              BS_PUSHBUTTON | WS_TABSTOP,
-              470, 140, 82, 22, IDC_BTN_BROWSE);
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_THEME),
-              BS_PUSHBUTTON | WS_TABSTOP,
-              330, 290, 96, 22, IDC_BTN_THEME);
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_CHK_LOGIN),
-              BS_AUTOCHECKBOX | BS_MULTILINE | WS_TABSTOP,
-              26, 172, 524, 30, IDC_CHK_LOGIN);
-
-    MakeChild(hwnd, WC_STATICW, L"\u2026",
-              SS_LEFT, 26, 208, 524, 34, IDC_ST_CURRENT);
-    MakeChild(hwnd, WC_STATICW, L"\u2026",
-              SS_LEFT, 26, 248, 524, 34, IDC_ST_TARGET);
-
+static void BuildMainPanel(HWND hwnd) {
+    const DWORD tab = WS_TABSTOP;
+    g_panelDst = g_mainCtrls;
+    g_panelCnt = &g_nMain;
+    g_panelCap = (int)_countof(g_mainCtrls);
+    g_nMain = 0;
+    MakeChild(hwnd, WC_STATICW, TR(TR_MAIN_INTRO), 0,
+              Dpx(16), Dpx(14), Dpx(448), Dpx(34), 0);
+    HWND rN = MakeChild(hwnd, WC_BUTTONW, TR(TR_NATIVE_NAME),
+                        BS_AUTORADIOBUTTON | WS_GROUP | tab,
+                        Dpx(16), Dpx(58), Dpx(448), Dpx(20), IDC_RADIO_NATIVE);
+    if (rN && g_hFontBold)
+        SendMessageW(rN, WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+    g_natSub = MakeChild(hwnd, WC_STATICW, TR(TR_NATIVE_SUB), 0,
+                         Dpx(38), Dpx(78), Dpx(420), Dpx(16), IDC_ST_NATSUB);
+    HWND rE = MakeChild(hwnd, WC_BUTTONW, TR(TR_WIN7EXPLORERRESTORER_NAME),
+                        BS_AUTORADIOBUTTON | tab,
+                        Dpx(16), Dpx(104), Dpx(448), Dpx(20),
+                        IDC_RADIO_WIN7EXPLORERRESTORER);
+    if (rE && g_hFontBold)
+        SendMessageW(rE, WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+    MakeChild(hwnd, WC_STATICW, g_Win7ExplorerRestorerPath, SS_PATHELLIPSIS,
+              Dpx(38), Dpx(126), Dpx(322), Dpx(16),
+              IDC_ST_WIN7EXPLORERRESTORERPATH);
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_BROWSE), BS_PUSHBUTTON | tab,
+              Dpx(372), Dpx(122), Dpx(92), Dpx(24), IDC_BTN_BROWSE);
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_CHK_LOGIN_SHORT),
+              BS_AUTOCHECKBOX | tab,
+              Dpx(16), Dpx(158), Dpx(448), Dpx(20), IDC_CHK_LOGIN);
+    HWND lnk = MakeChild(hwnd, WC_STATICW, TR(TR_LINK_INFO),
+                         SS_NOTIFY | tab,
+                         Dpx(38), Dpx(180), Dpx(150), Dpx(16), IDC_LINK_INFO);
+    if (lnk && g_hFontLink)
+        SendMessageW(lnk, WM_SETFONT, (WPARAM)g_hFontLink, TRUE);
+    lnk = MakeChild(hwnd, WC_STATICW, TR(TR_LINK_REINSTALL),
+                    SS_NOTIFY | tab,
+                    Dpx(296), Dpx(180), Dpx(70), Dpx(16), IDC_LINK_REINSTALL);
+    if (lnk && g_hFontLink)
+        SendMessageW(lnk, WM_SETFONT, (WPARAM)g_hFontLink, TRUE);
+    lnk = MakeChild(hwnd, WC_STATICW, TR(TR_LINK_UNINSTALL),
+                    SS_NOTIFY | tab,
+                    Dpx(384), Dpx(180), Dpx(80), Dpx(16), IDC_LINK_UNINSTALL);
+    if (lnk && g_hFontLink)
+        SendMessageW(lnk, WM_SETFONT, (WPARAM)g_hFontLink, TRUE);
+    MakeChild(hwnd, WC_STATICW, L"", SS_ETCHEDHORZ,
+              Dpx(16), Dpx(206), Dpx(448), Dpx(2), 0);
+    MakeChild(hwnd, WC_STATICW, TR(TR_LANG_LABEL), 0,
+              Dpx(16), Dpx(222), Dpx(44), Dpx(18), IDC_ST_LANG);
     HWND cbo = MakeChild(hwnd, WC_COMBOBOXW, NULL,
-                         CBS_DROPDOWNLIST | WS_VSCROLL,
-                         26, 290, 280, 140, IDC_CBO_SHLANG);
-    SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_SYS));
-    SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_EN));
-    SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_IT));
-    SendMessageW(cbo, CB_SETCURSEL, 0, 0);
+                         CBS_DROPDOWNLIST | WS_VSCROLL | tab,
+                         Dpx(62), Dpx(218), Dpx(190), Dpx(120), IDC_CBO_SHLANG);
+    if (cbo) {
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_SYS));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_EN));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_IT));
+        SendMessageW(cbo, CB_SETCURSEL, ShellLangLoad(), 0);
+    }
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_THEME), BS_PUSHBUTTON | tab,
+              Dpx(318), Dpx(217), Dpx(146), Dpx(24), IDC_BTN_THEME);
+    g_panelDst = NULL;
+    g_panelCnt = NULL;
+}
 
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_SWITCH),
-              BS_DEFPUSHBUTTON | WS_TABSTOP,
-              330, 322, 100, 28, IDC_BTN_SWITCH);
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_CANCEL),
-              BS_PUSHBUTTON | WS_TABSTOP,
-              440, 322, 100, 28, IDC_BTN_CANCEL);
+static void BuildFooter(HWND hwnd) {
+    const DWORD tab = WS_TABSTOP;
+    MakeChild(hwnd, WC_STATICW, L"", SS_ETCHEDHORZ,
+              Dpx(0), Dpx(272), Dpx(480), Dpx(2), 0);
+    g_hint = MakeChild(hwnd, WC_STATICW, L"", 0,
+                       Dpx(16), Dpx(290), Dpx(154), Dpx(32), 0);
+    // IDOK/IDCANCEL: Enter/Esc behave like a normal dialog.
+    MakeChild(hwnd, WC_BUTTONW, L"", BS_DEFPUSHBUTTON | tab,
+              Dpx(178), Dpx(286), Dpx(176), Dpx(26), IDOK);
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_CANCEL), BS_PUSHBUTTON | tab,
+              Dpx(362), Dpx(286), Dpx(102), Dpx(26), IDCANCEL);
+}
 
+static BOOL IsLinkId(int id) {
+    return id == IDC_LINK_INFO || id == IDC_LINK_REINSTALL ||
+           id == IDC_LINK_UNINSTALL;
+}
+
+static void ApplyView(HWND hwnd) {
+    const BOOL setup = (g_view != VIEW_MAIN);
+    for (int i = 0; i < g_nSetup; i++)
+        ShowWindow(g_setupCtrls[i], setup ? SW_SHOW : SW_HIDE);
+    for (int i = 0; i < g_nMain; i++)
+        ShowWindow(g_mainCtrls[i], setup ? SW_HIDE : SW_SHOW);
+    if (setup) {
+        const BOOL running = (g_view == VIEW_INSTALLING);
+        if (g_progress) ShowWindow(g_progress, running ? SW_SHOW : SW_HIDE);
+        if (g_heading)
+            SetWindowTextW(g_heading, g_reinstall ? TR(TR_REINSTALL_HEADING)
+                                                  : TR(TR_SETUP_HEADING));
+        if (g_desc)
+            SetWindowTextW(g_desc, g_reinstall ? TR(TR_REINSTALL_DESC)
+                                               : TR(TR_SETUP_DESC));
+        if (!running) SetStatus(L"");
+        SetDlgItemTextW(hwnd, IDOK, running ? TR(TR_BTN_ABORT)
+                               : (g_reinstall ? TR(TR_BTN_REINSTALL)
+                                              : TR(TR_BTN_INSTALL)));
+        if (g_hint)
+            SetWindowTextW(g_hint, running ? TR(TR_HINT_ONEMIN)
+                                           : TR(TR_HINT_NOADMIN));
+    } else {
+        UpdateTargetLabel(hwnd);
+        if (g_hint) SetWindowTextW(g_hint, TR(TR_HINT_RESTART));
+    }
+}
+
+static void OnCreate(HWND hwnd) {
+    CreateUiFonts();
+    BuildSetupPanel(hwnd);
+    BuildMainPanel(hwnd);
+    BuildFooter(hwnd);
+    g_installed = IsInstalled();
+    g_reinstall = FALSE;
+    g_view = g_installed ? VIEW_MAIN : VIEW_SETUP;
     // Initial state: select the OTHER shell as the target, so a first
-    // "Switch" actually changes something.
+    // click on the main button actually changes something.
     WCHAR path[1024];
     DWORD pid = 0;
     ShellKind cur = DetectCurrentShell(path, (DWORD)_countof(path), &pid);
     SetRadioForKind(hwnd, (cur == SHELL_WIN7EXPLORERRESTORER) ? SHELL_NATIVE : SHELL_WIN7EXPLORERRESTORER);
-    RefreshStatus(hwnd);
-    UpdateTargetLabel(hwnd);
     CheckDlgButton(hwnd, IDC_CHK_LOGIN,
                    LogonAutoStartPresent() ? BST_CHECKED : BST_UNCHECKED);
-
-    SetTimer(hwnd, 1, REFRESH_TIMER_MS, NULL);
+    ApplyView(hwnd);
+    RefreshStatus(hwnd);
+    SetTimer(hwnd, TID_REFRESH, REFRESH_TIMER_MS, NULL);
 }
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
@@ -1430,8 +2164,29 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_TIMER:
-        RefreshStatus(hwnd);
+        if (wParam == TID_INSTALL)
+            PollInstaller(hwnd);
+        else
+            RefreshStatus(hwnd);
         return 0;
+
+    case WM_CTLCOLORSTATIC: {
+        HDC hdc = (HDC)wParam;
+        HWND ctl = (HWND)lParam;
+        int id = (int)GetWindowLongPtrW(ctl, GWLP_ID);
+        if (IsLinkId(id)) {
+            SetTextColor(hdc, RGB(0, 102, 204));
+            SetBkMode(hdc, TRANSPARENT);
+            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+        }
+        if (ctl == g_hint || ctl == g_natSub || ctl == g_status ||
+            ctl == GetDlgItem(hwnd, IDC_ST_WIN7EXPLORERRESTORERPATH)) {
+            SetTextColor(hdc, GetSysColor(COLOR_GRAYTEXT));
+            SetBkMode(hdc, TRANSPARENT);
+            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+        }
+        break;
+    }
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
@@ -1441,15 +2196,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
                 UpdateTargetLabel(hwnd);
             return 0;
 
-        case IDC_BTN_SWITCH: {
-            if (MessageBoxW(hwnd, TR(TR_WARN_CONFIRM),
-                    L"7explorer Shell Switcher",
-                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES)
-                return 0;
-            (void)DoSwitch(hwnd, SelectedTarget(hwnd), FALSE, FALSE);
-            return 0;
-        }
-
         case IDC_BTN_BROWSE:
             if (HIWORD(wParam) == BN_CLICKED)
                 BrowseForWin7ExplorerRestorer(hwnd);
@@ -1458,6 +2204,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
         case IDC_BTN_THEME:
             if (HIWORD(wParam) == BN_CLICKED)
                 InstallTheme(hwnd);
+            return 0;
+
+        case IDC_CBO_SHLANG:
+            if (HIWORD(wParam) == CBN_SELCHANGE) {
+                // Shell-only (see ShellLangSave): persisted per-user under
+                // our own key; applied via the child env at next switch.
+                int sel = (int)SendMessageW((HWND)lParam, CB_GETCURSEL, 0, 0);
+                ShellLangSave(sel);
+            }
             return 0;
 
         case IDC_CHK_LOGIN:
@@ -1503,18 +2258,56 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
             }
             return 0;
 
-        case IDC_BTN_CANCEL:
+        case IDC_LINK_INFO:
+            if (HIWORD(wParam) == STN_CLICKED)
+                OpenLogonHelp(hwnd);
+            return 0;
+
+        case IDC_LINK_REINSTALL:
+            if (HIWORD(wParam) == STN_CLICKED)
+                EnterReinstall(hwnd);
+            return 0;
+
+        case IDC_LINK_UNINSTALL:
+            if (HIWORD(wParam) == STN_CLICKED)
+                DoUninstall(hwnd);
+            return 0;
+
+        case IDOK:
+            if (g_view == VIEW_SETUP) {
+                StartInstall(hwnd);
+            } else if (g_view == VIEW_INSTALLING) {
+                AbortInstall(hwnd, FALSE);
+            } else {
+                if (MessageBoxW(hwnd, TR(TR_WARN_CONFIRM),
+                        L"7explorer Shell Switcher",
+                        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES)
+                    return 0;
+                (void)DoSwitch(hwnd, SelectedTarget(hwnd), FALSE, FALSE);
+                ApplyView(hwnd);
+            }
+            return 0;
+
+        case IDCANCEL:
+            if (g_view == VIEW_INSTALLING)
+                AbortInstall(hwnd, FALSE);
             DestroyWindow(hwnd);
             return 0;
         }
         return 0;
 
     case WM_CLOSE:
+        if (g_view == VIEW_INSTALLING)
+            AbortInstall(hwnd, FALSE);
         DestroyWindow(hwnd);
         return 0;
 
     case WM_DESTROY:
-        KillTimer(hwnd, 1);
+        KillTimer(hwnd, TID_REFRESH);
+        KillTimer(hwnd, TID_INSTALL);
+        AbortInstall(hwnd, TRUE);  // safety: never orphan the child
+        g_installProc.Close();
+        DestroyUiFonts();
         PostQuitMessage(0);
         return 0;
     }
@@ -1662,6 +2455,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     EnsureHotkeyResident();
 
+    // GUI path only (headless modes above never reach this): opt out of
+    // DPI virtualization so Dpx() scaling renders crisp, and load the
+    // progress-bar class used by the Setup view.
+    (void)SetProcessDPIAware();
+    DpiInit();
+    {
+        INITCOMMONCONTROLSEX icc;
+        ZeroMemory(&icc, sizeof(icc));
+        icc.dwSize = sizeof(icc);
+        icc.dwICC = ICC_PROGRESS_CLASS;
+        InitCommonControlsEx(&icc);
+    }
+
     WNDCLASSEXW wc;
     ZeroMemory(&wc, sizeof(wc));
     wc.cbSize = sizeof(wc);
@@ -1675,12 +2481,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (!RegisterClassExW(&wc))
         return 1;
 
+    // Client area 480x330 @96dpi, DPI-scaled (unified setup UI).
+    RECT want = { 0, 0, Dpx(480), Dpx(330) };
+    AdjustWindowRectEx(&want,
+                       WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+                       FALSE, WS_EX_DLGMODALFRAME);
     HWND hwnd = CreateWindowExW(
         WS_EX_DLGMODALFRAME,
         L"Win7ExplorerRestorerShellSwitcher",
         L"7explorer Shell Switcher",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 576, 400,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        want.right - want.left, want.bottom - want.top,
         NULL, NULL, hInstance, NULL);
     if (!hwnd)
         return 1;

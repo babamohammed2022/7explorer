@@ -36,8 +36,13 @@ Indice: [requisiti](#requisiti) · [procedura](#procedura) · [cosa viene scaric
      **nessun file `.mui`** viene richiesto, scaricato o creato.
    L'operazione è deterministica e ripetibile: rieseguirla riscrive lo
    stesso file (verificato dalla CI a ogni build).
-4. Avvia **`7explorer-shell-switcher.exe`** → **Windows 7 Explorer** →
-   **Cambia**. La shell Win7 sostituisce quella di Windows 11 al volo.
+   In alternativa puoi saltare questo passo: avviando direttamente
+   **`7explorer-shell-switcher.exe`**, se l'installazione manca la finestra
+   propone **Installa** ed esegue `Win7ExplorerRestorer.exe` da sola
+   (nascosto, con barra di avanzamento e dettagli dal log).
+4. Avvia **`7explorer-shell-switcher.exe`** → seleziona
+   **Windows 7 Explorer** → **Usa Win7ExplorerRestorer**. La shell Win7
+   sostituisce quella di Windows 11 al volo.
 5. Per tornare: `Ctrl+Alt+Shift+S` → **Esplora risorse Windows nativo** →
    **Cambia**.
 6. (Opzionale) **"Avvia Win7ExplorerRestorer automaticamente al logon"** nel omonimo

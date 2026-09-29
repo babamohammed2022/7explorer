@@ -39,6 +39,35 @@ Technical notes (design is intentionally conservative):
 
 A **Browse…** button lets you point anywhere else.
 
+## Unified setup UI (test38)
+
+The window shows one view at a time (same layout as the Windhawk prototype
+`shell-switcher-ui-test`):
+
+- **Setup** (shown when `explorer.exe` + `state\install.json` are missing
+  next to the switcher): **Install** / **Reinstall** runs the bundled
+  `Win7ExplorerRestorer.exe` hidden and non-blocking, with an indeterminate
+  progress bar; the result comes from its exit code plus the tail of
+  `log\Win7ExplorerRestorerSetup.log`. **Abort** terminates it and deletes a
+  half-written private `explorer.exe` (a pre-launch snapshot tells
+  "untouched" from "suspect"), so the state stays coherent. If the
+  installer exe is missing, a clear error explains where to put it.
+- **Main** (shown when installed): pick the shell with the radios (the live
+  one is marked "– in use"), **Browse…** for another path, the logon
+  checkbox plus **More information** (opens `docs/avvio-al-login.md` when
+  shipped, else a built-in summary), **Reinstall** / **Uninstall** links,
+  the private-shell language combo and the theme button. The footer button
+  is explicit ("Use …") and warns that the desktop restarts briefly.
+
+Flows: **Reinstall** switches to the native shell first when ours is live,
+then installs and offers to switch back; **Uninstall** (confirmed) switches
+to native, disables the logon auto-start and deletes only the private
+`explorer.exe`, `cache\` and `state\` — never `C:\Windows\explorer.exe`,
+never `HKLM`. The private-shell language combo affects **only our shell**:
+it is stored per-user under `HKCU\Software\7explorer\ShellSwitcher` and
+applied via the `WIN7EXPLORERRESTORER_UI_LANG` child-process environment at
+switch time. All CLI flags stay headless and never start the installer.
+
 ## Login-time auto-start (test37)
 
 The checkbox **"Start Windows 7 Explorer automatically at logon"** arms
