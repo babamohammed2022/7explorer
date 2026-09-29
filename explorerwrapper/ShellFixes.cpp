@@ -78,9 +78,15 @@ void LogLine(LPCWSTR fmt, ...)
 	if (h.Get() != INVALID_HANDLE_VALUE) {
 		LARGE_INTEGER size = {};
 		if (GetFileSizeEx(h.Get(), &size) && size.QuadPart > 256 * 1024) {
-			// full: stop logging (delete the file to start over)
-			ReleaseSRWLockExclusive(&g_logLock);
-			return;
+			// test33: rotate instead of stopping (a full log hid everything
+			// after the first minutes): current -> .old, start a new file.
+			CloseHandle(h.Release());
+			wchar_t old[MAX_PATH];
+			StringCchCopyW(old, MAX_PATH, path); StringCchCatW(old, MAX_PATH, L".old");
+			MoveFileExW(path, old, MOVEFILE_REPLACE_EXISTING);
+			h.Reset(CreateFileW(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+				nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+			if (h.Get() == INVALID_HANDLE_VALUE) { ReleaseSRWLockExclusive(&g_logLock); return; }
 		}
 		SYSTEMTIME st; GetLocalTime(&st);
 		char line[3200];
@@ -186,6 +192,12 @@ BOOL LaunchSettingsUri(const wchar_t* uri, HWND hwnd)
 			Sleep(2500);
 			ok = g_origShellExecuteExW(&fb) || ActivateSettingsFallback(uri);
 			LogLine(L"[ex7] %s retry after UWP host: %d", uri, ok);
+		}
+		if (!ok) { // at any cost: classic Control Panel
+			wchar_t cp[MAX_PATH]; GetSystemDirectoryW(cp, MAX_PATH); StringCchCatW(cp, MAX_PATH, L"\\control.exe");
+			SHELLEXECUTEINFOW c = { sizeof(c) }; c.fMask = SEE_MASK_FLAG_NO_UI; c.lpFile = cp; c.nShow = SW_SHOWNORMAL;
+			ok = g_origShellExecuteExW(&c);
+			LogLine(L"[ex7] %s: all Settings paths failed, Control Panel -> %d", uri, ok);
 			return ok;
 		}
 	}
@@ -1559,10 +1571,11 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test32), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test33), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
+	SafeInvoke(L"UWP host early", ex7::uwp::EarlyStart);
 	SafeInvoke(L"InstallTrayMenus", ex7::InstallTrayMenus);             // Win32 tray menus + volume actions
 	SafeInvoke(L"OpenControlPanel hook", ex7::InstallControlPanelOpenHook); // "Customize..." -> built-in dialog
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare);

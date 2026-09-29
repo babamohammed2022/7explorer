@@ -10,11 +10,14 @@
 // ... allows running UWP/Immersive stuff without running explorer.exe").
 // Nothing is replaced on disk; the host runs in a kill-on-close job so it
 // ends with this shell. Explorer\Advanced UwpHostRuntime: 0 = never,
-// 1 = automatic (default), 2 = always at start-up.
+// 1 = automatic (default), 2 = always at start-up, 3 = always, before the
+// Win7 desktop. UwpEarlyHost: 1 = start early (set by itself when a late host
+// did not help), 0 = never early.
 #include "common.h"
 namespace ex7 { namespace uwp {
 void SetTwinUiStarted(bool ok);        // ImmersiveShell.cpp result
-void StartupCheck();                    // ~10 s after the tray is up
+void StartupCheck();
+void EarlyStart();                      // UwpHostRuntime=3 or UwpEarlyHost=1 (set automatically)                    // ~10 s after the tray is up
 int CountAppWindows();                  // visible UWP frame/core windows
 // After a UWP launch that reported success: if no app window appears within
 // a few seconds, start the host and repeat the launch once.

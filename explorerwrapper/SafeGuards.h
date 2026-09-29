@@ -64,6 +64,8 @@ public:
 	explicit ScopedHandle(HANDLE h = nullptr) : m_h(h) {}
 	~ScopedHandle() { if (m_h && m_h != INVALID_HANDLE_VALUE) CloseHandle(m_h); }
 	HANDLE Get() const { return m_h; }
+	HANDLE Release() { HANDLE h = m_h; m_h = nullptr; return h; }
+	void Reset(HANDLE h) { if (m_h && m_h != INVALID_HANDLE_VALUE) CloseHandle(m_h); m_h = h; }
 private:
 	HANDLE m_h;
 	ScopedHandle(const ScopedHandle&) = delete;

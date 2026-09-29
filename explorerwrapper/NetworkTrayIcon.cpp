@@ -246,6 +246,29 @@ int WifiBars(const GUID& adapter)
 	return bars;
 }
 
+// GUIDs of the Wi-Fi interfaces (WlanEnumInterfaces is not location-gated).
+// Second, independent Wi-Fi test next to the IF_TYPE of GetAdaptersAddresses.
+int WlanGuids(GUID* out, int max)
+{
+	ScopedLib lib(LoadLibraryExW(L"wlanapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32));
+	if (!lib.get()) return 0;
+	auto pOpen = (WlanOpenHandle_t)GetProcAddress(lib.get(), "WlanOpenHandle");
+	auto pClose = (WlanCloseHandle_t)GetProcAddress(lib.get(), "WlanCloseHandle");
+	auto pEnum = (WlanEnumInterfaces_t)GetProcAddress(lib.get(), "WlanEnumInterfaces");
+	auto pFree = (WlanFreeMemory_t)GetProcAddress(lib.get(), "WlanFreeMemory");
+	if (!pOpen || !pClose || !pEnum || !pFree) return 0;
+	HANDLE h = nullptr; DWORD ver = 0;
+	if (pOpen(2, nullptr, &ver, &h) != ERROR_SUCCESS) return 0;
+	int n = 0;
+	PWLAN_INTERFACE_INFO_LIST list = nullptr;
+	if (pEnum(h, nullptr, &list) == ERROR_SUCCESS && list) {
+		for (DWORD i = 0; i < list->dwNumberOfItems && n < max; ++i) out[n++] = list->InterfaceInfo[i].InterfaceGuid;
+		pFree(list);
+	}
+	pClose(h, nullptr);
+	return n;
+}
+
 struct ConnCtx { Snapshot* s; bool ok; };
 
 void TakeNlmUnsafe(ConnCtx* c)
@@ -253,6 +276,7 @@ void TakeNlmUnsafe(ConnCtx* c)
 	Snapshot& s = *c->s;
 	AdapterInfo ad[kMaxAdapters]; DWORD best = 0;
 	int nAd = ReadAdapters(ad, kMaxAdapters, &best);
+	GUID wl[8]; int nWl = WlanGuids(wl, 8);
 	ComPtr<INetworkListManager> nlm;
 	if (FAILED(CoCreateInstance(__uuidof(NetworkListManager), nullptr, CLSCTX_ALL, __uuidof(INetworkListManager), nlm.PutVoid())) || !nlm) return;
 	ComPtr<IEnumNetworkConnections> en;
@@ -274,6 +298,7 @@ void TakeNlmUnsafe(ConnCtx* c)
 		if (score <= bestScore) continue;
 		bestScore = score;
 		bool wifi = type == IF_TYPE_IEEE80211;
+		for (int i = 0; i < nWl && !wifi; ++i) if (IsEqualGUID(wl[i], id)) wifi = true;
 		s.st = wifi ? (internet ? StWifiOk : StWifiLimited) : (internet ? StWiredOk : StWiredLimited);
 		s.name[0] = 0;
 		ComPtr<INetwork> netw;
@@ -283,6 +308,8 @@ void TakeNlmUnsafe(ConnCtx* c)
 		}
 		s.bars = 4;
 		if (wifi) { int b = WifiBars(id); if (b >= 0) s.bars = b; }
+		static State lastLogged = (State)-1;
+		if (s.st != lastLogged) { lastLogged = s.st; Log(L"NLM: connection type=%u ifIndex=%u best=%u wifi=%d internet=%d", (DWORD)type, (DWORD)idx, best, wifi, internet); }
 	}
 }
 

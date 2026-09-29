@@ -66,7 +66,44 @@ HRESULT ActivateAumid(const wchar_t* aumid, const wchar_t* args)
 	return hr;
 }
 
+DWORD WINAPI AliveThread(LPVOID p)
+{
+	ScopedHandle h((HANDLE)p);
+	if (WaitForSingleObject(h.Get(), 4000) == WAIT_OBJECT_0) {
+		DWORD code = 0; GetExitCodeProcess(h.Get(), &code);
+		Log(L"ShellAppRuntime.exe exited after start, code 0x%08X", code);
+		InterlockedExchange(&g_hostStarted, 0);
+	} else Log(L"ShellAppRuntime.exe still running after 4 s");
+	return 0;
+}
+
+void SetEarly(DWORD v)
+{
+	HKEY k;
+	if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", 0, nullptr, 0, KEY_SET_VALUE, nullptr, &k, nullptr) == ERROR_SUCCESS) {
+		RegSetValueExW(k, L"UwpEarlyHost", 0, REG_DWORD, (const BYTE*)&v, sizeof(v));
+		RegCloseKey(k);
+	}
+}
+
 struct Watch { int kind; int before; wchar_t target[512]; wchar_t args[512]; };
+
+// Something must open: Settings -> classic Control Panel; an app ->
+// "explorer.exe shell:AppsFolder\<AUMID>" through the system explorer.
+void LastResort(Watch* w)
+{
+	wchar_t exe[MAX_PATH], args[600];
+	if (w->kind == 0 && StrCmpNIW(w->target, L"ms-settings:", 12) == 0) {
+		GetSystemDirectoryW(exe, MAX_PATH); PathAppendW(exe, L"control.exe");
+		HINSTANCE r = ShellExecuteW(nullptr, nullptr, exe, nullptr, nullptr, SW_SHOWNORMAL);
+		Log(L"last resort for %s: Control Panel -> %d", w->target, (int)(INT_PTR)r);
+	} else if (w->kind == 1) {
+		GetWindowsDirectoryW(exe, MAX_PATH); PathAppendW(exe, L"explorer.exe");
+		wnsprintfW(args, ARRAYSIZE(args), L"shell:AppsFolder\\%s", w->target);
+		HINSTANCE r = ShellExecuteW(nullptr, nullptr, exe, args, nullptr, SW_SHOWNORMAL);
+		Log(L"last resort for %s: system explorer AppsFolder -> %d", w->target, (int)(INT_PTR)r);
+	}
+}
 
 void WatchUnsafe(Watch* w)
 {
@@ -75,17 +112,25 @@ void WatchUnsafe(Watch* w)
 		if (CountAppWindows() > w->before) return; // the app came up
 	}
 	if (InterlockedCompareExchange(&g_hostStarted, 0, 0) || HostRunning()) {
-		Log(L"no window for %s, host already running: nothing more to try", w->target);
+		// the late host did not help: next start the host is launched before
+		// the Win7 desktop (forum-reported working order). UwpEarlyHost=0 to undo.
+		Log(L"no window for %s even with the host: UwpEarlyHost=1 for the next start", w->target);
+		if (ReadAdvancedDwordPublic(L"UwpEarlyHost", 2) == 2) SetEarly(1);
+		LastResort(w);
 		return;
 	}
 	Log(L"no app window 7 s after launching %s", w->target);
-	if (!EnsureHost(L"activation produced no window")) return;
+	if (!EnsureHost(L"activation produced no window")) { LastResort(w); return; }
 	Sleep(2500); // let the host register its services
 	if (w->kind == 1) ActivateAumid(w->target, w->args);
 	else {
 		HINSTANCE r = ShellExecuteW(nullptr, nullptr, w->target, nullptr, nullptr, SW_SHOWNORMAL);
 		Log(L"retry %s -> %d", w->target, (int)(INT_PTR)r);
 	}
+	for (int i = 0; i < 28; ++i) { Sleep(250); if (CountAppWindows() > w->before) return; }
+	Log(L"still no window for %s after the host", w->target);
+	if (ReadAdvancedDwordPublic(L"UwpEarlyHost", 2) == 2) SetEarly(1);
+	LastResort(w);
 }
 
 DWORD WINAPI WatchThread(LPVOID p)
@@ -141,7 +186,22 @@ bool EnsureHost(const wchar_t* why)
 	BOOL inJob = g_job ? AssignProcessToJobObject(g_job, pi.hProcess) : FALSE;
 	ResumeThread(pi.hThread);
 	Log(L"started ShellAppRuntime.exe pid=%u (%s), job=%d", pi.dwProcessId, why, inJob);
+	// did it stay up? (it may quit when it finds another shell)
+	HANDLE dup = nullptr;
+	if (DuplicateHandle(GetCurrentProcess(), pi.hProcess, GetCurrentProcess(), &dup, SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0)) {
+		HANDLE t = CreateThread(nullptr, 0, AliveThread, dup, 0, nullptr);
+		if (t) CloseHandle(t); else CloseHandle(dup);
+	}
 	return true;
+}
+
+void EarlyStart()
+{
+	__try {
+		DWORD m = Mode(), e = ReadAdvancedDwordPublic(L"UwpEarlyHost", 2);
+		if (m == 3 || (m != 0 && e == 1)) EnsureHost(L"early start (before the Win7 desktop)");
+	}
+	__except (SehFilter(L"uwp EarlyStart", GetExceptionInformation())) {}
 }
 
 void StartupCheck()
@@ -156,8 +216,7 @@ void StartupCheck()
 
 void WatchActivation(int kind, const wchar_t* target, const wchar_t* args, int windowsBefore)
 {
-	if (Mode() == 0 || !target || !*target) return;
-	if (InterlockedCompareExchange(&g_hostStarted, 0, 0)) return;
+	if (!target || !*target) return;
 	Watch* w = new Watch();
 	if (!w) return;
 	w->kind = kind; w->before = windowsBefore;
