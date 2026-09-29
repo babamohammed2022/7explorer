@@ -3316,15 +3316,24 @@ static LRESULT CALLBACK WndProcBody(HWND hwnd, UINT msg, WPARAM wParam,
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
+// C++ layer (C2712/C2713 forbid mixing both EH forms in one function, so the
+// C++ catch lives here and the SEH __except in the plain thunk below).
+static LRESULT CALLBACK WndProcCpp(HWND hwnd, UINT msg, WPARAM wParam,
+                                   LPARAM lParam)
+{
+    try {
+        return WndProcBody(hwnd, msg, wParam, lParam);
+    } catch (...) {
+        SwLog(L"C++ exception in WndProc msg=0x%X (continuing)", msg);
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
                                 LPARAM lParam)
 {
     __try {
-        try {
-            return WndProcBody(hwnd, msg, wParam, lParam);
-        } catch (...) {
-            SwLog(L"C++ exception in WndProc msg=0x%X (continuing)", msg);
-        }
+        return WndProcCpp(hwnd, msg, wParam, lParam);
     } __except (SwSehFilter(L"WndProc", GetExceptionInformation())) {
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -3531,15 +3540,22 @@ int WINAPI wWinMainBody(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     return (int)m.wParam;
 }
 
+int WINAPI wWinMainCpp(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                       LPWSTR lpCmdLine, int nCmdShow)
+{
+    try {
+        return wWinMainBody(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
+    } catch (...) {
+        SwLog(L"C++ exception in wWinMain (exiting 1)");
+    }
+    return 1;
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     LPWSTR lpCmdLine, int nCmdShow)
 {
     __try {
-        try {
-            return wWinMainBody(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
-        } catch (...) {
-            SwLog(L"C++ exception in wWinMain (exiting 1)");
-        }
+        return wWinMainCpp(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
     } __except (SwSehFilter(L"wWinMain", GetExceptionInformation())) {
     }
     return 1;
