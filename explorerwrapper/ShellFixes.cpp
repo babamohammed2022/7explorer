@@ -876,7 +876,7 @@ void DumpThreadStack(DWORD tid)
 
 DWORD WINAPI WatchdogThread(LPVOID)
 {
-	for (int i = 0; i < 25 && !g_trayReached; ++i) Sleep(1000);
+	for (int i = 0; i < 25 && !g_trayReached; ++i) { Sleep(1000); if (i % 5 == 4) LogLine(L"[ex7] watchdog: alive %d s, tray reached=%d", i + 1, g_trayReached); }
 	if (g_trayReached) return 0;
 	LogLine(L"[ex7] watchdog: taskbar not created after 25 s - start-up hang, thread stacks follow");
 	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
@@ -902,6 +902,74 @@ void LogLoadedForeignModules()
 	CloseHandle(snap);
 }
 
+// ---- exit / exception tracing (test21): the shell dies silently within 25 s
+typedef VOID (NTAPI *RtlExitUserProcess_t)(LONG);
+typedef LONG (NTAPI *NtTerminateProcess_t)(HANDLE, LONG);
+RtlExitUserProcess_t g_origExit = nullptr;
+NtTerminateProcess_t g_origTerm = nullptr;
+volatile LONG g_vehCount = 0;
+
+void CallerName(void* ret, wchar_t* out, int cch)
+{
+	HMODULE m = nullptr; wchar_t mp[MAX_PATH] = L"?";
+	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)ret, &m))
+		GetModuleFileNameW(m, mp, MAX_PATH);
+	wnsprintfW(out, cch, L"%s+0x%X", PathFindFileNameW(mp), (DWORD)((DWORD64)ret - (DWORD64)m));
+}
+
+VOID NTAPI Exit_Hook(LONG code)
+{
+	wchar_t c[300]; CallerName(_ReturnAddress(), c, 300);
+	LogLine(L"[ex7] process exit requested: code=0x%08X caller=%s tray reached=%d", code, c, g_trayReached);
+	g_origExit(code);
+}
+
+LONG NTAPI Term_Hook(HANDLE h, LONG code)
+{
+	if (h == GetCurrentProcess() || h == nullptr || GetProcessId(h) == GetCurrentProcessId()) {
+		wchar_t c[300]; CallerName(_ReturnAddress(), c, 300);
+		LogLine(L"[ex7] process terminate: handle=%p code=0x%08X caller=%s tray reached=%d", h, code, c, g_trayReached);
+	}
+	return g_origTerm(h, code);
+}
+
+LONG CALLBACK TraceVeh(EXCEPTION_POINTERS* ep)
+{
+	DWORD code = ep->ExceptionRecord->ExceptionCode;
+	if ((code & 0xC0000000) == 0xC0000000 || code == 0xE06D7363 || code == 0x20474343) {
+		if (InterlockedIncrement(&g_vehCount) <= 40) {
+			wchar_t c[300]; CallerName(ep->ExceptionRecord->ExceptionAddress, c, 300);
+			LogLine(L"[ex7] exception (first chance) 0x%08X at %s thread %u", code, c, GetCurrentThreadId());
+		}
+	}
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+void InstallExitTracing()
+{
+	HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+	void* e = (void*)GetProcAddress(nt, "RtlExitUserProcess");
+	void* t = (void*)GetProcAddress(nt, "NtTerminateProcess");
+	if (e && MH_CreateHook(e, (void*)Exit_Hook, (void**)&g_origExit) == MH_OK) MH_EnableHook(e);
+	if (t && MH_CreateHook(t, (void*)Term_Hook, (void**)&g_origTerm) == MH_OK) MH_EnableHook(t);
+	AddVectoredExceptionHandler(0, TraceVeh);
+	DWORD pid = 0; HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+	if (tray) GetWindowThreadProcessId(tray, &pid);
+	wchar_t exe[MAX_PATH] = L"?";
+	if (pid) {
+		HANDLE hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		DWORD cch = MAX_PATH;
+		if (hp) { QueryFullProcessImageNameW(hp, 0, exe, &cch); CloseHandle(hp); }
+	}
+	LogLine(L"[ex7] start-up: existing Shell_TrayWnd=%p owner pid=%u %s (a running taskbar makes the Win7 explorer act as a folder window)", tray, pid, exe);
+	wchar_t shell[MAX_PATH] = L""; DWORD cb = sizeof(shell);
+	RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", L"Shell", RRF_RT_REG_SZ, nullptr, shell, &cb);
+	LogLine(L"[ex7] start-up: cmdline=%s winlogon Shell=%s", GetCommandLineW(), shell);
+	HMODULE ep = GetModuleHandleW(L"dxgi.dll");
+	wchar_t dp[MAX_PATH] = L"-"; if (ep) GetModuleFileNameW(ep, dp, MAX_PATH);
+	LogLine(L"[ex7] start-up: dxgi.dll=%s (ExplorerPatcher uses C:\\Windows\\dxgi.dll)", dp);
+}
+
 void DirOf(wchar_t* p) { PathRemoveFileSpecW(p); lstrcatW(p, L"\\"); }
 
 void InstallInjectionGuard()
@@ -925,6 +993,7 @@ void InstallInjectionGuard()
 	for (const wchar_t* q = g_allow; *q; q += lstrlenW(q) + 1)
 		LogLine(L"[ex7] injection guard: allowed %s", q);
 	LogLoadedForeignModules();
+	InstallExitTracing();
 	HANDLE wd = CreateThread(nullptr, 0, WatchdogThread, nullptr, 0, nullptr);
 	if (wd) CloseHandle(wd);
 	LoadQuarantine();
@@ -953,7 +1022,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test20), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test21), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
