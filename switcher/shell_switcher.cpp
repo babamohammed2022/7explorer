@@ -123,6 +123,9 @@ typedef enum {
     TR_LANG_LABEL, TR_BTN_USE_E7, TR_BTN_USE_NATIVE, TR_HINT_RESTART,
     TR_LOGIN_HELP_TEXT, TR_REINSTALL_ASKBACK, TR_UNINSTALL_CONFIRM,
     TR_UNINSTALL_DONE,
+    // Shell-language combo entries, appended (test40).
+    TR_CBO_DE, TR_CBO_ES, TR_CBO_FR, TR_CBO_JA,
+    TR_CBO_PL, TR_CBO_PTBR, TR_CBO_RU, TR_CBO_ZHCN,
     TR_COUNT
 } TRID;
 static const WCHAR* TR_EN[] = {
@@ -213,6 +216,14 @@ static const WCHAR* TR_EN[] = {
     L"Reinstallation completed.\r\n\r\nSwitch back to Windows 7 Explorer Restorer now?",
     L"Windows 7 Explorer Restorer will be removed: you will be switched back to Windows Explorer and the private files will be deleted.\r\n\r\nProceed?",
     L"Windows 7 Explorer Restorer was removed.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_IT[] = {
     L"Scambia al volo la shell Explorer attiva. Nessun logout richiesto.",
@@ -303,6 +314,14 @@ static const WCHAR* TR_IT[] = {
     L"Reinstallazione completata.\r\n\r\nTornare ora a Windows 7 Explorer Restorer?",
     L"Windows 7 Explorer Restorer verr\u00e0 rimosso: si torner\u00e0 a Esplora risorse e i file privati verranno eliminati.\r\n\r\nProcedere?",
     L"Windows 7 Explorer Restorer rimosso.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_DE[] = {
     L"Wechselt die laufende Explorer-Shell zur Laufzeit. Keine Abmeldung n\u00f6tig.",
@@ -411,6 +430,14 @@ static const WCHAR* TR_DE[] = {
     L"Windows 7 Explorer Restorer wird entfernt: es wird zum Windows-Explorer "
     L"zur\u00fcckgewechselt und die privaten Dateien werden gel\u00f6scht.\r\n\r\nFortfahren?",
     L"Windows 7 Explorer Restorer wurde entfernt.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_ES[] = {
     L"Cambia la shell de Explorer en ejecuci\u00f3n al momento. No hace falta cerrar "
@@ -514,6 +541,14 @@ static const WCHAR* TR_ES[] = {
     L"Windows 7 Explorer Restorer ser\u00e1 eliminado: volver\u00e1s al Explorador de "
     L"Windows y se borrar\u00e1n los archivos privados.\r\n\r\n\u00bfProceder?",
     L"Windows 7 Explorer Restorer fue eliminado.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_FR[] = {
     L"Bascule \u00e0 chaud la shell Explorer active. Aucune d\u00e9connexion requise.",
@@ -620,6 +655,14 @@ static const WCHAR* TR_FR[] = {
     L"Windows 7 Explorer Restorer va \u00eatre supprim\u00e9 : vous reviendrez \u00e0 "
     L"l'Explorateur Windows et les fichiers priv\u00e9s seront effac\u00e9s.\r\n\r\nContinuer ?",
     L"Windows 7 Explorer Restorer a \u00e9t\u00e9 supprim\u00e9.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_JA[] = {
     L"\u5b9f\u884c\u4e2d\u306e Explorer \u30b7\u30a7\u30eb\u3092\u5373\u6642\u306b\u5207\u308a\u66ff\u3048\u307e\u3059\u3002\u30ed\u30b0\u30aa\u30d5\u306f\u4e0d\u8981\u3067\u3059\u3002",
@@ -703,6 +746,14 @@ static const WCHAR* TR_JA[] = {
     L"Windows 7 Explorer Restorer \u3092\u524a\u9664\u3057\u307e\u3059: \u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc\u306b\u623b\u308a\u3001\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8 "
     L"\u30d5\u30a1\u30a4\u30eb\u304c\u524a\u9664\u3055\u308c\u307e\u3059\u3002\r\n\r\n\u7d9a\u884c\u3057\u307e\u3059\u304b?",
     L"Windows 7 Explorer Restorer \u3092\u524a\u9664\u3057\u307e\u3057\u305f\u3002",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_PL[] = {
     L"Prze\u0142\u0105cza dzia\u0142aj\u0105c\u0105 pow\u0142ok\u0119 Eksploratora w locie. Wylogowanie nie jest "
@@ -811,6 +862,14 @@ static const WCHAR* TR_PL[] = {
     L"Program Windows 7 Explorer Restorer zostanie usuni\u0119ty: nast\u0105pi powr\u00f3t do "
     L"Eksploratora Windows, a prywatne pliki zostan\u0105 usuni\u0119te.\r\n\r\nKontynuowa\u0107?",
     L"Program Windows 7 Explorer Restorer zosta\u0142 usuni\u0119ty.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_PTBR[] = {
     L"Alterna a shell do Explorer em execu\u00e7\u00e3o imediatamente. N\u00e3o \u00e9 preciso sair.",
@@ -912,6 +971,14 @@ static const WCHAR* TR_PTBR[] = {
     L"O Windows 7 Explorer Restorer ser\u00e1 removido: voc\u00ea voltar\u00e1 ao Explorador de "
     L"Arquivos e os arquivos privados ser\u00e3o exclu\u00eddos.\r\n\r\nProsseguir?",
     L"O Windows 7 Explorer Restorer foi removido.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_RU[] = {
     L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0435\u0442 \u0440\u0430\u0431\u043e\u0442\u0430\u044e\u0449\u0443\u044e \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443 Explorer \u043d\u0430 \u043b\u0435\u0442\u0443. \u0412\u044b\u0445\u043e\u0434 \u0438\u0437 \u0441\u0438\u0441\u0442\u0435\u043c\u044b \u043d\u0435 "
@@ -1015,6 +1082,14 @@ static const WCHAR* TR_RU[] = {
     L"Windows 7 Explorer Restorer \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043b\u0451\u043d: \u043f\u0440\u043e\u0438\u0437\u043e\u0439\u0434\u0451\u0442 \u0432\u043e\u0437\u0432\u0440\u0430\u0442 \u043a \u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a\u0443 "
     L"Windows, \u0447\u0430\u0441\u0442\u043d\u044b\u0435 \u0444\u0430\u0439\u043b\u044b \u0431\u0443\u0434\u0443\u0442 \u0443\u0434\u0430\u043b\u0435\u043d\u044b.\r\n\r\n\u041f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c?",
     L"Windows 7 Explorer Restorer \u0443\u0434\u0430\u043b\u0451\u043d.",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR* TR_ZHCN[] = {
     L"\u5373\u65f6\u5207\u6362\u6b63\u5728\u8fd0\u884c\u7684 Explorer \u5916\u58f3\u3002\u65e0\u9700\u6ce8\u9500\u3002",
@@ -1093,6 +1168,14 @@ static const WCHAR* TR_ZHCN[] = {
     L"\u91cd\u65b0\u5b89\u88c5\u5b8c\u6210\u3002\r\n\r\n\u73b0\u5728\u5207\u6362\u56de Windows 7 Explorer Restorer \u5417?",
     L"\u5c06\u5220\u9664 Windows 7 Explorer Restorer: \u4f1a\u5207\u6362\u56de Windows \u8d44\u6e90\u7ba1\u7406\u5668\uff0c\u5e76\u5220\u9664\u79c1\u6709\u6587\u4ef6\u3002\r\n\r\n\u7ee7\u7eed\u5417?",
     L"\u5df2\u5220\u9664 Windows 7 Explorer Restorer\u3002",
+    L"Deutsch",
+    L"Espa\u00f1ol",
+    L"Fran\u00e7ais",
+    L"\u65e5\u672c\u8a9e",
+    L"Polski",
+    L"Portugu\u00eas (BR)",
+    L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
+    L"\u4e2d\u6587(\u7b80\u4f53)",
 };
 static const WCHAR** TR_TABLES[UI_LANG_COUNT] = {
     TR_EN, TR_IT, TR_DE, TR_ES, TR_FR, TR_JA, TR_PL, TR_PTBR, TR_RU, TR_ZHCN
@@ -1476,7 +1559,7 @@ static BOOL LaunchExe(LPCWSTR path, DWORD* pErr, LPCWSTR envLang) {
     return TRUE;
 }
 
-// UI-language selection for the Win7ExplorerRestorer launch: from the GUI combo (0/1/2) or
+// UI-language selection for the Win7ExplorerRestorer launch: from the GUI combo (0..10) or
 // from the caller environment (headless CLI inherits WIN7EXPLORERRESTORER_UI_LANG as-is).
 // This is the language-application point (shell-only, via the child env in
 // LaunchExe): it never throws out; on any failure fall back to NULL
@@ -1492,6 +1575,14 @@ static LPCWSTR SelectedShellUILang(HWND hwnd) {
                                     CB_GETCURSEL, 0, 0);
         if (sel == 1) return L"en-US";
         if (sel == 2) return L"it-IT";
+        if (sel == 3) return L"de-DE";
+        if (sel == 4) return L"es-ES";
+        if (sel == 5) return L"fr-FR";
+        if (sel == 6) return L"ja-JP";
+        if (sel == 7) return L"pl-PL";
+        if (sel == 8) return L"pt-BR";
+        if (sel == 9) return L"ru-RU";
+        if (sel == 10) return L"zh-CN";
         return NULL;  // system default
     } catch (...) {
         SwLog(L"shell-lang: selection read failed, using system default");
@@ -2479,7 +2570,7 @@ static void SetStatus(LPCWSTR text) {
 // Handles are RAII-guarded and every step is wrapped in try/catch with a
 // safe fallback (system default), as required.
 static const WCHAR kSwitcherRegKey[] = L"Software\\7explorer\\ShellSwitcher";
-static const WCHAR kShellLangValue[] = L"ShellUILang";  // REG_DWORD 0/1/2
+static const WCHAR kShellLangValue[] = L"ShellUILang";  // REG_DWORD 0..10 (0=system)
 
 static int ShellLangLoad(void) {
     try {
@@ -2490,7 +2581,7 @@ static int ShellLangLoad(void) {
         DWORD v = 0, cb = sizeof(v), type = 0;
         if (RegQueryValueExW(k.h, kShellLangValue, NULL, &type,
                              (LPBYTE)&v, &cb) != ERROR_SUCCESS ||
-            type != REG_DWORD || v > 2)
+            type != REG_DWORD || v > 10)
             return 0;
         return (int)v;
     } catch (...) {
@@ -2500,7 +2591,7 @@ static int ShellLangLoad(void) {
 }
 
 static void ShellLangSave(int sel) {
-    if (sel < 0 || sel > 2) sel = 0;
+    if (sel < 0 || sel > 10) sel = 0;
     try {
         RegKeyGuard k;
         if (RegCreateKeyExW(HKEY_CURRENT_USER, kSwitcherRegKey, 0, NULL, 0,
@@ -2970,6 +3061,14 @@ static void BuildMainPanel(HWND hwnd) {
         SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_SYS));
         SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_EN));
         SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_IT));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_DE));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_ES));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_FR));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_JA));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_PL));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_PTBR));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_RU));
+        SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_ZHCN));
         SendMessageW(cbo, CB_SETCURSEL, ShellLangLoad(), 0);
     }
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_THEME), BS_PUSHBUTTON | tab,

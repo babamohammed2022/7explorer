@@ -53,6 +53,7 @@
 //                        %08X + SizeOfImage %x, as in the symbol server URL)
 #include "LegacyBatteryFlyout.h"
 #include "SafeGuards.h"
+#include "ShellUiLang.h"
 #include "OSVersion.h"
 #include <shellapi.h>
 
@@ -598,7 +599,13 @@ bool PrepareAllMui()
 		}
 	}
 	bool a = PrepareMui(0, L"en-US"), b = PrepareMui(1, L"en-US");
-	return any || (a && b);
+	bool over = false;
+	if (ShellUiLangOverridden()) {
+		// The switcher may force a language outside the user list: cache
+		// its .mui too so the flyout renders in the forced language.
+		over = PrepareMui(0, ShellUiLangCode()) && PrepareMui(1, ShellUiLangCode());
+	}
+	return any || (a && b) || over;
 }
 
 // ------------------------------------------------------------ worker

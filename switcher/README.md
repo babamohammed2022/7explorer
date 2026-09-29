@@ -63,7 +63,7 @@ Flows: **Reinstall** switches to the native shell first when ours is live,
 then installs and offers to switch back; **Uninstall** (confirmed) switches
 to native, disables the logon auto-start and deletes only the private
 `explorer.exe`, `cache\` and `state\` — never `C:\Windows\explorer.exe`,
-never `HKLM`. The private-shell language combo affects **only our shell**:
+never `HKLM`. The private-shell language combo (System default + en/it/de/es/fr/ja/pl/pt-BR/ru/zh-CN) affects **only our shell**:
 it is stored per-user under `HKCU\Software\7explorer\ShellSwitcher` and
 applied via the `WIN7EXPLORERRESTORER_UI_LANG` child-process environment at
 switch time. All CLI flags stay headless and never start the installer.

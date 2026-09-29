@@ -2,6 +2,7 @@
 // under SEH; no C++ exceptions (the wrapper has no CRT EH support).
 #include "NetworkIcon.h"
 #include "SafeGuards.h"
+#include "ShellUiLang.h"
 #include "OptionConfig.h"
 #include <shlwapi.h>
 #include <unknwn.h>
@@ -180,6 +181,9 @@ void PrepareUnsafe()
 	if (GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &n, langs, &cch))
 		for (const wchar_t* p = langs; *p; p += lstrlenW(p) + 1) PrepareMui(p);
 	PrepareMui(L"en-US");
+	// The forced language may sit outside the user list: fetch its .mui too
+	// (no-op unless the switcher set WIN7EXPLORERRESTORER_UI_LANG).
+	if (ShellUiLangOverridden()) PrepareMui(ShellUiLangCode());
 	Log(L"cache %s: %s", g_dir, ok ? L"ready" : L"incomplete (icon from the next start after a successful download)");
 }
 

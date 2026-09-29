@@ -3,6 +3,7 @@
 // SEH around every callback; COM/handles owned by small RAII helpers.
 #include "NetworkIcon.h"
 #include "SafeGuards.h"
+#include "ShellUiLang.h"
 #include <shellapi.h>
 #include <winsock2.h>
 #include <ws2ipdef.h>
@@ -75,8 +76,6 @@ private:
 	HeapBuffer(const HeapBuffer&) = delete; HeapBuffer& operator=(const HeapBuffer&) = delete;
 };
 
-bool Italian() { return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_ITALIAN; }
-const wchar_t* T(const wchar_t* it, const wchar_t* en) { return Italian() ? it : en; }
 
 typedef DWORD(WINAPI* WlanOpenHandle_t)(DWORD, PVOID, PDWORD, PHANDLE);
 typedef DWORD(WINAPI* WlanCloseHandle_t)(HANDLE, PVOID);
@@ -380,9 +379,21 @@ WORD IconFor(const Snapshot& s)
 void Tooltip(const Snapshot& s, wchar_t* out, size_t cch)
 {
 	const wchar_t* acc =
-		(s.st == StWiredOk || s.st == StWifiOk) ? T(L"Accesso a Internet", L"Internet access") :
-		(s.st == StNone) ? T(L"Non connesso - Connessioni disponibili", L"Not connected - Connections are available") :
-		T(L"Nessun accesso a Internet", L"No Internet access");
+		(s.st == StWiredOk || s.st == StWifiOk) ? TX(L"Internet access", L"Accesso a Internet",
+			L"Internetzugriff", L"Acceso a Internet",
+			L"Acc\u00e8s Internet", L"\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8 \u30a2\u30af\u30bb\u30b9",
+			L"Dost\u0119p do Internetu", L"Acesso \u00e0 Internet",
+			L"\u0414\u043e\u0441\u0442\u0443\u043f \u043a \u0418\u043d\u0442\u0435\u0440\u043d\u0435\u0442\u0443", L"Internet \u8bbf\u95ee") :
+		(s.st == StNone) ? TX(L"Not connected - Connections are available", L"Non connesso - Connessioni disponibili",
+			L"Nicht verbunden - Verbindungen sind verf\u00fcgbar", L"Sin conexi\u00f3n - Hay conexiones disponibles",
+			L"Non connect\u00e9 - Des connexions sont disponibles", L"\u672a\u63a5\u7d9a - \u63a5\u7d9a\u306f\u5229\u7528\u53ef\u80fd\u3067\u3059",
+			L"Brak po\u0142\u0105czenia - dost\u0119pne s\u0105 po\u0142\u0105czenia", L"N\u00e3o conectado - H\u00e1 conex\u00f5es dispon\u00edveis",
+			L"\u041d\u0435\u0442 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f - \u0414\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0435 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f", L"\u672a\u8fde\u63a5 - \u6709\u53ef\u7528\u7684\u8fde\u63a5") :
+		TX(L"No Internet access", L"Nessun accesso a Internet",
+			L"Kein Internetzugriff", L"Sin acceso a Internet",
+			L"Pas d'acc\u00e8s Internet", L"\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8 \u30a2\u30af\u30bb\u30b9\u306a\u3057",
+			L"Brak dost\u0119pu do Internetu", L"Sem acesso \u00e0 Internet",
+			L"\u0411\u0435\u0437 \u0434\u043e\u0441\u0442\u0443\u043f\u0430 \u043a \u0418\u043d\u0442\u0435\u0440\u043d\u0435\u0442\u0443", L"\u65e0 Internet \u8bbf\u95ee");
 	if (s.st == StNone || !s.name[0]) lstrcpynW(out, acc, (int)cch);
 	else wnsprintfW(out, (int)cch, L"%s\n%s", s.name, acc);
 }
@@ -459,9 +470,21 @@ void OnMenu(HWND h)
 {
 	HMENU m = CreatePopupMenu();
 	if (!m) return;
-	AppendMenuW(m, MF_STRING, 1, T(L"Risoluzione problemi", L"Troubleshoot problems"));
-	AppendMenuW(m, MF_STRING, 2, T(L"Apri Centro connessioni di rete e condivisione", L"Open Network and Sharing Center"));
-	AppendMenuW(m, MF_STRING, 3, T(L"Impostazioni di rete e Internet", L"Network and Internet settings"));
+	AppendMenuW(m, MF_STRING, 1, TX(L"Troubleshoot problems", L"Risoluzione problemi",
+			L"Problembehandlung", L"Solucionar problemas",
+			L"R\u00e9soudre les probl\u00e8mes", L"\u554f\u984c\u306e\u30c8\u30e9\u30d6\u30eb\u30b7\u30e5\u30fc\u30c6\u30a3\u30f3\u30b0",
+			L"Rozwi\u0105zywanie problem\u00f3w", L"Solucionar problemas",
+			L"\u0423\u0441\u0442\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u043d\u0435\u043f\u043e\u043b\u0430\u0434\u043e\u043a", L"\u7591\u96be\u89e3\u7b54"));
+	AppendMenuW(m, MF_STRING, 2, TX(L"Open Network and Sharing Center", L"Apri Centro connessioni di rete e condivisione",
+			L"Netzwerk- und Freigabecenter \u00f6ffnen", L"Abrir el Centro de redes y recursos compartidos",
+			L"Ouvrir le Centre R\u00e9seau et partage", L"\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u3068\u5171\u6709\u30bb\u30f3\u30bf\u30fc\u3092\u958b\u304f",
+			L"Otw\u00f3rz Centrum sieci i udost\u0119pniania", L"Abrir a Central de Rede e Compartilhamento",
+			L"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0426\u0435\u043d\u0442\u0440 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0441\u0435\u0442\u044f\u043c\u0438 \u0438 \u043e\u0431\u0449\u0438\u043c \u0434\u043e\u0441\u0442\u0443\u043f\u043e\u043c", L"\u6253\u5f00\u7f51\u7edc\u548c\u5171\u4eab\u4e2d\u5fc3"));
+	AppendMenuW(m, MF_STRING, 3, TX(L"Network and Internet settings", L"Impostazioni di rete e Internet",
+			L"Netzwerk- und Interneteinstellungen", L"Configuraci\u00f3n de red e Internet",
+			L"Param\u00e8tres r\u00e9seau et Internet", L"\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u3068\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8\u306e\u8a2d\u5b9a",
+			L"Ustawienia sieci i Internetu", L"Configura\u00e7\u00f5es de rede e Internet",
+			L"\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0441\u0435\u0442\u0438 \u0438 \u0418\u043d\u0442\u0435\u0440\u043d\u0435\u0442\u0430", L"\u7f51\u7edc\u548c Internet \u8bbe\u7f6e"));
 	SetMenuDefaultItem(m, 2, FALSE);
 	POINT pt; GetCursorPos(&pt);
 	SetForegroundWindow(h);

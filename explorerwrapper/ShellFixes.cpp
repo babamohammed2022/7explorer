@@ -12,10 +12,10 @@
 //      see LaunchRemap below; final fallback is ms-settings:taskbar.
 //    * "Connect To" uses ::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B} (Win7 network
 //      "Connect To" pop-up), which does not exist any more. Redirect to
-//      Network Connections shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E},
-//      fallback ms-settings:network. The Start menu binds the CLSID directly
-//      (no ShellExecute), so failed activations are also retried as Network
-//      Connections in Shell32_CoCreateInstance (shell32_wrappers.cpp).
+//      Network Connections shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}
+//      via a per-user TreatAs (+ open verb), fallback ms-settings:network.
+//      Failed activations are also retried as Network Connections in
+//      Shell32_CoCreateInstance (shell32_wrappers.cpp).
 //    Every call is logged with dbgprintf so unknown targets can be captured
 //    with DebugView.
 // 2) "Help and Support" name: the Start menu item shows the display name of
@@ -886,7 +886,8 @@ void CALLBACK TrayTimerProc(HWND, UINT, UINT_PTR id, DWORD)
 // The Win7 Start menu opens "Connect To" by invoking the regitem
 // ::{38A98528-...} directly (no ShellExecuteEx call was ever logged), and
 // that CLSID is not registered on Windows 10/11. Register a per-user
-// verb-only CLSID that opens Network Connections. Only if the system has none.
+// CLSID with TreatAs + open verb pointing at Network Connections.
+// Only if the system has none.
 void RegisterConnectTo()
 {
 	const wchar_t key[] = L"Software\\Classes\\CLSID\\{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}";
@@ -904,9 +905,14 @@ void RegisterConnectTo()
 	wchar_t icoKey[200]; wnsprintfW(icoKey, 200, L"%s\\DefaultIcon", key);
 	const wchar_t cmd[] = L"%SystemRoot%\\explorer.exe shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}";
 	const wchar_t ico[] = L"%SystemRoot%\\system32\\netshell.dll,0";
+	// TreatAs: binds done directly via CoCreateInstance (the Win7 Start menu
+	// path, which never issues a ShellExecute for the verb above) resolve to
+	// the Network Connections folder instead of failing.
+	const wchar_t treatAs[] = L"{7007ACC7-3202-11D1-AAD2-00805FC1270E}";
 	LSTATUS a = RegSetKeyValueW(HKEY_CURRENT_USER, cmdKey, nullptr, REG_EXPAND_SZ, cmd, sizeof(cmd));
 	LSTATUS b = RegSetKeyValueW(HKEY_CURRENT_USER, icoKey, nullptr, REG_EXPAND_SZ, ico, sizeof(ico));
-	LogLine(L"[Win7ExplorerRestorer] Connect To: per-user CLSID verb -> Network Connections (%d,%d)", a, b);
+	LSTATUS c = RegSetKeyValueW(HKEY_CURRENT_USER, key, L"TreatAs", REG_SZ, treatAs, sizeof(treatAs));
+	LogLine(L"[Win7ExplorerRestorer] Connect To: per-user CLSID verb+TreatAs -> Network Connections (%d,%d,%d)", a, b, c);
 }
 
 // ------------------------------------------------------------ ms-settings / UWP
