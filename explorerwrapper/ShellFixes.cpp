@@ -33,6 +33,7 @@
 #include "ImmersiveMenus.h"
 #include "NotifyIconsDialog.h"
 #include "TrayMenus.h"
+#include "UwpHost.h"
 #include <shobjidl.h>
 #include "dbgprint.h"
 #include <shlwapi.h>
@@ -175,9 +176,21 @@ BOOL LaunchSettingsUri(const wchar_t* uri, HWND hwnd)
 	SHELLEXECUTEINFOW fb = { sizeof(fb) };
 	fb.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
 	fb.hwnd = hwnd; fb.lpFile = uri; fb.nShow = SW_SHOWNORMAL;
-	if (g_origShellExecuteExW(&fb)) { LogLine(L"[ex7] opened %s", uri); return TRUE; }
-	LogLine(L"[ex7] %s failed (%u): activation fallback", uri, GetLastError());
-	return ActivateSettingsFallback(uri);
+	int before = ex7::uwp::CountAppWindows();
+	BOOL ok = g_origShellExecuteExW(&fb);
+	if (ok) LogLine(L"[ex7] opened %s", uri);
+	else {
+		LogLine(L"[ex7] %s failed (%u): activation fallback", uri, GetLastError());
+		ok = ActivateSettingsFallback(uri);
+		if (!ok && ex7::uwp::EnsureHost(L"Settings activation failed")) { // native host, then once more
+			Sleep(2500);
+			ok = g_origShellExecuteExW(&fb) || ActivateSettingsFallback(uri);
+			LogLine(L"[ex7] %s retry after UWP host: %d", uri, ok);
+			return ok;
+		}
+	}
+	if (ok) ex7::uwp::WatchActivation(0, uri, nullptr, before);
+	return ok;
 }
 
 BOOL LaunchRemap(const Remap* r, HWND hwnd, int nShow)
@@ -310,6 +323,7 @@ bool TryActivateAumid(const wchar_t* target, SHELLEXECUTEINFOW* sei, ExecCtx* c)
 	if (!ExtractAumid(target, aumid, ARRAYSIZE(aumid))) return false;
 	if (ReadAdvancedDword(L"UwpActivationShim", 1) == 0) return false;
 	if (sei->lpVerb && *sei->lpVerb && lstrcmpiW(sei->lpVerb, L"open")) return false; // runas, properties...
+	int before = ex7::uwp::CountAppWindows();
 	HRESULT hi = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 	IApplicationActivationManager* aam = nullptr;
 	DWORD pid = 0;
@@ -321,7 +335,8 @@ bool TryActivateAumid(const wchar_t* target, SHELLEXECUTEINFOW* sei, ExecCtx* c)
 	}
 	if (SUCCEEDED(hi)) CoUninitialize();
 	LogLine(L"[ex7] UWP shim: ActivateApplication(%s) hr=0x%08X pid=%u", aumid, (DWORD)hr, pid);
-	if (FAILED(hr)) return false; // let the normal path try
+	if (FAILED(hr)) { ex7::uwp::EnsureHost(L"ActivateApplication failed"); return false; } // let the normal path try
+	ex7::uwp::WatchActivation(1, aumid, sei->lpParameters, before);
 	c->handled = TRUE; c->result = TRUE;
 	sei->hInstApp = (HINSTANCE)(INT_PTR)33;
 	if (sei->fMask & SEE_MASK_NOCLOSEPROCESS)
@@ -376,8 +391,13 @@ BOOL WINAPI ShellExecuteExW_Hook(SHELLEXECUTEINFOW* sei)
 	if (!SafeInvokeCtx<ExecCtx>(L"ShellExecuteExW remap", TryRemapExec, &c))
 		c.handled = FALSE; // any fault in our code: behave exactly like before
 	if (c.handled) return c.result;
+	bool settingsUri = false;
+	int before = 0;
+	__try { settingsUri = IsMsSettings(sei->lpFile); } __except (EXCEPTION_EXECUTE_HANDLER) { settingsUri = false; }
+	if (settingsUri) before = ex7::uwp::CountAppWindows();
 	BOOL ok = g_origShellExecuteExW(sei);
-	if (IsMsSettings(sei->lpFile)) {
+	if (settingsUri && ok) ex7::uwp::WatchActivation(0, sei->lpFile, nullptr, before);
+	if (settingsUri) {
 		DWORD err = ok ? 0 : GetLastError();
 		LogLine(L"[ex7] UWP activation uri=%s method=ShellExecuteEx(protocol) build=%u pid=%u result=%d err=%u",
 			sei->lpFile, OsBuild(), GetCurrentProcessId(), ok, err);
@@ -838,6 +858,7 @@ void CALLBACK TrayTimerProc(HWND, UINT, UINT_PTR id, DWORD)
 		++g_trayTicks;
 		PatchTrayModules();
 		if (g_trayTicks == 4) SafeInvoke(L"StartNetworkSso", StartNetworkSso); // ~8 s after SysTray
+		if (g_trayTicks == 5) ex7::uwp::StartupCheck(); // UWP host if TwinUI is not running
 		if (g_trayTicks >= 15) { KillTimer(nullptr, id); g_trayTimer = 0; }
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) { KillTimer(nullptr, id); }
@@ -975,7 +996,7 @@ bool IsForeignModule(const wchar_t* path)
 //  InjectionAllowlist (REG_MULTI_SZ, same key format as the quarantine).
 //  Safe mode: after 2 start-ups that never reached the taskbar, every
 //  Windhawk mod is refused (allow-list ignored) until one start succeeds.
-DWORD g_policy = 2;
+DWORD g_policy = 1; // test30: default = every mod loads, only crashers are quarantined
 bool g_safeMode = false;
 wchar_t g_allow[2048];
 
@@ -998,9 +1019,11 @@ const wchar_t* RefuseReason(const wchar_t* path, const wchar_t* key)
 {
 	if (g_policy == 0) return nullptr;
 	if (IsQuarantined(key)) return L"quarantined (crashed earlier)";
-	if (g_policy >= 2 && IsWindhawkMod(path)) {
-		if (g_safeMode) return L"safe mode (previous start-ups did not reach the taskbar)";
-		if (!IsAllowed(key)) return L"not in InjectionAllowlist";
+	if (IsWindhawkMod(path)) {
+		// safe mode stays active with every policy: it only kicks in after
+		// two start-ups that never reached the taskbar.
+		if (g_safeMode && !IsAllowed(key)) return L"safe mode (previous start-ups did not reach the taskbar)";
+		if (g_policy >= 2 && !IsAllowed(key)) return L"not in InjectionAllowlist";
 	}
 	return nullptr;
 }
@@ -1401,22 +1424,63 @@ void StartSwitcherHotkey()
 // Win+I: the Win7 explorer has no handler for it (it belongs to the modern
 // shell). Own the hotkey and open Settings through the same path used by the
 // remaps (ShellExecute + AAM fallbacks). Opt-out SettingsHotkey=0.
+// Fallback when Win+I is already owned (e.g. by the in-process TwinUI, which
+// then tries its own immersive launch that fails under this shell): a
+// low-level keyboard hook sees the keys before hotkey dispatch. Only Win+I is
+// swallowed; a dummy key (0xE8, unassigned) is injected so that releasing Win
+// does not open the Start menu.
+DWORD g_hotkeyTid = 0;
+bool g_iSwallowed = false;
+const UINT WM_EX7_SETTINGS = WM_APP + 0x71;
+
+LRESULT CALLBACK SettingsLLProc(int code, WPARAM w, LPARAM l)
+{
+	__try {
+		if (code == HC_ACTION) {
+			const KBDLLHOOKSTRUCT* k = (const KBDLLHOOKSTRUCT*)l;
+			if (k->vkCode == 'I' && !(k->flags & LLKHF_INJECTED)) {
+				bool down = w == WM_KEYDOWN || w == WM_SYSKEYDOWN;
+				bool win = ((GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000) != 0;
+				if (down && win) {
+					if (!g_iSwallowed) {
+						g_iSwallowed = true;
+						keybd_event(0xE8, 0, 0, 0); keybd_event(0xE8, 0, KEYEVENTF_KEYUP, 0);
+						PostThreadMessageW(g_hotkeyTid, WM_EX7_SETTINGS, 0, 0);
+					}
+					return 1;
+				}
+				if (!down && g_iSwallowed) { g_iSwallowed = false; return 1; }
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return CallNextHookEx(nullptr, code, w, l);
+}
+
 DWORD WINAPI SettingsHotkeyThread(LPVOID)
 {
 	__try {
 		Sleep(3000); // let the tray/desktop register theirs first
-		if (!RegisterHotKey(nullptr, 0x7E71, MOD_WIN | 0x4000 /*MOD_NOREPEAT*/, 'I')) {
-			LogLine(L"[ex7] Win+I hotkey not registered (err %u)", GetLastError());
-			return 0;
-		}
-		LogLine(L"[ex7] Win+I hotkey registered");
+		g_hotkeyTid = GetCurrentThreadId();
 		MSG m;
+		PeekMessageW(&m, nullptr, WM_USER, WM_USER, PM_NOREMOVE); // create the queue
+		HHOOK ll = nullptr;
+		if (RegisterHotKey(nullptr, 0x7E71, MOD_WIN | 0x4000 /*MOD_NOREPEAT*/, 'I')) {
+			LogLine(L"[ex7] Win+I hotkey registered");
+		} else {
+			DWORD err = GetLastError();
+			ll = SetWindowsHookExW(WH_KEYBOARD_LL, SettingsLLProc, g_self, 0);
+			LogLine(L"[ex7] Win+I RegisterHotKey failed (err %u, 1409 = owned by another component): low-level hook %s",
+				err, ll ? L"installed" : L"FAILED");
+			if (!ll) return 0;
+		}
 		while (GetMessageW(&m, nullptr, 0, 0) > 0) {
-			if (m.message == WM_HOTKEY && m.wParam == 0x7E71) {
+			if ((m.message == WM_HOTKEY && m.wParam == 0x7E71) || m.message == WM_EX7_SETTINGS) {
 				BOOL ok = LaunchSettingsUri(L"ms-settings:", nullptr);
 				LogLine(L"[ex7] Win+I -> Settings: %d", ok);
 			}
 		}
+		if (ll) UnhookWindowsHookEx(ll);
 	}
 	__except (SehFilter(L"SettingsHotkeyThread", GetExceptionInformation())) {}
 	return 0;
@@ -1453,7 +1517,7 @@ void InstallInjectionGuard()
 	GetModuleFileNameW(nullptr, g_exeDir, MAX_PATH); DirOf(g_exeDir);
 	GetModuleFileNameW(g_self, g_selfDir, MAX_PATH); DirOf(g_selfDir);
 	g_swallow = ReadAdvancedDword(L"InjectionSwallow", 1) != 0;
-	g_policy = ReadAdvancedDword(L"InjectionPolicy", 2);
+	g_policy = ReadAdvancedDword(L"InjectionPolicy", 1);
 	DWORD fails = ReadAdvancedDword(L"StartupFailures", 0);
 	g_safeMode = fails >= 2;
 	WriteAdvancedDword(L"StartupFailures", fails + 1); // cleared when the taskbar is created
@@ -1496,7 +1560,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test29), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test30), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);

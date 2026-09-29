@@ -5,7 +5,7 @@
 #include "SafeGuards.h"
 #include "ImmersiveShell.h"
 #include "dbgprint.h"
-namespace ex7 { void LogText(const wchar_t* text); }
+namespace ex7 { void LogText(const wchar_t* text); namespace uwp { void SetTwinUiStarted(bool ok); } }
 
 typedef HWND(WINAPI* GetTaskmanWindow)();
 typedef BOOL(WINAPI* SetTaskmanWindow)(HWND handle);
@@ -185,6 +185,7 @@ void CreateTwinUI_UWP()
 
 			dbgprintf(L"Immersive Shell Controller Result: %x", hr);
 			{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI controller Start hr=0x%08X", (DWORD)hr); ex7::LogText(l); }
+			ex7::uwp::SetTwinUiStarted(SUCCEEDED(hr));
 		}
 	}
 }

@@ -8,6 +8,8 @@
 #include <ws2ipdef.h>
 #include <iphlpapi.h>
 #include <wlanapi.h>
+#include <netlistmgr.h>
+#include <ocidl.h>
 
 namespace ex7 {
 void LogText(const wchar_t* text);
@@ -153,25 +155,207 @@ DWORD Connectivity()
 	return c;
 }
 
+// ---------------------------------------------------------------------------
+// test30: state from Network List Manager (learn.microsoft.com, "Network List
+// Manager"): every *connected* INetworkConnection gives its adapter id,
+// connectivity and INetwork name. The adapter id is matched with
+// GetAdaptersAddresses (AdapterName = "{GUID}") to know whether it is Wi-Fi
+// (IF_TYPE_IEEE80211) or wired, and the connection that carries the default
+// route (GetBestInterface) is the one shown - an Ethernet adapter that merely
+// exists is never preferred over the Wi-Fi link actually in use.
+// Why: on Windows 11 24H2 WlanQueryInterface(wlan_intf_opcode_current_
+// connection) returns ERROR_ACCESS_DENIED unless the user granted location
+// access to desktop apps ("Changes to API behavior for Wi-Fi access and
+// location"); test29 used it as the only Wi-Fi test, so Wi-Fi fell through to
+// the wired branch (Ethernet icon). wlan_intf_opcode_rssi is not in that list
+// and is used only for the signal bars.
+struct AdapterInfo { GUID id; IFTYPE type; IF_INDEX index; };
+const int kMaxAdapters = 32;
+
+typedef DWORD(WINAPI* GetBestInterface_t)(DWORD, PDWORD);
+
+int ReadAdapters(AdapterInfo* out, int max, DWORD* bestIf)
+{
+	*bestIf = 0;
+	ScopedLib lib(LoadLibraryExW(L"iphlpapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32));
+	if (!lib.get()) return 0;
+	auto pGet = (GetAdaptersAddresses_t)GetProcAddress(lib.get(), "GetAdaptersAddresses");
+	auto pBest = (GetBestInterface_t)GetProcAddress(lib.get(), "GetBestInterface");
+	if (pBest) { DWORD idx = 0; if (pBest(0x01010101 /*1.1.1.1, route lookup only*/, &idx) == NO_ERROR) *bestIf = idx; }
+	if (!pGet) return 0;
+	ULONG cb = 16 * 1024;
+	for (int attempt = 0; attempt < 3; ++attempt) {
+		HeapBuffer buf(cb);
+		if (!buf.Get()) return 0;
+		PIP_ADAPTER_ADDRESSES a = (PIP_ADAPTER_ADDRESSES)buf.Get();
+		ULONG r = pGet(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER, nullptr, a, &cb);
+		if (r == ERROR_BUFFER_OVERFLOW) continue;
+		if (r != ERROR_SUCCESS) return 0;
+		int n = 0;
+		for (; a && n < max; a = a->Next) {
+			wchar_t w[64];
+			if (!a->AdapterName || !MultiByteToWideChar(CP_ACP, 0, a->AdapterName, -1, w, 64)) continue;
+			if (FAILED(CLSIDFromString(w, &out[n].id))) continue;
+			out[n].type = a->IfType; out[n].index = a->IfIndex ? a->IfIndex : a->Ipv6IfIndex;
+			++n;
+		}
+		return n;
+	}
+	return 0;
+}
+
+typedef void(WINAPI* SysFreeString_t)(BSTR);
+void FreeBstr(BSTR b)
+{
+	static SysFreeString_t p = (SysFreeString_t)GetProcAddress(LoadLibraryW(L"oleaut32.dll"), "SysFreeString");
+	if (b && p) p(b);
+}
+
+// Signal bars (0-4) of a Wi-Fi adapter; -1 = unknown.
+int WifiBars(const GUID& adapter)
+{
+	ScopedLib lib(LoadLibraryExW(L"wlanapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32));
+	if (!lib.get()) return -1;
+	auto pOpen = (WlanOpenHandle_t)GetProcAddress(lib.get(), "WlanOpenHandle");
+	auto pClose = (WlanCloseHandle_t)GetProcAddress(lib.get(), "WlanCloseHandle");
+	auto pQuery = (WlanQueryInterface_t)GetProcAddress(lib.get(), "WlanQueryInterface");
+	auto pFree = (WlanFreeMemory_t)GetProcAddress(lib.get(), "WlanFreeMemory");
+	if (!pOpen || !pClose || !pQuery || !pFree) return -1;
+	HANDLE h = nullptr; DWORD ver = 0;
+	if (pOpen(2, nullptr, &ver, &h) != ERROR_SUCCESS) return -1;
+	int bars = -1;
+	PVOID data = nullptr; DWORD cb = 0;
+	DWORD r = pQuery(h, &adapter, wlan_intf_opcode_rssi, nullptr, &cb, &data, nullptr);
+	if (r == ERROR_SUCCESS && data && cb >= sizeof(LONG)) {
+		LONG rssi = *(LONG*)data;
+		bars = rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -75 ? 2 : rssi >= -85 ? 1 : 0;
+	}
+	if (data) pFree(data);
+	if (bars < 0) { // older drivers: signal quality (needs location consent on 24H2)
+		PWLAN_CONNECTION_ATTRIBUTES ca = nullptr; cb = 0;
+		DWORD r2 = pQuery(h, &adapter, wlan_intf_opcode_current_connection, nullptr, &cb, (PVOID*)&ca, nullptr);
+		if (r2 == ERROR_SUCCESS && ca) {
+			int q = (int)ca->wlanAssociationAttributes.wlanSignalQuality;
+			bars = q >= 80 ? 4 : q >= 60 ? 3 : q >= 40 ? 2 : q >= 20 ? 1 : 0;
+		}
+		if (ca) pFree(ca);
+		static bool logged = false;
+		if (!logged) { logged = true; Log(L"wlan rssi=%u current_connection=%u (5 = location access denied)", r, r2); }
+	}
+	pClose(h, nullptr);
+	return bars;
+}
+
+struct ConnCtx { Snapshot* s; bool ok; };
+
+void TakeNlmUnsafe(ConnCtx* c)
+{
+	Snapshot& s = *c->s;
+	AdapterInfo ad[kMaxAdapters]; DWORD best = 0;
+	int nAd = ReadAdapters(ad, kMaxAdapters, &best);
+	ComPtr<INetworkListManager> nlm;
+	if (FAILED(CoCreateInstance(__uuidof(NetworkListManager), nullptr, CLSCTX_ALL, __uuidof(INetworkListManager), nlm.PutVoid())) || !nlm) return;
+	ComPtr<IEnumNetworkConnections> en;
+	if (FAILED(nlm->GetNetworkConnections(en.Put())) || !en) return;
+	c->ok = true;
+	int bestScore = -1;
+	for (;;) {
+		ComPtr<INetworkConnection> conn; ULONG got = 0;
+		if (en->Next(1, conn.Put(), &got) != S_OK || !conn) break;
+		VARIANT_BOOL connected = VARIANT_FALSE;
+		if (FAILED(conn->get_IsConnected(&connected)) || connected != VARIANT_TRUE) continue;
+		NLM_CONNECTIVITY cn = NLM_CONNECTIVITY_DISCONNECTED; conn->GetConnectivity(&cn);
+		GUID id = {}; conn->GetAdapterId(&id);
+		IFTYPE type = 0; IF_INDEX idx = 0;
+		for (int i = 0; i < nAd; ++i) if (IsEqualGUID(ad[i].id, id)) { type = ad[i].type; idx = ad[i].index; break; }
+		if (type == IF_TYPE_SOFTWARE_LOOPBACK || type == IF_TYPE_TUNNEL) continue;
+		bool internet = (cn & (NLM_CONNECTIVITY_IPV4_INTERNET | NLM_CONNECTIVITY_IPV6_INTERNET)) != 0;
+		int score = (idx && idx == best ? 4 : 0) + (internet ? 2 : 0) + 1;
+		if (score <= bestScore) continue;
+		bestScore = score;
+		bool wifi = type == IF_TYPE_IEEE80211;
+		s.st = wifi ? (internet ? StWifiOk : StWifiLimited) : (internet ? StWiredOk : StWiredLimited);
+		s.name[0] = 0;
+		ComPtr<INetwork> netw;
+		if (SUCCEEDED(conn->GetNetwork(netw.Put())) && netw) {
+			BSTR name = nullptr;
+			if (SUCCEEDED(netw->GetName(&name)) && name) { lstrcpynW(s.name, name, ARRAYSIZE(s.name)); FreeBstr(name); }
+		}
+		s.bars = 4;
+		if (wifi) { int b = WifiBars(id); if (b >= 0) s.bars = b; }
+	}
+}
+
 Snapshot Take()
 {
 	Snapshot s = {}; s.st = StNone;
-	DWORD c = Connectivity();
-	bool internet = (c & (NLM_V4_INTERNET | NLM_V6_INTERNET)) != 0;
-	bool any = (c & (NLM_V4_ANY | NLM_V6_ANY)) != 0;
+	ConnCtx c = { &s, false };
+	if (!SafeInvokeCtx<ConnCtx>(L"net icon NLM", TakeNlmUnsafe, &c)) { c.ok = false; s = Snapshot(); s.st = StNone; }
+	if (c.ok) return s;
+	// NLM unavailable (service stopped): previous heuristics.
+	DWORD cv = Connectivity();
+	bool internet = (cv & (NLM_V4_INTERNET | NLM_V6_INTERNET)) != 0;
 	int q = 0;
 	if (QueryWifi(s.name, ARRAYSIZE(s.name), &q)) {
 		s.st = internet ? StWifiOk : StWifiLimited;
 		s.bars = q >= 80 ? 4 : q >= 60 ? 3 : q >= 40 ? 2 : q >= 20 ? 1 : 0;
-	} else if (WiredUp(s.name, ARRAYSIZE(s.name)) || any) {
+	} else if (WiredUp(s.name, ARRAYSIZE(s.name))) {
 		s.st = internet ? StWiredOk : StWiredLimited;
 	}
 	return s;
 }
 
+// ---------------------------------------------------------------------------
+// Change notifications (INetworkListManagerEvents / INetworkConnectionEvents /
+// INetworkEvents via IConnectionPointContainer): each event only schedules a
+// refresh on the icon thread (debounced), the slow timer stays as a net.
+const UINT WM_NETCHANGED = WM_APP + 0x38;
+HWND g_notifyWnd = nullptr;
+
+class NetEvents : public INetworkListManagerEvents, public INetworkConnectionEvents, public INetworkEvents {
+public:
+	STDMETHODIMP QueryInterface(REFIID r, void** p) override {
+		if (!p) return E_POINTER;
+		if (IsEqualIID(r, IID_IUnknown) || IsEqualIID(r, __uuidof(INetworkListManagerEvents))) *p = static_cast<INetworkListManagerEvents*>(this);
+		else if (IsEqualIID(r, __uuidof(INetworkConnectionEvents))) *p = static_cast<INetworkConnectionEvents*>(this);
+		else if (IsEqualIID(r, __uuidof(INetworkEvents))) *p = static_cast<INetworkEvents*>(this);
+		else { *p = nullptr; return E_NOINTERFACE; }
+		return S_OK;
+	}
+	STDMETHODIMP_(ULONG) AddRef() override { return 2; }   // static lifetime
+	STDMETHODIMP_(ULONG) Release() override { return 1; }
+	STDMETHODIMP ConnectivityChanged(NLM_CONNECTIVITY) override { return Ping(); }
+	STDMETHODIMP NetworkConnectionConnectivityChanged(GUID, NLM_CONNECTIVITY) override { return Ping(); }
+	STDMETHODIMP NetworkConnectionPropertyChanged(GUID, NLM_CONNECTION_PROPERTY_CHANGE) override { return Ping(); }
+	STDMETHODIMP NetworkAdded(GUID) override { return Ping(); }
+	STDMETHODIMP NetworkDeleted(GUID) override { return Ping(); }
+	STDMETHODIMP NetworkConnectivityChanged(GUID, NLM_CONNECTIVITY) override { return Ping(); }
+	STDMETHODIMP NetworkPropertyChanged(GUID, NLM_NETWORK_PROPERTY_CHANGE) override { return Ping(); }
+private:
+	HRESULT Ping() { if (g_notifyWnd) PostMessageW(g_notifyWnd, WM_NETCHANGED, 0, 0); return S_OK; }
+};
+NetEvents g_events;
+INetworkListManager* g_evNlm = nullptr; // kept for the thread lifetime
+
+void AdviseUnsafe()
+{
+	if (FAILED(CoCreateInstance(__uuidof(NetworkListManager), nullptr, CLSCTX_ALL, __uuidof(INetworkListManager), (void**)&g_evNlm)) || !g_evNlm) {
+		g_evNlm = nullptr; Log(L"NLM events: CoCreateInstance failed"); return;
+	}
+	ComPtr<IConnectionPointContainer> cpc;
+	if (FAILED(g_evNlm->QueryInterface(__uuidof(IConnectionPointContainer), cpc.PutVoid())) || !cpc) return;
+	const IID* iids[] = { &__uuidof(INetworkListManagerEvents), &__uuidof(INetworkConnectionEvents), &__uuidof(INetworkEvents) };
+	for (const IID* iid : iids) {
+		ComPtr<IConnectionPoint> cp; DWORD cookie = 0;
+		HRESULT hr = cpc->FindConnectionPoint(*iid, cp.Put());
+		if (SUCCEEDED(hr) && cp) hr = cp->Advise(static_cast<INetworkListManagerEvents*>(&g_events), &cookie);
+		Log(L"NLM events advise hr=0x%08X", (DWORD)hr);
+	}
+}
+
 // ------------------------------------------------------------ window
 const UINT WM_TRAYCB = WM_APP + 0x37;
-const UINT_PTR kTimer = 1;
+const UINT_PTR kTimer = 1, kTimerDebounce = 2;
 HMODULE g_res = nullptr;          // cached pnidui.dll as image resource
 HWND g_wnd = nullptr;
 UINT g_taskbarCreated = 0;
@@ -280,7 +464,14 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 	__try {
 		if (msg == g_taskbarCreated && g_taskbarCreated) { g_added = false; UpdateIcon(true); return 0; }
 		switch (msg) {
+		case WM_NETCHANGED: // debounce bursts of NLM events
+			SetTimer(h, kTimerDebounce, 700, nullptr);
+			return 0;
+		case WM_POWERBROADCAST:
+			if (w == PBT_APMRESUMEAUTOMATIC || w == PBT_APMRESUMESUSPEND) SetTimer(h, kTimerDebounce, 3000, nullptr);
+			return TRUE;
 		case WM_TIMER:
+			if (w == kTimerDebounce) { KillTimer(h, kTimerDebounce); UpdateIcon(false); return 0; }
 			if (w == kTimer) {
 				if (NetworkSsoCreated()) { // the real icon started after all
 					NOTIFYICONDATAW nid = { sizeof(nid) }; nid.hWnd = h; nid.uID = 1;
@@ -329,8 +520,10 @@ DWORD WINAPI IconThread(LPVOID)
 	g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 	g_wnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, wc.hInstance, nullptr);
 	if (g_wnd) {
+		g_notifyWnd = g_wnd;
+		SafeInvoke(L"net icon NLM advise", AdviseUnsafe);
 		SafeInvoke(L"net icon add", []() { UpdateIcon(true); });
-		SetTimer(g_wnd, kTimer, 4000, nullptr);
+		SetTimer(g_wnd, kTimer, 10000, nullptr); // safety net; events drive updates
 		MSG m;
 		while (GetMessageW(&m, nullptr, 0, 0) > 0) { TranslateMessage(&m); DispatchMessageW(&m); }
 	}

@@ -270,6 +270,7 @@
     <ClCompile Include="ImmersiveMenus.cpp" />
     <ClCompile Include="NotifyIconsDialog.cpp" />
     <ClCompile Include="TrayMenus.cpp" />
+    <ClCompile Include="UwpHost.cpp" />
     <ClCompile Include="minCRT.cpp">
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</WholeProgramOptimization>
     </ClCompile>
