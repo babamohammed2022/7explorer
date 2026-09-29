@@ -95,7 +95,7 @@ removes everything, like unchecking the box.
 ## Command line
 
 ```
-7explorer-shell-switcher.exe              # GUI
+shell-switcher.exe              # GUI
 --apply-win7explorerestorer        # switch to Windows 7 Explorer Restorer (verified + retry ~60 s + hotkey restart;
                    #   exit code 0/2)
 --apply-win7explorerestorer --logon  # as above, from the logon link: fully silent (log only)

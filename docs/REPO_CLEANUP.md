@@ -83,7 +83,7 @@ validati.
 39 release (tutte pre-release): `v0.0.1-test1` … `v0.0.3-test36`, una per
 ogni iterazione di test, più la nuova `v0.3-test37`. Ogni release conteneva
 gli stessi asset (wrp64.dll, Win7ExplorerRestorer.exe,
-7explorer-shell-switcher.exe, Win7ExplorerRestorer-test-bundle.zip, sorgenti windhawk,
+shell-switcher.exe, Win7ExplorerRestorer-test-bundle.zip, sorgenti windhawk,
 SHA256SUMS.txt). A 38 vecchi tag corrispondevano 38 vecchie release
 (verificato con `git ls-remote --tags` e l'API `/releases`: nessun tag
 orfano).

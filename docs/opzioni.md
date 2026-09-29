@@ -30,7 +30,7 @@ Indice: [shell e avvio](#shell-e-avvio) · [scorciatoie e log](#scorciatoie-e-lo
 
 | nome | tipo | default | significato |
 |---|---|---|---|
-| `SwitcherHotkey` | DWORD | 1 | Quando la shell privata parte, `wrp64.dll` avvia `7explorer-shell-switcher.exe --hotkey` (istanza resident che possiede **Ctrl+Alt+Shift+S**), se lo trova accanto a `explorer.exe` o `wrp64.dll`. **Disattivando**: dopo il logon la scorciatoia non è attiva finché non apri la GUI dello switcher. |
+| `SwitcherHotkey` | DWORD | 1 | Quando la shell privata parte, `wrp64.dll` avvia `shell-switcher.exe --hotkey` (istanza resident che possiede **Ctrl+Alt+Shift+S**), se lo trova accanto a `explorer.exe` o `wrp64.dll`. **Disattivando**: dopo il logon la scorciatoia non è attiva finché non apri la GUI dello switcher. |
 | `SettingsHotkey` | DWORD | 1 | Possiede **Win+I** (con fallback a hook tastiera a basso livello) e apre Impostazioni con lo stesso percorso dei remap (`ms-settings:` → shell Win32). **Disattivando**: Win+I non fa nulla nella shell Win7. |
 | `ShellFixLog` | DWORD | 1 | Logging della shell su `%TEMP%\7explorer-shellfix.log` (cap 256 KB) + `OutputDebugString`. **Disattivando**: nessun log file (OutputDebugString resta). |
 
@@ -57,7 +57,7 @@ Indice: [shell e avvio](#shell-e-avvio) · [scorciatoie e log](#scorciatoie-e-lo
 | `OpaqueThumbnails` | DWORD | 0 | Anteprime taskbar opache con gradiente (comportamento upstream) invece di translucide. **Attivando**: thumbnail opachi. |
 | `NotifyIconsUseSettings` | DWORD | 0 | Dove apre "Personalizza icone notifica": **0** = automatico (la pagina di sistema `::{05D7B0F4-…}` "Icone area di notifica" se il suo CLSID è registrato — esiste ancora su 24H2/25H2 ma su 24H2 si apre **vuota** — altrimenti la finestra integrata); **1** = app Impostazioni (`ms-settings:taskbar`); **2** = sempre la pagina di sistema; **3** = sempre la **finestra integrata** (ricreata dal progetto, raccomandata su 24H2). |
 | `FixHelpAndSupportName` | DWORD | 1 | Fix del nome visualizzato "Guida e supporto" (Win7 it-IT legge il nome dal .mui che qui non esiste). **Disattivando**: possibile nome/etichetta errata nel menu Start. |
-| `FixConnectTo` | DWORD | 1 | Registra il CLSID "Connetti a" (`{38A98528-…}`, verb + TreatAs) solo se il sistema non ne ha uno; inoltre le attivazioni fallite di quel CLSID vengono riprovate come Connessioni di rete (`shell:::{7007ACC7-…}`, test39). **Disattivando**: "Connetti a" può non funzionare. |
+| `FixConnectTo` | DWORD | 1 | Registra il CLSID "Connetti a" (`{38A98528-…}`, verb + TreatAs) solo se il sistema non ne ha uno; apre la sezione Video (`shell:::{18989B1D-…}`). **Disattivando**: "Connetti a" può non funzionare. |
 | `FixAutoPlay` | DWORD | 1 | Ripara i criteri AutoPlay per-utente che lo disabilitano del tutto (HKCU-only, test39): `NoDriveTypeAutoRun=0xFF` → `0x91` e `NoAutoplayfornonVolume≠0` → `0` (default Wine, come il mod `win7-classic-autoplay-restorer`); valori mancanti lasciati stare, HKLM mai toccato. **Disattivando**: nessuna riparazione. |
 | `KeepSystemTransparency` | DWORD | 0 | Per default la shell privata forza la trasparenza DWM attiva (per l'Aero della taskbar). **Attivando**: la shell rispetta l'impostazione di trasparenza di sistema (taskbar opaca se il sistema ha effetti trasparenza off). |
 

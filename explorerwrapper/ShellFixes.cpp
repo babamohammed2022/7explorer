@@ -12,9 +12,9 @@
 //      see LaunchRemap below; final fallback is ms-settings:taskbar.
 //    * "Connect To" uses ::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B} (Win7 network
 //      "Connect To" pop-up), which does not exist any more. Redirect to
-//      Network Connections shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}
-//      via a per-user TreatAs (+ open verb), fallback ms-settings:network.
-//      Failed activations are also retried as Network Connections in
+//      the Videos library shell:::{18989B1D-99B5-455B-841C-AB7C74E4DDFC}
+//      via a per-user TreatAs (+ open verb), fallback plain Explorer.
+//      Failed activations are also retried as the Videos library in
 //      Shell32_CoCreateInstance (shell32_wrappers.cpp).
 //    Every call is logged with dbgprintf so unknown targets can be captured
 //    with DebugView.
@@ -154,7 +154,8 @@ bool Contains(const wchar_t* s, const wchar_t* needle)
 const Remap* FindRemap(const wchar_t* target)
 {
 	static const Remap notify = { L"shell:::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}", L"ms-settings:taskbar" };
-	static const Remap connect = { L"shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}", L"ms-settings:network" };
+	// Videos (was Network Connections): the fallback is plain Explorer.
+	static const Remap connect = { L"shell:::{18989B1D-99B5-455B-841C-AB7C74E4DDFC}", L"explorer.exe" };
 	if (Contains(target, kNotifyIconsClsid) || Contains(target, L"Microsoft.NotificationAreaIcons")) return &notify;
 	if (Contains(target, kConnectToClsid)) return &connect;
 	return nullptr;
@@ -886,7 +887,7 @@ void CALLBACK TrayTimerProc(HWND, UINT, UINT_PTR id, DWORD)
 // The Win7 Start menu opens "Connect To" by invoking the regitem
 // ::{38A98528-...} directly (no ShellExecuteEx call was ever logged), and
 // that CLSID is not registered on Windows 10/11. Register a per-user
-// CLSID with TreatAs + open verb pointing at Network Connections.
+// CLSID with TreatAs + open verb pointing at the Videos library.
 // Only if the system has none.
 void RegisterConnectTo()
 {
@@ -902,17 +903,15 @@ void RegisterConnectTo()
 		RegCloseKey(h); LogLine(L"[Win7ExplorerRestorer] Connect To: system CLSID present, untouched"); return;
 	}
 	wchar_t cmdKey[200]; wnsprintfW(cmdKey, 200, L"%s\\shell\\open\\command", key);
-	wchar_t icoKey[200]; wnsprintfW(icoKey, 200, L"%s\\DefaultIcon", key);
-	const wchar_t cmd[] = L"%SystemRoot%\\explorer.exe shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}";
-	const wchar_t ico[] = L"%SystemRoot%\\system32\\netshell.dll,0";
+	const wchar_t cmd[] = L"%SystemRoot%\\explorer.exe shell:::{18989B1D-99B5-455B-841C-AB7C74E4DDFC}";
 	// TreatAs: binds done directly via CoCreateInstance (the Win7 Start menu
 	// path, which never issues a ShellExecute for the verb above) resolve to
-	// the Network Connections folder instead of failing.
-	const wchar_t treatAs[] = L"{7007ACC7-3202-11D1-AAD2-00805FC1270E}";
+	// the Videos library instead of failing. No DefaultIcon: with TreatAs
+	// set, the target library supplies its own icon.
+	const wchar_t treatAs[] = L"{18989B1D-99B5-455B-841C-AB7C74E4DDFC}";
 	LSTATUS a = RegSetKeyValueW(HKEY_CURRENT_USER, cmdKey, nullptr, REG_EXPAND_SZ, cmd, sizeof(cmd));
-	LSTATUS b = RegSetKeyValueW(HKEY_CURRENT_USER, icoKey, nullptr, REG_EXPAND_SZ, ico, sizeof(ico));
 	LSTATUS c = RegSetKeyValueW(HKEY_CURRENT_USER, key, L"TreatAs", REG_SZ, treatAs, sizeof(treatAs));
-	LogLine(L"[Win7ExplorerRestorer] Connect To: per-user CLSID verb+TreatAs -> Network Connections (%d,%d,%d)", a, b, c);
+	LogLine(L"[Win7ExplorerRestorer] Connect To: per-user CLSID verb+TreatAs -> Videos (%d,%d)", a, c);
 }
 
 // ------------------------------------------------------------ ms-settings / UWP
@@ -1416,7 +1415,7 @@ void InstallForceShell()
 	} else LogLine(L"[Win7ExplorerRestorer] ForceShell: CreateDesktopAndTray prologue mismatch");
 }
 
-// Emergency shortcut: start "7explorer-shell-switcher.exe --hotkey" (a tiny
+// Emergency shortcut: start "shell-switcher.exe --hotkey" (a tiny
 // resident process, independent of explorer, owning Ctrl+Alt+Shift+S) if the
 // switcher sits next to explorer.exe or wrp64.dll. Opt-out SwitcherHotkey=0.
 void StartSwitcherHotkey()
@@ -1431,7 +1430,7 @@ void StartSwitcherHotkey()
 	for (const wchar_t* d : dirs) {
 		if (!d[0]) continue;
 		wchar_t exe[MAX_PATH], cmd[MAX_PATH + 32];
-		wnsprintfW(exe, MAX_PATH, L"%s\\7explorer-shell-switcher.exe", d);
+		wnsprintfW(exe, MAX_PATH, L"%s\\shell-switcher.exe", d);
 		if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) continue;
 		wnsprintfW(cmd, ARRAYSIZE(cmd), L"\"%s\" --hotkey", exe);
 		STARTUPINFOW si = { sizeof(si) };
@@ -1442,7 +1441,7 @@ void StartSwitcherHotkey()
 		}
 		return;
 	}
-	LogLine(L"[Win7ExplorerRestorer] 7explorer-shell-switcher.exe not found next to explorer/wrp64: no hotkey");
+	LogLine(L"[Win7ExplorerRestorer] shell-switcher.exe not found next to explorer/wrp64: no hotkey");
 }
 
 // Win+I: the Win7 explorer has no handler for it (it belongs to the modern

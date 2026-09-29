@@ -28,7 +28,7 @@ Indice:
 
 Fino a **test36** la casella creava solo un collegamento nella cartella
 `Esecuzione automatica` dell'utente, che eseguiva
-`7explorer-shell-switcher.exe --apply-win7explorerestorer` **dopo** il logon. Era una gara
+`shell-switcher.exe --apply-win7explorerestorer` **dopo** il logon. Era una gara
 persa in partenza:
 
 1. Winlogon avvia **prima** la shell di sistema (`C:\Windows\explorer.exe`,
@@ -52,8 +52,8 @@ Attivandola (test37) vengono eseguite **tre** operazioni, tutte per-utente
 | # | Cosa | Dove | A cosa serve |
 |---|------|------|--------------|
 | 1 | Valore `Shell` = percorso dell'explorer privato (REG_SZ) | `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell` | **Meccanismo primario**: userinit lancia l'explorer privato *come shell*, prima che parta quella nativa. Il valore precedente viene salvato (vedi sotto) e ripristinato byte per byte alla disattivazione. |
-| 2 | Link `7explorer-shell.lnk` → `7explorer-shell-switcher.exe --apply-win7explorerestorer --logon` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | **Fallback**: se il valore Shell non bastasse, al logon lo switcher verifica che lo switch sia davvero avvenuto (retry con backoff per ~60 s) e riavvia l'istanza `--hotkey`. |
-| 3 | Task pianificato `7explorer Shell Recovery` → `7explorer-shell-switcher.exe --recover-login` | libreria Utilità di pianificazione (per-utente, trigger "al logon" con ritardo 30 s) | **Rete di sicurezza**: ~30 s dopo il logon controlla che la shell privata sia viva; se non lo è, ripristina la configurazione precedente e garantisce una shell (vedi [Recovery](#recovery-se-la-shell-privata-non-parte)). |
+| 2 | Link `7explorer-shell.lnk` → `shell-switcher.exe --apply-win7explorerestorer --logon` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | **Fallback**: se il valore Shell non bastasse, al logon lo switcher verifica che lo switch sia davvero avvenuto (retry con backoff per ~60 s) e riavvia l'istanza `--hotkey`. |
+| 3 | Task pianificato `7explorer Shell Recovery` → `shell-switcher.exe --recover-login` | libreria Utilità di pianificazione (per-utente, trigger "al logon" con ritardo 30 s) | **Rete di sicurezza**: ~30 s dopo il logon controlla che la shell privata sia viva; se non lo è, ripristina la configurazione precedente e garantisce una shell (vedi [Recovery](#recovery-se-la-shell-privata-non-parte)). |
 
 Note sul valore `Shell`:
 
@@ -119,7 +119,7 @@ scorciatoia in vita. Disattivabile con `SwitcherHotkey=0` (vedi
   2. eliminato il task `7explorer Shell Recovery`;
   3. eliminato il link `7explorer-shell.lnk`.
 - **Da riga di comando**:
-  `7explorer-shell-switcher.exe --uninstall-login` (equivalente alla
+  `shell-switcher.exe --uninstall-login` (equivalente alla
   casella deselezionata).
 - **A mano** (emergenza, se lo switcher non è disponibile):
   - `reg delete "HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" /v Shell /f`
@@ -168,8 +168,8 @@ Per chi non vuole **alcuna** modifica al registro è disponibile il solo
 meccanismo di fallback:
 
 ```
-7explorer-shell-switcher.exe --install-login     # crea SOLO il link
-7explorer-shell-switcher.exe --uninstall-login   # rimuove tutto (anche eventuale valore Shell)
+shell-switcher.exe --install-login     # crea SOLO il link
+shell-switcher.exe --uninstall-login   # rimuove tutto (anche eventuale valore Shell)
 ```
 
 Il link esegue `--apply-win7explorerestorer --logon`: switch verificato, retry con backoff

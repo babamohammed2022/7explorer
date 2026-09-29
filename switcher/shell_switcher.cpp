@@ -3144,7 +3144,22 @@ static void OnCreate(HWND hwnd) {
     SetTimer(hwnd, TID_REFRESH, REFRESH_TIMER_MS, NULL);
 }
 
-static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
+// Last-resort guards (test41): the window procedure and the entry point must
+// never let an exception escape into the OS. The inner C++ catch(...) handles
+// our own throws; the outer __except also catches access violations from
+// real-world failures (bad pointers, dead COM servers). Fatal/stack
+// conditions are re-raised to the OS (same rule as the wrapper's SehFilter).
+// No logic is changed: every non-crashing path runs exactly as before.
+static LONG WINAPI SwSehFilter(const WCHAR* where, EXCEPTION_POINTERS* info)
+{
+    DWORD code = (info && info->ExceptionRecord) ? info->ExceptionRecord->ExceptionCode : 0;
+    if (code == EXCEPTION_STACK_OVERFLOW || code == 0xC0000374) // STATUS_HEAP_CORRUPTION
+        return EXCEPTION_CONTINUE_SEARCH;
+    SwLog(L"SEH 0x%08X caught in %s (continuing)", code, where ? where : L"?");
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static LRESULT CALLBACK WndProcBody(HWND hwnd, UINT msg, WPARAM wParam,
                                 LPARAM lParam) {
     switch (msg) {
     case WM_CREATE:
@@ -3301,6 +3316,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                LPARAM lParam)
+{
+    __try {
+        try {
+            return WndProcBody(hwnd, msg, wParam, lParam);
+        } catch (...) {
+            SwLog(L"C++ exception in WndProc msg=0x%X (continuing)", msg);
+        }
+    } __except (SwSehFilter(L"WndProc", GetExceptionInformation())) {
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
 
 // ------------------------------------------------------------- hotkey ---
 // Emergency shortcut Ctrl+Alt+Shift+S opens this switcher even when the
@@ -3351,7 +3379,7 @@ static int RunHotkeyResident() {
     return 0;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+int WINAPI wWinMainBody(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     LPWSTR lpCmdLine, int nCmdShow) {
     (void)hPrevInstance; (void)nCmdShow;
     g_hInst = hInstance;
@@ -3501,4 +3529,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         }
     }
     return (int)m.wParam;
+}
+
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                    LPWSTR lpCmdLine, int nCmdShow)
+{
+    __try {
+        try {
+            return wWinMainBody(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
+        } catch (...) {
+            SwLog(L"C++ exception in wWinMain (exiting 1)");
+        }
+    } __except (SwSehFilter(L"wWinMain", GetExceptionInformation())) {
+    }
+    return 1;
 }

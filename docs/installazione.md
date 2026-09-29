@@ -23,7 +23,7 @@ Indice: [requisiti](#requisiti) · [procedura](#procedura) · [cosa viene scaric
 
 1. Scarica **`Win7ExplorerRestorer-test-bundle.zip`** dalla [release di riferimento]
    (https://github.com/babamohammed2022/7explorer/releases) — contiene
-   `wrp64.dll`, `Win7ExplorerRestorer.exe`, `7explorer-shell-switcher.exe` e i
+   `wrp64.dll`, `Win7ExplorerRestorer.exe`, `shell-switcher.exe` e i
    README (inclusi i sorgenti dei mod Windhawk opzionali).
 2. Decomprimi tutto in **una singola cartella**, ad es. `C:\Win7ExplorerRestorerTest`.
 3. Avvia **`Win7ExplorerRestorer.exe`**:
@@ -37,10 +37,10 @@ Indice: [requisiti](#requisiti) · [procedura](#procedura) · [cosa viene scaric
    L'operazione è deterministica e ripetibile: rieseguirla riscrive lo
    stesso file (verificato dalla CI a ogni build).
    In alternativa puoi saltare questo passo: avviando direttamente
-   **`7explorer-shell-switcher.exe`**, se l'installazione manca la finestra
+   **`shell-switcher.exe`**, se l'installazione manca la finestra
    propone **Installa** ed esegue `Win7ExplorerRestorer.exe` da sola
    (nascosto, con barra di avanzamento e dettagli dal log).
-4. Avvia **`7explorer-shell-switcher.exe`** → seleziona
+4. Avvia **`shell-switcher.exe`** → seleziona
    **Windows 7 Explorer** → **Usa Win7ExplorerRestorer**. La shell Win7
    sostituisce quella di Windows 11 al volo.
 5. Per tornare: `Ctrl+Alt+Shift+S` → **Esplora risorse Windows nativo** →
@@ -118,7 +118,7 @@ Dal **secondo** avvio non serve alcuna rete:
 ## Disinstallazione
 
 1. Deseleziona l'avvio automatico al logon (o
-   `7explorer-shell-switcher.exe --uninstall-login`) — ripristina il
+   `shell-switcher.exe --uninstall-login`) — ripristina il
    valore `Shell` precedente, elimina link e task di recovery
    ([dettagli](avvio-al-login.md)).
 2. Torna alla shell nativa (switcher o `Ctrl+Alt+Shift+S`).

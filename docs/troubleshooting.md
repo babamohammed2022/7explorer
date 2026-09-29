@@ -5,7 +5,7 @@
 | log | chi lo scrive | contenuto |
 |---|---|---|
 | `%TEMP%\7explorer-shellfix.log` | `wrp64.dll` (la shell) | avvio della shell, hook installati, tray, rete, jump list, guardia anti-iniezione. Cap 256 KB con rotazione. Disattivabile con `ShellFixLog=0`. |
-| `%TEMP%\7explorer-switcher.log` | `7explorer-shell-switcher.exe` | switch runtime, avvio automatico al logon (registro, link, task), recovery. Indispensabile per diagnosticare il logon. |
+| `%TEMP%\7explorer-switcher.log` | `shell-switcher.exe` | switch runtime, avvio automatico al logon (registro, link, task), recovery. Indispensabile per diagnosticare il logon. |
 | `%LocalAppData%\7explorer\theme.log` | tema (ThemeManager) | caricamento/estrazione del tema, fallback. |
 | `<cartella bundle>\log\Win7ExplorerRestorerSetup.log` | `Win7ExplorerRestorer.exe` | download, verifica hash, patch, risorse. |
 

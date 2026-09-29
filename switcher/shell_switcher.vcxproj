@@ -23,8 +23,8 @@
     <!-- deterministic layout for CI artifacts -->
     <OutDir>$(ProjectDir)bin\</OutDir>
     <IntDir>$(ProjectDir)obj\</IntDir>
-    <!-- artifact name: 7explorer-shell-switcher.exe -->
-    <TargetName>7explorer-shell-switcher</TargetName>
+    <!-- artifact name: shell-switcher.exe -->
+    <TargetName>shell-switcher</TargetName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

@@ -65,7 +65,7 @@ jobs:
         shell: cmd
         run: msbuild installer\Win7ExplorerRestorer\Win7ExplorerRestorer.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-Win7ExplorerRestorer.log
 
-      - name: Build 7explorer-shell-switcher.exe (Release x64, static CRT)
+      - name: Build shell-switcher.exe (Release x64, static CRT)
         shell: cmd
         run: msbuild switcher\shell_switcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-switcher.log
 
@@ -161,7 +161,7 @@ jobs:
           New-Item -ItemType Directory -Force bundle | Out-Null
           Copy-Item Release\wrp64.dll bundle\
           Copy-Item installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe bundle\
-          Copy-Item switcher\bin\7explorer-shell-switcher.exe bundle\
+          Copy-Item switcher\bin\shell-switcher.exe bundle\
           New-Item -ItemType Directory -Force bundle\windhawk | Out-Null
           Copy-Item windhawk\*.cpp bundle\windhawk\
           Copy-Item installer\Win7ExplorerRestorer\README.md bundle\BOOTSTRAP-README.md
@@ -173,7 +173,7 @@ jobs:
       - name: Produce SHA256SUMS for the CI-built binaries
         shell: pwsh
         run: |
-          $items = @("Release\wrp64.dll", "installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe", "switcher\bin\7explorer-shell-switcher.exe", "Win7ExplorerRestorer-test-bundle.zip")
+          $items = @("Release\wrp64.dll", "installer\Win7ExplorerRestorer\bin\Win7ExplorerRestorer.exe", "switcher\bin\shell-switcher.exe", "Win7ExplorerRestorer-test-bundle.zip")
           $lines = foreach ($i in $items) { $h=(Get-FileHash -Algorithm SHA256 $i).Hash.ToLower(); "$h  $(Split-Path $i -Leaf)" }
           $lines | Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
@@ -213,7 +213,7 @@ jobs:
           path: |
             Release/wrp64.dll
             installer/Win7ExplorerRestorer/bin/Win7ExplorerRestorer.exe
-            switcher/bin/7explorer-shell-switcher.exe
+            switcher/bin/shell-switcher.exe
             Win7ExplorerRestorer-test-bundle.zip
             SHA256SUMS.txt
             msbuild-wrp64.log
@@ -234,9 +234,10 @@ jobs:
         with:
           name: Win7ExplorerRestorer-binaries
       - name: Publish pre-release with CI-built binaries
-        # POLICY: la release resta GENERICA (note = docs/RELEASE_NOTES_test.md,
-        # in inglese, schema fisso, mai miglioramenti citati) e pubblica UNICO
-        # asset: Win7ExplorerRestorer-test-bundle.zip. Niente binari singoli,
+        # POLICY: la release resta GENERICA (titolo fisso "win7explorerrestorer",
+        # note = docs/RELEASE_NOTES_test.md in inglese, schema fisso, mai
+        # miglioramenti citati) e pubblica UNICO asset:
+        # Win7ExplorerRestorer-test-bundle.zip. Niente binari singoli,
         # niente SHA256SUMS, niente sorgenti windhawk separati (sono nel bundle).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -245,7 +246,7 @@ jobs:
         run: |
           Get-ChildItem -Recurse -File | Select-Object -ExpandProperty FullName
           gh release create "$env:TAG" --prerelease `
-            --title "7explorer $env:TAG (reference test build)" `
+            --title "win7explorerrestorer" `
             --notes-file docs/RELEASE_NOTES_test.md `
             "Win7ExplorerRestorer-test-bundle.zip#Win7ExplorerRestorer-test-bundle.zip"
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
