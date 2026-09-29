@@ -2,7 +2,7 @@
 
 Small native Win32 GUI application that switches the **running** shell
 process between the native Windows Explorer and the private 7explorer
-Explorer7 — **no logout, no reboot, no registry changes**.
+Explorer7 — **no logout, no reboot**.
 
 Technical notes (design is intentionally conservative):
 
@@ -21,9 +21,14 @@ Technical notes (design is intentionally conservative):
   automatically; if *both* fail, a critical message explains the manual
   recovery (Task Manager → Run new task). An *unrecognized* shell owner
   path is never stopped.
-- **No changes** to `C:\Windows\explorer.exe`, Winlogon, Userinit, the
-  `Shell` registry value, or the registry in general.
+- **Never touched**: `C:\Windows\explorer.exe`, `HKLM`, `userinit.exe`,
+  the machine-wide `Shell` value, other accounts. The optional logon
+  auto-start (below) writes only the **per-user**
+  `HKCU\...\Winlogon\Shell` value, reversibly and with its previous
+  content backed up.
 - Builds with static CRT (`/MT`) — no Visual C++ Redistributable required.
+- Log: `%TEMP%\7explorer-switcher.log` (switches, logon auto-start,
+  recovery; see `docs/troubleshooting.md`).
 
 ## Paths (no hardcode)
 
@@ -34,34 +39,66 @@ Technical notes (design is intentionally conservative):
 
 A **Browse…** button lets you point anywhere else.
 
-## Login-time auto-start (file-based, optional)
+## Login-time auto-start (test37)
 
-Checkbox **"Start Windows 7 Explorer automatically at logon"**: creates/removes
-`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\7explorer-shell.lnk`
-(per-user Startup folder — a plain file, no registry, no Winlogon). At logon
-it runs `7explorer-shell-switcher.exe --apply-ex7`, which performs the runtime
-switch silently in the background. Uncheck the box (or delete the link) to
-remove it. The Windhawk `ex7-userinit-shell` mod remains available as the
-(earlier, pre-userinit) login-time alternative.
+The checkbox **"Start Windows 7 Explorer automatically at logon"** arms
+three cooperating mechanisms (full details in
+[`docs/avvio-al-login.md`](../docs/avvio-al-login.md)):
+
+1. **Per-user `Shell` value** (primary):
+   `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell` =
+   the private explorer.exe. This is the standard per-user shell mechanism:
+   no elevation, current user only, previous value saved and restored
+   **byte-for-byte** on removal. `explorer.exe` **and** `wrp64.dll` are
+   validated before anything is written.
+2. **Startup-folder link** (fallback, `7explorer-shell.lnk` →
+   `--apply-ex7 --logon`): verifies the switch really happened (retry with
+   backoff, ~60 s) and restarts the `--hotkey` resident on success.
+3. **Recovery task** (`7explorer Shell Recovery`, per-user scheduled task):
+   ~30 s after each logon, if the private shell is not alive it restores
+   the previous `Shell` value, makes sure some shell is running, restarts
+   the `--hotkey` resident and removes itself.
+
+Unchecking the box undoes all three. `--install-login` installs **only**
+the link (the zero-registry variant, mechanism B); `--uninstall-login`
+removes everything, like unchecking the box.
 
 ## Command line
 
 ```
 7explorer-shell-switcher.exe              # GUI
---apply-ex7        # switch to Explorer7, no confirm dialog (exit code 0/2)
+--apply-ex7        # switch to Explorer7 (verified + retry ~60 s + hotkey restart;
+                   #   exit code 0/2)
+--apply-ex7 --logon  # as above, from the logon link: fully silent (log only)
 --apply-native     # switch back to the native shell
---install-login    # create the Startup-folder link
---uninstall-login  # remove it
+--install-login    # create ONLY the Startup-folder link (zero registry changes)
+--uninstall-login  # remove the whole logon auto-start (restore Shell value,
+                   #   delete link + recovery task)
+--hotkey           # resident Ctrl+Alt+Shift+S instance (one per session)
+--recover-login    # body of the recovery task (no UI; do not run by hand)
+--lang=it|--lang=en  # force the switcher UI language
+```
+
+## Hotkey: Ctrl+Alt+Shift+S
+
+A tiny resident instance (`--hotkey`, one per session, guarded by the mutex
+`Local\7explorer.ShellSwitcher.Hotkey`) owns the global shortcut and opens
+the switcher GUI — even when the shell has crashed or hangs. It is started:
+
+- by the GUI itself;
+- by `wrp64.dll` when the private shell starts (so it is alive right after
+  every logon with the auto-start enabled — see `StartSwitcherHotkey` in
+  `explorerwrapper/ShellFixes.cpp`);
+- by `--apply-ex7`/`--apply-native`/`--recover-login` after a successful
+  switch/recovery.
+
+If no instance is running (e.g. native shell after a failed logon start and
+no recovery happened), the shortcut is dead: open the switcher GUI once to
+bring it back.
 
 ## Relationship with the Windhawk mods
 
-Two complementary mechanisms, both kept:
-
-| mode | how | when |
-|---|---|---|
-| login-time | Windhawk `ex7-userinit-shell` redirects the `Shell` query of `userinit.exe` | every logon |
-| runtime test | this switcher stops/starts the shell process in place | interactive dev/test |
-
-The Windhawk `ex7-fake-explorer-path` mod stays unchanged and remains
-useful so that the runtime-launched Explorer7 believes it lives in
-`%SystemRoot%`. The switcher itself does not depend on Windhawk.
+The Windhawk `ex7-fake-explorer-path` mod is now redundant (the path spoof
+is built into `wrp64.dll`) and `ex7-userinit-shell` is superseded by the
+per-user `Shell` value (test37). Both mods remain in `windhawk/` as
+optional source. The switcher itself does not depend on Windhawk.

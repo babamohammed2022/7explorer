@@ -5,11 +5,29 @@
 // private 7explorer Explorer7 executable (default C:\ex7test\explorer.exe,
 // overridable via the EX7_EXPLORER_PATH environment variable).
 //
-// What it does NOT do (by design, hard scope limits):
+// Runtime switching stays registry-free. The OPTIONAL "start at logon"
+// feature (the checkbox, test37) instead sets the standard per-user shell:
+//
+//   - HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell
+//     = the private explorer.exe path. This is the documented per-user way
+//     to make a program the shell at logon: no elevation, current user
+//     only, fully reversible. The previous value is saved and restored
+//     byte-per-byte when the feature is turned off.
+//   - a per-user Startup-folder link (7explorer-shell.lnk -> --apply-ex7
+//     --logon) is kept as a robust fallback: it verifies the switch really
+//     happened (retry with backoff, ~60 s) and restarts the --hotkey
+//     resident on success.
+//   - a per-user scheduled task ("7explorer Shell Recovery", no elevation)
+//     runs --recover-login ~30 s after each logon: if the private shell is
+//     not alive it restores the previous Shell value, makes sure SOME shell
+//     is running, restarts the --hotkey resident and removes itself.
+//
+// What it never does (hard scope limits):
 //   - never modifies C:\Windows\explorer.exe or any system file;
-//   - never touches Winlogon, userinit, or the "Shell" registry value;
-//   - never writes to the registry at all;
-//   - no background service, no permanent shell replacement.
+//   - never touches HKLM, userinit.exe, or the machine-wide Winlogon
+//     values — only the per-user HKCU Shell value above;
+//   - never writes a value pointing to a missing explorer.exe/wrp64.dll:
+//     both files are validated before anything is written.
 //
 // Process identification: the shell process is the owner of the shell
 // desktop window (GetShellWindow). Its executable path is read with
@@ -20,9 +38,10 @@
 // stopped.
 //
 // Build: native x64, static CRT (/MT) — see shell_switcher.vcxproj.
+// Log: %TEMP%\7explorer-switcher.log (logon/recovery/switch diagnostics).
 
 #define WIN32_LEAN_AND_MEAN
-#define _WIN32_WINNT 0x0600  // Vista+ (QueryFullProcessImageNameW)
+#define _WIN32_WINNT 0x0601  // Win7+ (taskschd, QueryFullProcessImageNameW)
 
 // Themed standard controls (comctl32 v6); no external framework.
 // (the whole /manifestdependency value must be double-quoted for the linker,
@@ -35,14 +54,19 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <objbase.h>
+#include <oaidl.h>
+#include <oleauto.h>
+#include <taskschd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "comdlg32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "taskschd.lib")
 
 // ---------------------------------------------------------------- data ---
 
@@ -71,17 +95,19 @@ typedef enum {
     TR_CBO_SYS, TR_CBO_EN, TR_CBO_IT,
     TR_BTN_THEME, TR_THEME_TITLE, TR_THEME_FILTER,
     TR_THEME_OK_FMT, TR_THEME_ERR_FMT,
+    TR_ERR_LOGON_VALIDATE_FMT, TR_INFO_LOGON_OFF, TR_ERR_LOGON_TASK_FMT,
     TR_COUNT
 } TRID;
 static const WCHAR* TR_EN[TR_COUNT] = {
-    L"Switches the running Explorer shell at runtime. No registry, no logout.",
+    L"Switches the running Explorer shell at runtime. No logout needed.",
     L"Select Explorer shell",
     L"Native Windows Explorer",
     L"Windows 7 Explorer",
     L"(none detected)",
     L"Unknown explorer (see path)",
     L"Switch", L"Cancel", L"Browse\u2026",
-    L"Start Windows 7 Explorer automatically at logon (user Startup folder)",
+    L"Start Windows 7 Explorer automatically at logon\r\n"
+    L"(sets the per-user Shell value, reversible \u2014 details: docs/avvio-al-login.md)",
     L"Current shell: %s\r\nPID %lu \u2014 %s",
     L"Target: %s\r\n%s",
     L"Explorer will be restarted.\r\nUnsaved work may be affected.\r\n\r\nContinue?",
@@ -96,12 +122,16 @@ static const WCHAR* TR_EN[TR_COUNT] = {
     L"Recovery: Ctrl+Alt+Shift+S opens this switcher; or Ctrl+Shift+Esc \u2192 Task Manager \u2192 Run new task \u2192 %s",
     L"Failed to start the native shell:\r\n%s\r\n"
     L"CreateProcess error %lu.\r\n\r\nRetry starting %s?",
-    L"Could not %ls the Startup-folder link (error %lu).",
-    L"A link was created in your Startup folder:\r\n"
-    L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"
-    L"7explorer-shell.lnk\r\n\r\nAt each logon this tool will switch to "
-    L"Explorer7 in the background. Uncheck the box (or delete the link) to "
-    L"remove it.",
+    L"Could not %ls the logon auto-start (error %lu).\r\n"
+    L"Nothing else was changed.",
+    L"Windows 7 Explorer will start at logon. Applied (all reversible):\r\n"
+    L"\u2022 per-user Shell value (HKCU ...\\Winlogon\\Shell) \u2014 previous value saved;\r\n"
+    L"\u2022 link in your Startup folder (fallback + hotkey restart);\r\n"
+    L"\u2022 recovery task \"7explorer Shell Recovery\" (~30 s after logon:\r\n"
+    L"   if the private shell is not alive it restores everything).\r\n"
+    L"\r\n"
+    L"Uncheck the box to undo all three (previous value restored\r\n"
+    L"byte-for-byte). Details: docs/avvio-al-login.md",
     L"Select the private Explorer7 (explorer.exe)",
     L"explorer.exe\0explorer.exe\0All files\0*.*\0",
     L"Startup-folder link operation failed (error %lu).",
@@ -114,16 +144,28 @@ static const WCHAR* TR_EN[TR_COUNT] = {
     L"Theme installed to:\r\n%s\r\n\r\nSwitch shell (e.g. native \u2192 Explorer7) to apply it.\r\n"
     L"The file is YOURS: it was only copied locally, nothing downloaded or shared.",
     L"Could not copy the theme file (error %lu):\r\n%s",
+    L"Cannot enable logon auto-start:\r\n"
+    L"%s\r\n\r\n"
+    L"Both explorer.exe and wrp64.dll must exist in that folder\r\n"
+    L"(the Shell value is never left pointing to missing files).",
+    L"Logon auto-start removed.\r\n"
+    L"The previous Shell value was restored and the fallback link\r\n"
+    L"and recovery task were deleted.",
+    L"The per-user Shell value was set, but the recovery task could not\r\n"
+    L"be registered (error %lu).\r\n"
+    L"Auto-start still works; you just have no automatic safety net\r\n"
+    L"at logon (details: docs/avvio-al-login.md).",
 };
 static const WCHAR* TR_IT[TR_COUNT] = {
-    L"Scambia al volo la shell Explorer attiva. Nessun registry, nessun logout.",
+    L"Scambia al volo la shell Explorer attiva. Nessun logout richiesto.",
     L"Seleziona la shell Explorer",
     L"Esplora risorse Windows nativo",
     L"Explorer7 (Windows 7)",
     L"(nessuna rilevata)",
     L"Explorer sconosciuto (vedi path)",
     L"Cambia", L"Annulla", L"Sfoglia\u2026",
-    L"Avvia Explorer7 automaticamente al logon (cartella Esecuzione automatica utente)",
+    L"Avvia Explorer7 automaticamente al logon\r\n"
+    L"(imposta il valore Shell dell'utente, reversibile \u2014 dettagli: docs/avvio-al-login.md)",
     L"Shell attuale: %s\r\nPID %lu \u2014 %s",
     L"Destinazione: %s\r\n%s",
     L"Explorer verr\u00e0 riavviato.\r\nIl lavoro non salvato potrebbe essere perso.\r\n\r\nContinuare?",
@@ -138,12 +180,17 @@ static const WCHAR* TR_IT[TR_COUNT] = {
     L"Ripristino: Ctrl+Alt+Maiusc+S apre questo switcher; oppure Ctrl+Shift+Esc \u2192 Gestione attivit\u00e0 \u2192 Esegui nuova attivit\u00e0 \u2192 %s",
     L"Impossibile avviare la shell nativa:\r\n%s\r\n"
     L"CreateProcess errore %lu.\r\n\r\nRipetere l'avvio di %s?",
-    L"Impossibile %ls il collegamento in Esecuzione automatica (errore %lu).",
-    L"Collegamento creato nella cartella Esecuzione automatica:\r\n"
-    L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\"
-    L"7explorer-shell.lnk\r\n\r\nA ogni logon questo strumento passer\u00e0 a "
-    L"Explorer7 in background. Deseleziona la casella (o elimina il collegamento) "
-    L"per rimuoverlo.",
+    L"Impossibile %ls l'avvio automatico al logon (errore %lu).\r\n"
+    L"Nient'altro \u00e8 stato modificato.",
+    L"Explorer7 verr\u00e0 avviato al logon. Applicato (tutto reversibile):\r\n"
+    L"\u2022 valore Shell per-utente (HKCU ...\\Winlogon\\Shell) \u2014 valore\r\n"
+    L"   precedente salvato;\r\n"
+    L"\u2022 collegamento in Esecuzione automatica (fallback + riavvio hotkey);\r\n"
+    L"\u2022 task di recovery \"7explorer Shell Recovery\" (~30 s dopo il logon:\r\n"
+    L"   se la shell privata non \u00e8 viva ripristina tutto).\r\n"
+    L"\r\n"
+    L"Deseleziona la casella per annullare tutte e tre le cose (il valore\r\n"
+    L"precedente viene ripristinato byte per byte). Dettagli: docs/avvio-al-login.md",
     L"Seleziona l'Explorer7 privato (explorer.exe)",
     L"explorer.exe\0explorer.exe\0Tutti i file\0*.*\0",
     L"Operazione sul collegamento in Esecuzione automatica non riuscita (errore %lu).",
@@ -156,6 +203,17 @@ static const WCHAR* TR_IT[TR_COUNT] = {
     L"Tema installato in:\r\n%s\r\n\r\nCambia shell (es. nativa \u2192 Explorer7) per applicarlo.\r\n"
     L"Il file resta TUO: \u00e8 stato solo copiato in locale, niente \u00e8 stato scaricato o condiviso.",
     L"Impossibile copiare il file tema (errore %lu):\r\n%s",
+    L"Impossibile attivare l'avvio automatico al logon:\r\n"
+    L"%s\r\n\r\n"
+    L"In quella cartella devono esistere sia explorer.exe sia wrp64.dll\r\n"
+    L"(il valore Shell non punta mai a file mancanti).",
+    L"Avvio automatico al logon rimosso.\r\n"
+    L"Il valore Shell precedente \u00e8 stato ripristinato; il collegamento\r\n"
+    L"di fallback e il task di recovery sono stati eliminati.",
+    L"Il valore Shell per-utente \u00e8 stato impostato, ma il task di recovery\r\n"
+    L"non \u00e8 stato registrato (errore %lu).\r\n"
+    L"L'avvio automatico funziona comunque; manca solo la rete di\r\n"
+    L"sicurezza automatica al logon (dettagli: docs/avvio-al-login.md).",
 };
 static BOOL g_uiItalian;   // FALSE = English UI (default)
 static const WCHAR* TR(TRID id) { return (g_uiItalian ? TR_IT : TR_EN)[id]; }
@@ -177,12 +235,67 @@ static const WCHAR* TR(TRID id) { return (g_uiItalian ? TR_IT : TR_EN)[id]; }
 
 #define STARTUP_LINK_NAME L"7explorer-shell.lnk"
 
+// ---- logon auto-start (test37) -------------------------------------------
+// Three cooperating pieces, all per-user, all reversible (details in
+// docs/avvio-al-login.md):
+//   1. HKCU\...\Winlogon\Shell = private explorer.exe  (primary mechanism)
+//   2. Startup-folder link -> --apply-ex7 --logon       (fallback, robust)
+//   3. scheduled task "7explorer Shell Recovery"        (safety net)
+static const WCHAR kWinlogonKey[]  = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon";
+static const WCHAR kShellValue[]   = L"Shell";
+static const WCHAR kBackupValue[]  = L"7explorerShellBackup";  // REG_BINARY blob
+static const WCHAR kMarkerValue[]  = L"7explorerShellPath";    // REG_SZ we wrote
+static const WCHAR kRecoveryTaskName[] = L"7explorer Shell Recovery";
+static const WCHAR kApplyRunningMutex[] = L"Local\\7explorer.LogonApplyRunning";
+static const DWORD kShellBackupAbsent = 0xFFFFFFFF;  // "value did not exist"
+
 // ------------------------------------------------------------ helpers ---
 
 static BOOL FileExists(LPCWSTR path) {
     DWORD a = GetFileAttributesW(path);
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
+
+// ------------------------------------------------------------- logging ---
+// Tiny append-only log for the logon/recovery/switch paths (the wrapper
+// logs to %TEMP%\7explorer-shellfix.log; this is the switcher's own trail,
+// same folder so both are found together). Rotated when it grows too big.
+static void SwLogV(const WCHAR* fmt, va_list ap) {
+    WCHAR body[900];
+    _vsnwprintf_s(body, _countof(body), _TRUNCATE, fmt, ap);
+    WCHAR dir[MAX_PATH];
+    DWORD n = GetTempPathW((DWORD)_countof(dir), dir);
+    if (n == 0 || n >= _countof(dir)) { OutputDebugStringW(body); return; }
+    WCHAR path[MAX_PATH + 40];
+    _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s7explorer-switcher.log", dir);
+    // keep it bounded: start over past ~512 KB
+    HANDLE h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+                           OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) { OutputDebugStringW(body); return; }
+    if (GetFileSize(h, NULL) > 512 * 1024)
+        SetFilePointer(h, 0, NULL, FILE_BEGIN), SetEndOfFile(h);
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    WCHAR line[1024];
+    _snwprintf_s(line, _countof(line), _TRUNCATE,
+                 L"[%02u:%02u:%02u %u] %s\r\n",
+                 st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId(), body);
+    DWORD cb = (DWORD)(lstrlenW(line) * sizeof(WCHAR));
+    SetFilePointer(h, 0, NULL, FILE_END);
+    DWORD written = 0;
+    WriteFile(h, line, cb, &written, NULL);
+    CloseHandle(h);
+    OutputDebugStringW(line);
+}
+static void SwLog(const WCHAR* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    SwLogV(fmt, ap);
+    va_end(ap);
+}
+
+// defined in the hotkey section below; used by the logon/recovery paths too
+static void EnsureHotkeyResident(void);
 
 // Resolve the two shell paths once. Private path priority (no hardcode):
 //   1. EX7_EXPLORER_PATH environment variable (expands %VAR%);
@@ -407,19 +520,23 @@ static LPCWSTR SelectedShellUILang(HWND hwnd) {
 
 // headless: TRUE when invoked from the command line (--apply-*); suppresses
 // informational popups, keeps error popups (message boxes work with hwnd
-// NULL). Returns 0 on success, 2 on failure (used as process exit code).
-static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
+// NULL). silent: additionally suppresses ALL popups (background/logon use —
+// errors are reported via the log and the exit code only).
+// Returns 0 on success, 2 on failure (used as process exit code).
+static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless, BOOL silent) {
     const WCHAR* targetPath = (target == SHELL_EX7) ? g_ex7Path
                                                     : g_nativePath;
 
     // 1. The target must exist BEFORE anything is stopped.
     if (!FileExists(targetPath)) {
         WCHAR msg[1300];
+        SwLog(L"switch to %s: target not found", targetPath);
         _snwprintf_s(msg, _countof(msg), _TRUNCATE,
                      TR(TR_ERR_NF_TARGET_FMT), targetPath);
-        MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                    MB_OK | MB_ICONERROR |
-                    (headless ? MB_SYSTEMMODAL : 0));
+        if (!silent)
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
+                        MB_OK | MB_ICONERROR |
+                        (headless ? MB_SYSTEMMODAL : 0));
         return 2;
     }
 
@@ -432,11 +549,13 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
     if (curKind == SHELL_OTHER) {
         // Safety: refuse to stop an unrecognized shell.
         WCHAR msg[1400];
+        SwLog(L"refusing to stop unrecognized shell owner %s", curPath);
         _snwprintf_s(msg, _countof(msg), _TRUNCATE,
                      TR(TR_ERR_REFUSED_FMT), curPath);
-        MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                    MB_OK | MB_ICONERROR |
-                    (headless ? MB_SYSTEMMODAL : 0));
+        if (!silent)
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
+                        MB_OK | MB_ICONERROR |
+                        (headless ? MB_SYSTEMMODAL : 0));
         return 2;
     }
 
@@ -450,6 +569,8 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
     }
 
     // 3. Stop the current shell (graceful, then terminate after timeout).
+    SwLog(L"switch: stopping shell pid %u (%s) -> %s",
+          pid, curPath, targetPath);
     HWND shellWnd = GetShellWindow();
     if (pid != 0)
         StopShellProcess(pid, shellWnd);
@@ -466,19 +587,25 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
     if (!LaunchExe(targetPath, &err, envLang)) {
         WCHAR msg[1500];
         failed = 1;
+        SwLog(L"switch: CreateProcess(%s) failed with error %lu",
+              targetPath, (unsigned long)err);
         if (target != SHELL_NATIVE && FileExists(g_nativePath)) {
             _snwprintf_s(msg, _countof(msg), _TRUNCATE,
                          TR(TR_ERR_START_EX7_FMT),
                          targetPath, (unsigned long)err);
-            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                        MB_OK | MB_ICONERROR | mbExtra);
+            if (!silent)
+                MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
+                            MB_OK | MB_ICONERROR | mbExtra);
             DWORD err2 = 0;
             if (!LaunchExe(g_nativePath, &err2, NULL)) {
+                SwLog(L"CRITICAL: native restore failed too (error %lu)",
+                      (unsigned long)err2);
                 _snwprintf_s(msg, _countof(msg), _TRUNCATE,
                              TR(TR_ERR_CRITICAL_FMT),
                              (unsigned long)err2, g_nativePath);
-                MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
-                            MB_OK | MB_ICONSTOP | mbExtra);
+                if (!silent)
+                    MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
+                                MB_OK | MB_ICONSTOP | mbExtra);
             } else {
                 failed = 2;  // native restored, but the requested switch failed
             }
@@ -488,14 +615,15 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
                 _snwprintf_s(msg, _countof(msg), _TRUNCATE,
                              TR(TR_ERR_START_NATIVE_FMT),
                              targetPath, (unsigned long)err, targetPath);
-                r = MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
+                r = silent ? IDOK :
+                    MessageBoxW(hwnd, msg, L"7explorer Shell Switcher",
                                 (headless ? MB_OK : MB_RETRYCANCEL) |
                                 MB_ICONERROR | mbExtra);
                 if (r == IDRETRY && LaunchExe(targetPath, &err, NULL)) {
                     failed = 0;
                     break;
                 }
-            } while (!headless && r == IDRETRY);
+            } while (!headless && !silent && r == IDRETRY);
         }
     }
 
@@ -512,9 +640,11 @@ static int DoSwitch(HWND hwnd, ShellKind target, BOOL headless) {
 }
 
 // --------------------------------------------------- startup folder ----
-// Optional login-time auto-switch: a link in the per-user Startup folder.
-// File-based only (C:\Users\<user>\...\Startup\7explorer-shell.lnk), no
-// registry, trivially removable. Requires CoInitialize by the caller path.
+// Optional login-time auto-switch FALLBACK (mechanism B in
+// docs/avvio-al-login.md): a link in the per-user Startup folder pointing
+// at this tool with --apply-ex7 --logon (robust retry + verification +
+// hotkey restart). File-based only, no registry, trivially removable.
+// Requires CoInitialize by the caller path.
 
 static BOOL StartupLinkPath(LPWSTR outPath, DWORD outChars) {
     WCHAR startup[MAX_PATH];
@@ -554,8 +684,8 @@ static HRESULT StartupSetPresence(BOOL present, DWORD* pWin32Err) {
                               IID_IShellLinkW, (void**)&sl);
         if (SUCCEEDED(hr)) {
             sl->SetPath(own);
-            sl->SetArguments(L"--apply-ex7");
-            sl->SetDescription(L"7explorer shell at logon");
+            sl->SetArguments(L"--apply-ex7 --logon");
+            sl->SetDescription(L"7explorer shell at logon (fallback)");
             IPersistFile* pf = NULL;
             hr = sl->QueryInterface(IID_IPersistFile, (void**)&pf);
             if (SUCCEEDED(hr)) {
@@ -575,6 +705,546 @@ static BOOL StartupIsPresent(void) {
     WCHAR linkPath[MAX_PATH];
     return StartupLinkPath(linkPath, (DWORD)_countof(linkPath)) &&
            FileExists(linkPath);
+}
+
+// ------------------------------------------- per-user Winlogon Shell -----
+// Mechanism (A) of the logon auto-start: the standard per-user shell value
+// HKCU\Software\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell. The
+// previous value is saved (type + raw bytes, i.e. byte-for-byte) and
+// restored on removal. A REG_SZ marker records the exact string we wrote so
+// "ours" detection never guesses. Nothing is ever written if the private
+// explorer.exe + wrp64.dll do not exist.
+
+// Read the raw Shell value. Returns TRUE when the value exists.
+static BOOL ReadShellRaw(BYTE* buf, DWORD bufCb, DWORD* pDataCb,
+                         DWORD* pType) {
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0, KEY_READ, &k)
+        != ERROR_SUCCESS)
+        return FALSE;
+    DWORD cb = bufCb, type = 0;
+    LONG r = RegQueryValueExW(k, kShellValue, NULL, &type, buf, &cb);
+    RegCloseKey(k);
+    if (r != ERROR_SUCCESS && r != ERROR_MORE_DATA)
+        return FALSE;
+    if (pDataCb) *pDataCb = cb;
+    if (pType) *pType = type;
+    return TRUE;
+}
+
+// Does the Shell value still contain exactly what we last wrote? The
+// marker value records our string verbatim, so detection never guesses.
+static BOOL MarkerMatchesShellValue(void) {
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0, KEY_READ, &k)
+        != ERROR_SUCCESS)
+        return FALSE;
+    WCHAR marker[1100];
+    DWORD cb = sizeof(marker);
+    BOOL ok = FALSE;
+    if (RegQueryValueExW(k, kMarkerValue, NULL, NULL, (LPBYTE)marker, &cb)
+        == ERROR_SUCCESS && cb >= 2) {
+        WCHAR shell[1100];
+        cb = sizeof(shell);
+        if (RegQueryValueExW(k, kShellValue, NULL, NULL, (LPBYTE)shell, &cb)
+            == ERROR_SUCCESS && cb >= 2)
+            ok = (lstrcmpiW(marker, shell) == 0);
+    }
+    RegCloseKey(k);
+    return ok;
+}
+
+// Save the current Shell value (type + bytes) into kBackupValue.
+// kShellBackupAbsent encodes "the value did not exist".
+static BOOL SaveShellBackup(void) {
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0, NULL, 0,
+                        KEY_READ | KEY_SET_VALUE, NULL, &k, NULL)
+        != ERROR_SUCCESS)
+        return FALSE;
+    BYTE buf[2048], blob[2048 + 16];
+    DWORD cb = 0, type = 0;
+    BOOL exists = ReadShellRaw(buf, sizeof(buf), &cb, &type);
+    if (exists && (cb > sizeof(buf) || cb < 2)) {
+        // oversized/garbage value: refuse to trade it away unsaved
+        SwLog(L"logon: previous Shell value too large (%lu bytes) - "
+              L"refusing to enable", (unsigned long)cb);
+        RegCloseKey(k);
+        return FALSE;
+    }
+    DWORD hdr[3];
+    hdr[0] = 1;  // format version
+    hdr[1] = exists ? cb : kShellBackupAbsent;
+    hdr[2] = type;
+    memcpy(blob, hdr, sizeof(hdr));
+    if (exists)
+        memcpy(blob + sizeof(hdr), buf, cb);
+    LONG r = RegSetValueExW(k, kBackupValue, 0, REG_BINARY, blob,
+                            sizeof(hdr) + (exists ? cb : 0));
+    RegCloseKey(k);
+    SwLog(L"logon: saved previous Shell value (%s, %lu bytes)",
+          exists ? L"present" : L"absent", exists ? (unsigned long)cb : 0UL);
+    return r == ERROR_SUCCESS;
+}
+
+// Write the per-user Shell value = private explorer.exe (quoted when the
+// path contains spaces, as Winlogon-style values are parsed with quotes).
+static BOOL WriteShellValue(LPCWSTR path, LPWSTR outWritten, DWORD outChars) {
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0, NULL, 0,
+                        KEY_READ | KEY_SET_VALUE, NULL, &k, NULL)
+        != ERROR_SUCCESS)
+        return FALSE;
+    WCHAR v[1100];
+    if (wcschr(path, L' '))
+        _snwprintf_s(v, _countof(v), _TRUNCATE, L"\"%s\"", path);
+    else
+        wcsncpy_s(v, _countof(v), path, _TRUNCATE);
+    LONG r = RegSetValueExW(k, kShellValue, 0, REG_SZ, (const BYTE*)v,
+                            (DWORD)((lstrlenW(v) + 1) * sizeof(WCHAR)));
+    BOOL ok = r == ERROR_SUCCESS;
+    if (ok) {
+        r = RegSetValueExW(k, kMarkerValue, 0, REG_SZ, (const BYTE*)v,
+                           (DWORD)((lstrlenW(v) + 1) * sizeof(WCHAR)));
+        ok = r == ERROR_SUCCESS;
+    }
+    RegCloseKey(k);
+    if (ok && outWritten)
+        wcsncpy_s(outWritten, outChars, v, _TRUNCATE);
+    SwLog(L"logon: HKCU Winlogon Shell = %s (%s)", v,
+          ok ? L"ok" : L"WRITE FAILED");
+    return ok;
+}
+
+// Restore the backed-up Shell value byte-for-byte (deleting it when it did
+// not exist before us). Returns TRUE when the value is ours no longer.
+static BOOL RestoreShellValue(void) {
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0,
+                      KEY_READ | KEY_SET_VALUE, &k) != ERROR_SUCCESS)
+        return FALSE;
+    BYTE blob[2048 + 16];
+    DWORD cb = sizeof(blob);
+    LONG r = RegQueryValueExW(k, kBackupValue, NULL, NULL, blob, &cb);
+    BOOL restored = FALSE;
+    if (r == ERROR_SUCCESS && cb >= sizeof(DWORD) * 3) {
+        DWORD* hdr = (DWORD*)blob;
+        if (hdr[0] == 1) {
+            if (hdr[1] == kShellBackupAbsent) {
+                restored = RegDeleteValueW(k, kShellValue) == ERROR_SUCCESS;
+                SwLog(L"logon: Shell value removed (it did not exist before)");
+            } else if (hdr[1] <= cb - sizeof(DWORD) * 3 &&
+                       hdr[1] <= 2048) {
+                restored = RegSetValueExW(k, kShellValue, 0, hdr[2],
+                                          blob + sizeof(DWORD) * 3,
+                                          hdr[1]) == ERROR_SUCCESS;
+                SwLog(L"logon: Shell value restored byte-for-byte "
+                      L"(%lu bytes, type %lu)", (unsigned long)hdr[1],
+                      (unsigned long)hdr[2]);
+            }
+        }
+    }
+    RegDeleteValueW(k, kMarkerValue);
+    RegDeleteValueW(k, kBackupValue);
+    RegCloseKey(k);
+    return restored;
+}
+
+// Enable mechanism (A). Files are validated FIRST: the value must never
+// point at a missing explorer.exe/wrp64.dll.
+static BOOL LogonRegistryEnable(LPWSTR pErr, DWORD errChars) {
+    pErr[0] = L'\0';
+    if (!FileExists(g_ex7Path)) {
+        _snwprintf_s(pErr, errChars, _TRUNCATE, L"%s", g_ex7Path);
+        return FALSE;
+    }
+    WCHAR wrp[1100];
+    wcsncpy_s(wrp, _countof(wrp), g_ex7Path, _TRUNCATE);
+    WCHAR* bs = wcsrchr(wrp, L'\\');
+    if (bs)
+        *bs = L'\0';
+    else
+        wrp[0] = L'\0';
+    lstrcatW(wrp, L"\\wrp64.dll");
+    if (!FileExists(wrp)) {
+        _snwprintf_s(pErr, errChars, _TRUNCATE, L"%s", wrp);
+        return FALSE;
+    }
+    if (!MarkerMatchesShellValue() && !SaveShellBackup())
+        return FALSE;  // never trade the old value away without a backup
+    WCHAR written[1100];
+    return WriteShellValue(g_ex7Path, written, (DWORD)_countof(written));
+}
+
+// Remove mechanism (A): restore the previous value. When the current value
+// is no longer the one we wrote (another tool owns it now), it is left
+// untouched and only our bookkeeping values are deleted.
+static BOOL LogonRegistryDisable(void) {
+    if (MarkerMatchesShellValue())
+        return RestoreShellValue();
+    SwLog(L"logon: Shell value changed by someone else - left untouched");
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0,
+                      KEY_READ | KEY_SET_VALUE, &k) == ERROR_SUCCESS) {
+        RegDeleteValueW(k, kMarkerValue);
+        RegDeleteValueW(k, kBackupValue);
+        RegCloseKey(k);
+    }
+    return TRUE;
+}
+
+static BOOL LogonRegistryActive(void) {
+    if (MarkerMatchesShellValue())
+        return TRUE;
+    // marker present but Shell changed externally: still "we are installed"
+    HKEY k;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, kWinlogonKey, 0, KEY_READ, &k)
+        != ERROR_SUCCESS)
+        return FALSE;
+    DWORD cb = 0;
+    LONG r = RegQueryValueExW(k, kMarkerValue, NULL, NULL, NULL, &cb);
+    RegCloseKey(k);
+    return r == ERROR_SUCCESS;
+}
+
+// ------------------------------------- scheduled recovery task (COM) ----
+// Per-user, no elevation: LogonTrigger (30 s delay) + ExecAction running
+// this executable with --recover-login. Created while the logon auto-start
+// is enabled; removed when it is disabled (and it removes itself if it ever
+// has to restore the previous shell). See docs/avvio-al-login.md.
+
+// COM apartment helper: safe on any thread (balanced CoUninitialize).
+static BOOL ComApartmentInit(BOOL* pUninit) {
+    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    *pUninit = SUCCEEDED(hr);  // S_FALSE still needs the matching uninit
+    return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
+}
+
+static BOOL TaskComInit(ITaskService** pSvc) {
+    HRESULT hr = CoCreateInstance(CLSID_TaskScheduler, NULL,
+                                  CLSCTX_INPROC_SERVER, IID_ITaskService,
+                                  (void**)pSvc);
+    if (FAILED(hr)) { SwLog(L"recovery task: CoCreateInstance hr=0x%08X", (DWORD)hr); return FALSE; }
+    VARIANT v1, v2, v3, v4;
+    VariantInit(&v1); VariantInit(&v2); VariantInit(&v3); VariantInit(&v4);
+    hr = (*pSvc)->Connect(v1, v2, v3, v4);
+    if (FAILED(hr)) {
+        SwLog(L"recovery task: Connect hr=0x%08X", (DWORD)hr);
+        (*pSvc)->Release();
+        *pSvc = NULL;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static BOOL RecoveryTaskExistsInner(void) {
+    ITaskService* svc = NULL;
+    if (!TaskComInit(&svc)) return FALSE;
+    ITaskFolder* root = NULL;
+    BOOL found = FALSE;
+    BSTR broot = SysAllocString(L"\\");
+    BSTR bname = SysAllocString(kRecoveryTaskName);
+    if (broot && bname && SUCCEEDED(svc->GetFolder(broot, &root)) && root) {
+        IRegisteredTask* t = NULL;
+        if (SUCCEEDED(root->GetTask(bname, &t)) && t) {
+            found = TRUE;
+            t->Release();
+        }
+        root->Release();
+    }
+    SysFreeString(broot);
+    SysFreeString(bname);
+    svc->Release();
+    return found;
+}
+
+static BOOL RecoveryTaskExists(void) {
+    BOOL uninit = FALSE, ok = FALSE;
+    if (ComApartmentInit(&uninit))
+        ok = RecoveryTaskExistsInner();
+    if (uninit) CoUninitialize();
+    return ok;
+}
+
+static BOOL RecoveryTaskInstallInner(LPWSTR pErr, DWORD errChars) {
+    HRESULT hr = E_FAIL;
+    ITaskService* svc = NULL;
+    ITaskFolder* root = NULL;
+    ITaskDefinition* def = NULL;
+    IRegisteredTask* regd = NULL;
+    BOOL ok = FALSE;
+    pErr[0] = L'\0';
+    if (!TaskComInit(&svc)) { _snwprintf_s(pErr, errChars, _TRUNCATE, L"COM"); return FALSE; }
+    BSTR broot = SysAllocString(L"\\");
+    BSTR bname = SysAllocString(kRecoveryTaskName);
+    BSTR bpath = NULL, bargs = NULL, bdelay = NULL, blimit = NULL;
+    WCHAR own[MAX_PATH];
+    GetModuleFileNameW(NULL, own, MAX_PATH);
+    do {
+        if (!broot || !bname) break;
+        if (FAILED(hr = svc->GetFolder(broot, &root))) break;
+        if (FAILED(hr = root->NewTask(0, &def))) break;
+        ITriggerCollection* trigs = NULL;
+        if (FAILED(hr = def->get_Triggers(&trigs))) break;
+        ITrigger* trig = NULL;
+        hr = trigs->Create(TASK_TRIGGER_LOGON, &trig);
+        trigs->Release();
+        if (FAILED(hr)) break;
+        ILogonTrigger* lt = NULL;
+        hr = trig->QueryInterface(IID_ILogonTrigger, (void**)&lt);
+        trig->Release();
+        if (FAILED(hr)) break;
+        bdelay = SysAllocString(L"PT30S");
+        if (bdelay) lt->put_Delay(bdelay);
+        lt->Release();
+        IActionCollection* acts = NULL;
+        if (FAILED(hr = def->get_Actions(&acts))) break;
+        IAction* act = NULL;
+        hr = acts->Create(TASK_ACTION_EXEC, &act);
+        acts->Release();
+        if (FAILED(hr)) break;
+        IExecAction* ea = NULL;
+        hr = act->QueryInterface(IID_IExecAction, (void**)&ea);
+        act->Release();
+        if (FAILED(hr)) break;
+        bpath = SysAllocString(own);
+        bargs = SysAllocString(L"--recover-login");
+        hr = ea->put_Path(bpath);
+        if (SUCCEEDED(hr)) hr = ea->put_Arguments(bargs);
+        ea->Release();
+        if (FAILED(hr)) break;
+        IPrincipal* prin = NULL;
+        if (FAILED(hr = def->get_Principal(&prin))) break;
+        prin->put_LogonType(TASK_LOGON_INTERACTIVE_TOKEN);
+        prin->put_RunLevel(TASK_RUNLEVEL_LUA);
+        prin->Release();
+        ITaskSettings* set = NULL;
+        if (FAILED(hr = def->get_Settings(&set))) break;
+        set->put_StartWhenAvailable(VARIANT_TRUE);
+        blimit = SysAllocString(L"PT10M");
+        if (blimit) set->put_ExecutionTimeLimit(blimit);
+        set->put_DisallowStartIfOnBatteries(VARIANT_FALSE);
+        set->put_StopIfGoingOnBatteries(VARIANT_FALSE);
+        set->put_MultipleInstances(TASK_INSTANCES_IGNORE_NEW);
+        set->Release();
+        VARIANT v1, v2;
+        VariantInit(&v1); VariantInit(&v2);
+        hr = root->RegisterTaskDefinition(bname, def, TASK_CREATE_OR_UPDATE,
+                                          v1, v2, TASK_LOGON_INTERACTIVE_TOKEN,
+                                          v1, &regd);
+        if (SUCCEEDED(hr)) ok = TRUE;
+    } while (0);
+    if (regd) regd->Release();
+    if (def) def->Release();
+    if (root) root->Release();
+    svc->Release();
+    SysFreeString(broot);
+    SysFreeString(bname);
+    SysFreeString(bpath);
+    SysFreeString(bargs);
+    SysFreeString(bdelay);
+    SysFreeString(blimit);
+    if (!ok)
+        _snwprintf_s(pErr, errChars, _TRUNCATE, L"hr=0x%08X", (DWORD)hr);
+    SwLog(L"recovery task: install %s (%s)", ok ? L"ok" : L"FAILED", pErr);
+    return ok;
+}
+
+static BOOL RecoveryTaskInstall(LPWSTR pErr, DWORD errChars) {
+    BOOL uninit = FALSE, ok = FALSE;
+    if (ComApartmentInit(&uninit))
+        ok = RecoveryTaskInstallInner(pErr, errChars);
+    if (uninit) CoUninitialize();
+    return ok;
+}
+
+static BOOL RecoveryTaskRemoveInner(void) {
+    ITaskService* svc = NULL;
+    if (!TaskComInit(&svc)) return FALSE;
+    ITaskFolder* root = NULL;
+    BOOL ok = FALSE;
+    BSTR broot = SysAllocString(L"\\");
+    BSTR bname = SysAllocString(kRecoveryTaskName);
+    if (broot && bname && SUCCEEDED(svc->GetFolder(broot, &root)) && root) {
+        HRESULT hr = root->DeleteTask(bname, 0);
+        ok = SUCCEEDED(hr) || hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        SwLog(L"recovery task: remove %s", ok ? L"ok" : L"FAILED");
+        root->Release();
+    }
+    SysFreeString(broot);
+    SysFreeString(bname);
+    svc->Release();
+    return ok;
+}
+
+static BOOL RecoveryTaskRemove(void) {
+    BOOL uninit = FALSE, ok = FALSE;
+    if (ComApartmentInit(&uninit))
+        ok = RecoveryTaskRemoveInner();
+    if (uninit) CoUninitialize();
+    return ok;
+}
+
+// ------------------------------------------------- logon auto-start -----
+// The checkbox = all three mechanisms together (registry + fallback link +
+// recovery task). Each step is undone on disable; nothing is left behind.
+
+static BOOL LogonAutoStartPresent(void) {
+    return LogonRegistryActive() || StartupIsPresent() ||
+           RecoveryTaskExists();
+}
+
+// Enable. Returns 0 = ok, 2 = refused (missing files, nothing changed),
+// 3 = registry set but the recovery task could not be registered.
+static int LogonAutoStartEnable(LPWSTR pDetail, DWORD detailChars,
+                                DWORD* pTaskErr) {
+    pDetail[0] = L'\0';
+    if (pTaskErr) *pTaskErr = 0;
+    // 1. validate: explorer.exe + wrp64.dll must exist
+    if (!LogonRegistryEnable(pDetail, detailChars)) {
+        SwLog(L"logon enable: validation failed (%s)", pDetail);
+        return 2;
+    }
+    // 2. recovery task (safety net first: never have (A) without it)
+    WCHAR taskErr[64];
+    BOOL taskOk = RecoveryTaskInstall(taskErr, (DWORD)_countof(taskErr));
+    if (!taskOk && pTaskErr) {
+        // taskErr looks like "hr=0x80070005" (or "COM"): extract the hex
+        const WCHAR* hx = wcsrchr(taskErr, L'x');
+        *pTaskErr = hx ? (DWORD)wcstoul(hx + 1, NULL, 16) : 0;
+    }
+    // 3. fallback link
+    DWORD le = 0;
+    BOOL linkOk = SUCCEEDED(StartupSetPresence(TRUE, &le));
+    if (!linkOk)
+        SwLog(L"logon enable: startup link failed (error %lu)",
+              (unsigned long)le);
+    SwLog(L"logon enable: registry ok, task %s, link %s",
+          taskOk ? L"ok" : L"FAILED", linkOk ? L"ok" : L"FAILED");
+    return taskOk ? 0 : 3;
+}
+
+static void LogonAutoStartDisable(void) {
+    LogonRegistryDisable();
+    RecoveryTaskRemove();
+    DWORD e = 0;
+    StartupSetPresence(FALSE, &e);
+    SwLog(L"logon disable: complete (registry restored, task and link removed)");
+}
+
+// --------------------------------------- robust logon --apply-ex7 -------
+// Used by the Startup-folder link (--apply-ex7 --logon) and by plain
+// --apply-ex7. The switch is attempted and then VERIFIED (the shell window
+// owner must really be the private explorer); on failure it retries with
+// backoff for about a minute. On success the --hotkey resident is (re)
+// started. kApplyRunningMutex tells --recover-login that a switch is still
+// being attempted, so the recovery task does not fight it.
+
+static BOOL ApplyMutexHold(HANDLE* pMutex) {
+    HANDLE m = CreateMutexW(NULL, TRUE, kApplyRunningMutex);
+    *pMutex = m;
+    return m != NULL && GetLastError() != ERROR_ALREADY_EXISTS;
+}
+
+static int ApplyEx7Robust(BOOL fromLogonLink) {
+    static const DWORD waitMs[] = { 5000, 10000, 15000, 20000, 25000 };
+    const DWORD totalMs = 60000;
+    DWORD spent = 0;
+    int rc = 2;
+    SwLog(L"apply-ex7 (%s): target %s",
+          fromLogonLink ? L"logon link" : L"manual",
+          g_ex7Path);
+    HANDLE mutex = NULL;
+    BOOL ownMutex = fromLogonLink && ApplyMutexHold(&mutex);
+    for (int attempt = 1; ; attempt++) {
+        WCHAR path[1024];
+        DWORD pid = 0;
+        ShellKind k = DetectCurrentShell(path, (DWORD)_countof(path), &pid);
+        if (k == SHELL_EX7 && pid != 0) {
+            SwLog(L"apply-ex7: verified, shell pid %u (%s)", pid, path);
+            rc = 0;
+            break;
+        }
+        if (!FileExists(g_ex7Path)) {
+            SwLog(L"apply-ex7: target missing, not retrying");
+            rc = 2;
+            break;
+        }
+        if (attempt > 1)
+            SwLog(L"apply-ex7: attempt %d (shell is %s), retrying",
+                  attempt, KindName(k));
+        rc = DoSwitch(NULL, SHELL_EX7, TRUE, fromLogonLink /*silent*/);
+        // verification happens at the top of the next iteration
+        if (spent >= totalMs)
+            break;
+        int wi = attempt - 1;
+        if (wi > (int)_countof(waitMs) - 1)
+            wi = (int)_countof(waitMs) - 1;
+        DWORD w = waitMs[wi];
+        if (spent + w > totalMs)
+            w = totalMs - spent;
+        Sleep(w);
+        spent += w;
+    }
+    if (rc == 0)
+        EnsureHotkeyResident();  // Ctrl+Alt+Shift+S alive after every switch
+    else
+        SwLog(L"apply-ex7: giving up after ~%lu ms (rc=%d)",
+              (unsigned long)spent, rc);
+    if (ownMutex && mutex)
+        ReleaseMutex(mutex);
+    if (mutex)
+        CloseHandle(mutex);
+    return rc;
+}
+
+// ---------------------------------------------- --recover-login ---------
+// Body of the scheduled recovery task (runs ~30 s after logon, per-user,
+// no UI). If the private shell is alive: nothing to do (the task stays for
+// the next logon; wrp64.dll has already restarted the hotkey resident).
+// Otherwise: make sure SOME shell is running, restore the previous Shell
+// value, remove this task, restart the hotkey resident.
+static int RecoverLogin(void) {
+    SwLog(L"recover-login: start (checking the private shell)");
+    for (int i = 0; i < 5; i++) {  // ~10 s of grace past the 30 s delay
+        WCHAR path[1024];
+        DWORD pid = 0;
+        ShellKind k = DetectCurrentShell(path, (DWORD)_countof(path), &pid);
+        if (k == SHELL_EX7 && pid != 0) {
+            SwLog(L"recover-login: private shell alive (pid %u) - ok", pid);
+            return 0;  // keep the task armed for the next logon
+        }
+        // a Startup-link switch may still be retrying: do not fight it
+        HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, kApplyRunningMutex);
+        if (m) {
+            SwLog(L"recover-login: logon switch still in progress - ok");
+            CloseHandle(m);
+            return 0;
+        }
+        Sleep(2000);
+    }
+    WCHAR path[1024];
+    DWORD pid = 0;
+    ShellKind k = DetectCurrentShell(path, (DWORD)_countof(path), &pid);
+    if (k == SHELL_NONE) {
+        // nothing owns the desktop: start the native shell right now
+        DWORD err = 0;
+        if (LaunchExe(g_nativePath, &err, NULL))
+            SwLog(L"recover-login: no shell at all - native started");
+        else
+            SwLog(L"recover-login: no shell at all, native start FAILED"
+                  L" (error %lu) - manual recovery: Task Manager -> Run"
+                  L" new task -> explorer.exe", (unsigned long)err);
+    } else {
+        SwLog(L"recover-login: shell is not the private one (%s) - "
+              L"restoring the previous configuration", path);
+    }
+    LogonRegistryDisable();   // byte-for-byte restore of the Shell value
+    RecoveryTaskRemove();     // this task self-eliminates
+    EnsureHotkeyResident();   // Ctrl+Alt+Shift+S works from now on
+    SwLog(L"recover-login: done (auto-start disabled; the Startup link, if "
+          L"present, keeps trying as plain fallback)");
+    return 0;
 }
 
 
@@ -713,19 +1383,19 @@ static void OnCreate(HWND hwnd) {
               470, 140, 82, 22, IDC_BTN_BROWSE);
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_THEME),
               BS_PUSHBUTTON | WS_TABSTOP,
-              330, 286, 96, 22, IDC_BTN_THEME);
+              330, 290, 96, 22, IDC_BTN_THEME);
     MakeChild(hwnd, WC_BUTTONW, TR(TR_CHK_LOGIN),
-              BS_AUTOCHECKBOX | WS_TABSTOP,
-              26, 176, 524, 20, IDC_CHK_LOGIN);
+              BS_AUTOCHECKBOX | BS_MULTILINE | WS_TABSTOP,
+              26, 172, 524, 30, IDC_CHK_LOGIN);
 
     MakeChild(hwnd, WC_STATICW, L"\u2026",
-              SS_LEFT, 26, 202, 524, 34, IDC_ST_CURRENT);
+              SS_LEFT, 26, 208, 524, 34, IDC_ST_CURRENT);
     MakeChild(hwnd, WC_STATICW, L"\u2026",
-              SS_LEFT, 26, 242, 524, 34, IDC_ST_TARGET);
+              SS_LEFT, 26, 248, 524, 34, IDC_ST_TARGET);
 
     HWND cbo = MakeChild(hwnd, WC_COMBOBOXW, NULL,
                          CBS_DROPDOWNLIST | WS_VSCROLL,
-                         26, 286, 280, 140, IDC_CBO_SHLANG);
+                         26, 290, 280, 140, IDC_CBO_SHLANG);
     SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_SYS));
     SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_EN));
     SendMessageW(cbo, CB_ADDSTRING, 0, (LPARAM)TR(TR_CBO_IT));
@@ -733,10 +1403,10 @@ static void OnCreate(HWND hwnd) {
 
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_SWITCH),
               BS_DEFPUSHBUTTON | WS_TABSTOP,
-              330, 316, 100, 28, IDC_BTN_SWITCH);
+              330, 322, 100, 28, IDC_BTN_SWITCH);
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_CANCEL),
               BS_PUSHBUTTON | WS_TABSTOP,
-              440, 316, 100, 28, IDC_BTN_CANCEL);
+              440, 322, 100, 28, IDC_BTN_CANCEL);
 
     // Initial state: select the OTHER shell as the target, so a first
     // "Switch" actually changes something.
@@ -747,7 +1417,7 @@ static void OnCreate(HWND hwnd) {
     RefreshStatus(hwnd);
     UpdateTargetLabel(hwnd);
     CheckDlgButton(hwnd, IDC_CHK_LOGIN,
-                   StartupIsPresent() ? BST_CHECKED : BST_UNCHECKED);
+                   LogonAutoStartPresent() ? BST_CHECKED : BST_UNCHECKED);
 
     SetTimer(hwnd, 1, REFRESH_TIMER_MS, NULL);
 }
@@ -776,7 +1446,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
                     L"7explorer Shell Switcher",
                     MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES)
                 return 0;
-            (void)DoSwitch(hwnd, SelectedTarget(hwnd), FALSE);
+            (void)DoSwitch(hwnd, SelectedTarget(hwnd), FALSE, FALSE);
             return 0;
         }
 
@@ -794,25 +1464,42 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam,
             if (HIWORD(wParam) == BN_CLICKED) {
                 BOOL want = (IsDlgButtonChecked(hwnd, IDC_CHK_LOGIN) ==
                              BST_CHECKED);
-                DWORD e = 0;
-                HRESULT hr = StartupSetPresence(want, &e);
-                if (FAILED(hr)) {
-                    WCHAR m[700];
-                    _snwprintf_s(m, _countof(m), _TRUNCATE,
-                                 TR(TR_ERR_STARTUPLINK_FMT),
-                                 want ? (g_uiItalian ? L"creare" : L"create")
-                                      : (g_uiItalian ? L"rimuovere" : L"remove"),
-                                 (unsigned long)e);
-                    MessageBoxW(hwnd, m, L"7explorer Shell Switcher",
-                                MB_OK | MB_ICONERROR);
-                    CheckDlgButton(hwnd, IDC_CHK_LOGIN,
-                                   StartupIsPresent() ? BST_CHECKED
-                                                      : BST_UNCHECKED);
-                } else if (want) {
-                    MessageBoxW(hwnd, TR(TR_INFO_STARTUP_OK),
-                        L"7explorer Shell Switcher",
-                        MB_OK | MB_ICONINFORMATION);
+                if (want) {
+                    WCHAR detail[1100];
+                    DWORD taskErr = 0;
+                    int rc = LogonAutoStartEnable(detail,
+                                                  (DWORD)_countof(detail),
+                                                  &taskErr);
+                    if (rc == 2) {
+                        // refused: missing explorer.exe/wrp64.dll — nothing
+                        // was changed
+                        WCHAR m[1400];
+                        _snwprintf_s(m, _countof(m), _TRUNCATE,
+                                     TR(TR_ERR_LOGON_VALIDATE_FMT), detail);
+                        MessageBoxW(hwnd, m, L"7explorer Shell Switcher",
+                                    MB_OK | MB_ICONERROR);
+                    } else if (rc == 3) {
+                        // Shell value + link OK, recovery task NOT registered
+                        WCHAR m[900];
+                        _snwprintf_s(m, _countof(m), _TRUNCATE,
+                                     TR(TR_ERR_LOGON_TASK_FMT),
+                                     (unsigned long)taskErr);
+                        MessageBoxW(hwnd, m, L"7explorer Shell Switcher",
+                                    MB_OK | MB_ICONWARNING);
+                    } else {
+                        MessageBoxW(hwnd, TR(TR_INFO_STARTUP_OK),
+                                    L"7explorer Shell Switcher",
+                                    MB_OK | MB_ICONINFORMATION);
+                    }
+                } else {
+                    LogonAutoStartDisable();
+                    MessageBoxW(hwnd, TR(TR_INFO_LOGON_OFF),
+                                L"7explorer Shell Switcher",
+                                MB_OK | MB_ICONINFORMATION);
                 }
+                CheckDlgButton(hwnd, IDC_CHK_LOGIN,
+                               LogonAutoStartPresent() ? BST_CHECKED
+                                                       : BST_UNCHECKED);
             }
             return 0;
 
@@ -905,34 +1592,55 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ResolveShellPaths();
 
     // Command-line modes (used by the Startup-folder link / scripts):
-    //   --apply-ex7        apply Explorer7 as shell, no confirm dialog
+    //   --apply-ex7        apply Explorer7 as shell (verified, retries for
+    //                      ~60 s, restarts the hotkey resident)
+    //   --logon            modifier for --apply-ex7: running from the logon
+    //                      link -> fully silent, log-only errors
     //   --apply-native     apply the native shell, no confirm dialog
-    //   --install-login    create the Startup-folder link
-    //   --uninstall-login  remove the Startup-folder link
+    //   --install-login    create the Startup-folder link ONLY (fallback
+    //                      mechanism B: zero registry changes)
+    //   --uninstall-login  remove the whole logon auto-start (restores the
+    //                      previous Shell value, deletes link + task)
+    //   --hotkey           resident Ctrl+Alt+Shift+S instance
+    //   --recover-login    body of the recovery task (no UI)
     {
         int argc = 0;
         LPWSTR* argv =
             lpCmdLine && *lpCmdLine ? CommandLineToArgvW(GetCommandLineW(), &argc)
                                     : NULL;
-        int mode = 0;  // 0=GUI, 1=ex7, 2=native, 3=install, 4=uninstall
+        int mode = 0;   // 0=GUI, 1=ex7, 2=native, 3=install, 4=uninstall,
+                        // 5=hotkey, 6=recover
+        BOOL logonLink = FALSE;
         for (int i = 1; i < argc; i++) {
             if (!lstrcmpiW(argv[i], L"--apply-ex7"))        mode = 1;
             else if (!lstrcmpiW(argv[i], L"--apply-native"))   mode = 2;
             else if (!lstrcmpiW(argv[i], L"--install-login"))  mode = 3;
             else if (!lstrcmpiW(argv[i], L"--uninstall-login"))mode = 4;
             else if (!lstrcmpiW(argv[i], L"--hotkey"))         mode = 5;
+            else if (!lstrcmpiW(argv[i], L"--recover-login"))  mode = 6;
+            else if (!lstrcmpiW(argv[i], L"--logon"))          logonLink = TRUE;
             else if (!lstrcmpiW(argv[i], L"--lang=it"))        g_uiItalian = TRUE;
             else if (!lstrcmpiW(argv[i], L"--lang=en"))        g_uiItalian = FALSE;
         }
         if (argv) LocalFree(argv);
 
+        SwLog(L"started (mode %d%s)", mode, logonLink ? L", logon link" : L"");
         if (mode == 5)
             return RunHotkeyResident();
-        if (mode == 1 || mode == 2)
-            return DoSwitch(NULL, mode == 1 ? SHELL_EX7 : SHELL_NATIVE, TRUE);
-        if (mode == 3 || mode == 4) {
+        if (mode == 6)
+            return RecoverLogin();
+        if (mode == 1)
+            return ApplyEx7Robust(logonLink);
+        if (mode == 2) {
+            int rc = DoSwitch(NULL, SHELL_NATIVE, TRUE, FALSE);
+            if (rc == 0)
+                EnsureHotkeyResident();  // the shortcut must survive too
+            return rc;
+        }
+        if (mode == 3) {
+            // mechanism B only: plain Startup link, zero registry changes
             DWORD e = 0;
-            HRESULT hr = StartupSetPresence(mode == 3, &e);
+            HRESULT hr = StartupSetPresence(TRUE, &e);
             if (FAILED(hr)) {
                 WCHAR m[512];
                 _snwprintf_s(m, _countof(m), _TRUNCATE,
@@ -942,6 +1650,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                             MB_OK | MB_ICONERROR | MB_SYSTEMMODAL);
                 return 2;
             }
+            SwLog(L"--install-login: fallback link created (registry untouched)");
+            return 0;
+        }
+        if (mode == 4) {
+            // full removal, exactly like unchecking the box
+            LogonAutoStartDisable();
             return 0;
         }
     }
