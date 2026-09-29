@@ -213,6 +213,10 @@ void TryRemapExec(ExecCtx* c)
 	}
 }
 
+bool IsMsSettings(LPCWSTR f);
+DWORD OsBuild();
+BOOL ActivateSettingsFallback(LPCWSTR uri);
+
 BOOL WINAPI ShellExecuteExW_Hook(SHELLEXECUTEINFOW* sei)
 {
 	ExecCtx c = { sei, FALSE, FALSE };
