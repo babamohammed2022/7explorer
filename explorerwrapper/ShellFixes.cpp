@@ -195,22 +195,21 @@ BOOL LaunchSettingsUri(const wchar_t* uri, HWND hwnd)
 
 BOOL LaunchRemap(const Remap* r, HWND hwnd, int nShow)
 {
-	// "Customize..." (taskbar properties + overflow): hardcoded built-in
-	// window driving explorer's own ITrayNotify. NotifyIconsUseSettings:
-	// 0 = built-in (default), 1 = Settings, 2 = system page (old behaviour).
-	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid) &&
-		ReadAdvancedDword(L"NotifyIconsUseSettings", 0) == 0) {
-		bool ok = ShowNotifyIconsDialog();
-		LogLine(L"[ex7][notifyicons] built-in dialog started=%d", ok ? 1 : 0);
-		if (ok) return TRUE;
-	}
-	// Windows 11 24H2 removed the Notification Area Icons page: explorer
-	// "succeeds" but nothing appears. Go straight to Settings there.
-	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid) &&
-		(OsBuild() >= 26100 || !ClsidRegistered(kNotifyIconsClsid) ||
-		 ReadAdvancedDword(L"NotifyIconsUseSettings", 0) == 1)) {
-		LogLine(L"[ex7] notification icons page unavailable on build %u: using %s", OsBuild(), r->fallbackUri);
-		return LaunchSettingsUri(r->fallbackUri, hwnd);
+	// "Customize..." (taskbar properties + overflow). NotifyIconsUseSettings:
+	// 0 = auto (default): the system "Notification Area Icons" page when its
+	//     CLSID is registered (it still exists on 24H2/25H2 - test29 wrongly
+	//     assumed it was removed), otherwise the built-in window;
+	// 1 = Settings, 2 = system page only, 3 = built-in window always.
+	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid)) {
+		DWORD mode = ReadAdvancedDword(L"NotifyIconsUseSettings", 0);
+		bool pageOk = ClsidRegistered(kNotifyIconsClsid);
+		LogLine(L"[ex7][notifyicons] mode=%u page registered=%d build=%u", mode, pageOk, OsBuild());
+		if (mode == 3 || (mode == 0 && !pageOk)) {
+			bool ok = ShowNotifyIconsDialog();
+			LogLine(L"[ex7][notifyicons] built-in dialog started=%d", ok ? 1 : 0);
+			if (ok) return TRUE;
+		}
+		if (mode == 1 || (!pageOk && mode != 2)) return LaunchSettingsUri(r->fallbackUri, hwnd);
 	}
 	wchar_t explorer[MAX_PATH];
 	if (!ExpandEnvironmentStringsW(L"%SystemRoot%\\explorer.exe", explorer, MAX_PATH))
@@ -1560,7 +1559,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test30), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test31), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);

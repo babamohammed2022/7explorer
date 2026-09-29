@@ -195,8 +195,16 @@ HRESULT STDMETHODCALLTYPE Open_Hook(IOpenControlPanel* self, LPCWSTR name, LPCWS
 		LogText(l);
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) { mine = false; }
-	if (mine && ReadAdvancedDwordPublic(L"NotifyIconsUseSettings", 0) == 0 && ShowNotifyIconsDialog()) return S_OK;
-	return g_origOpen(self, name, page, site);
+	// The system page is used when it exists (it does on 24H2/25H2); the
+	// built-in window only if Open fails or NotifyIconsUseSettings=3.
+	DWORD mode = mine ? ReadAdvancedDwordPublic(L"NotifyIconsUseSettings", 0) : 0;
+	if (mine && mode == 3 && ShowNotifyIconsDialog()) return S_OK;
+	HRESULT hr = g_origOpen(self, name, page, site);
+	if (mine) {
+		wchar_t l[120]; wnsprintfW(l, 120, L"[ex7] IOpenControlPanel::Open hr=0x%08X", (DWORD)hr); LogText(l);
+		if (FAILED(hr) && mode == 0 && ShowNotifyIconsDialog()) return S_OK;
+	}
+	return hr;
 }
 
 void InstallOpenUnsafe()
