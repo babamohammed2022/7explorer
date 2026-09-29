@@ -607,8 +607,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	{
 		PatchShunimpl();
 
-		if (GetFileAttributesW((LPCWSTR)blacklistPath) != INVALID_FILE_ATTRIBUTES) // Windowblinds blockage part 1 - create user-facing error
-			CrashError(); // The user-facing crash message - we do these blocks of code like this, so that the 0xc0000142 error doesn't appear
+		// 7explorer fork: WindowBlinds block removed (no technical conflict) // The user-facing crash message - we do these blocks of code like this, so that the 0xc0000142 error doesn't appear
 
 		/*if (g_osVersion.BuildNumber() >= 26100)
 		{
@@ -657,8 +656,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 			g_alttabhooked = TRUE;
 		}
 
-		if (GetFileAttributes((LPCWSTR)blacklistPath) != INVALID_FILE_ATTRIBUTES) // Windowblinds blockage part 2 - actually stops the program from running
-			ExitExplorerSilently(); //byebye WB users
+		// 7explorer fork: WindowBlinds block removed (no technical conflict) //byebye WB users
 
 	}
 	break;

@@ -998,6 +998,55 @@ void InstallExitTracing()
 	LogLine(L"[ex7] start-up: dxgi.dll=%s (ExplorerPatcher uses C:\\Windows\\dxgi.dll)", dp);
 }
 
+// ---- ExplorerIsShell (test23)
+// Win7 explorer!ShouldStartDesktopAndTray -> ExplorerIsShell reads
+// GetPrivateProfileStringW("boot", "shell", ..., "system.ini"), which the
+// IniFileMapping redirects to Winlogon\Shell (HKCU first, then HKLM), and
+// compares its file name with its own ("explorer.exe"). When Shell names
+// another program (a launcher, a per-user override...), the Win7 explorer
+// runs as a folder window and exits with code 1: the black screen.
+// We answer with our own file name, so the decision is left to the other
+// check (no desktop window already present). Opt-out: ForceExplorerIsShell=0.
+typedef DWORD (WINAPI *GPPS_t)(LPCWSTR, LPCWSTR, LPCWSTR, LPWSTR, DWORD, LPCWSTR);
+GPPS_t g_origGPPS = nullptr;
+
+DWORD WINAPI GPPS_Hook(LPCWSTR app, LPCWSTR key, LPCWSTR def, LPWSTR out, DWORD cch, LPCWSTR file)
+{
+	DWORD r = g_origGPPS(app, key, def, out, cch, file);
+	__try {
+		if (app && key && file && out && cch > 1 && !lstrcmpiW(app, L"boot") && !lstrcmpiW(key, L"shell") &&
+			StrStrIW(file, L"system.ini")) {
+			wchar_t self[MAX_PATH]; GetModuleFileNameW(nullptr, self, MAX_PATH);
+			const wchar_t* name = PathFindFileNameW(self);
+			wchar_t cur[MAX_PATH]; lstrcpynW(cur, out, MAX_PATH);
+			PathRemoveArgsW(cur); PathRemoveBlanksW(cur);
+			if (StrCmpNIW(PathFindFileNameW(cur), name, lstrlenW(name)) != 0) {
+				LogLine(L"[ex7] ExplorerIsShell: Shell=\"%s\" is not %s -> answering %s (Win7 explorer would exit as folder window)", out, name, name);
+				lstrcpynW(out, name, cch);
+				r = lstrlenW(out);
+			} else {
+				LogLine(L"[ex7] ExplorerIsShell: Shell=\"%s\" ok", out);
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return r;
+}
+
+void InstallExplorerIsShellFix()
+{
+	if (ReadAdvancedDword(L"ForceExplorerIsShell", 1) == 0) return;
+	g_origGPPS = (GPPS_t)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetPrivateProfileStringW");
+	if (!g_origGPPS) return;
+	HMODULE exe = GetModuleHandleW(nullptr);
+	ChangeImportedAddress(exe, (LPSTR)"KERNEL32.dll", (FARPROC)g_origGPPS, (FARPROC)GPPS_Hook);
+	FARPROC kb = GetProcAddress(GetModuleHandleW(L"kernelbase.dll"), "GetPrivateProfileStringW");
+	if (kb && kb != (FARPROC)g_origGPPS) ChangeImportedAddress(exe, (LPSTR)"KERNEL32.dll", kb, (FARPROC)GPPS_Hook);
+	wchar_t hk[MAX_PATH] = L"-"; DWORD cb = sizeof(hk);
+	RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", L"Shell", RRF_RT_REG_SZ, nullptr, hk, &cb);
+	LogLine(L"[ex7] ExplorerIsShell fix installed (HKCU Winlogon Shell=%s)", hk);
+}
+
 void DirOf(wchar_t* p) { PathRemoveFileSpecW(p); lstrcatW(p, L"\\"); }
 
 void InstallInjectionGuard()
@@ -1050,7 +1099,8 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test22), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test23), pid %u ----", GetCurrentProcessId());
+	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
