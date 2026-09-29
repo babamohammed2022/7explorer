@@ -4,6 +4,7 @@
 
 
 explorer7 is a **wrapper library** that allows Windows 7's explorer.exe to run properly on modern Windows versions, aiming to resurrect the original Windows 7 shell experience.
+Note: this fork is independent from the original project. The original is GPL-3.0 licensed and this one is too.
 
 > **This fork — self-contained bootstrap + progetto di localizzazione integrato**
 > This fork adds `installer/ex7selfcontained` (download-verifica-patch-localizza
