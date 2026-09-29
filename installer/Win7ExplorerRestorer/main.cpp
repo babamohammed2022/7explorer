@@ -29,6 +29,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <exception>
 #include <string>
 #include <vector>
 
@@ -203,7 +204,7 @@ int SelfTestImportPatch(const std::wstring& input) {
 
 } // namespace
 
-int wmain(int argc, wchar_t** argv) {
+int Run(int argc, wchar_t** argv) {
     bool offline = false, skipSig = false;
     for (int i = 1; i < argc; ++i) {
         std::wstring a = argv[i];
@@ -348,4 +349,20 @@ int wmain(int argc, wchar_t** argv) {
 
     FileLog(L"DONE. working copy ready at %s", workPath.c_str());
     return 0;
+}
+
+int wmain(int argc, wchar_t** argv) {
+    // Top-level guard: the pipeline uses std::wstring/std::vector
+    // throughout, so std::bad_alloc (or any other C++ exception) can
+    // escape. Log it LOUDLY and fail with exit 1 instead of dying in
+    // terminate() with no trail in the CI evidence.
+    try {
+        return Run(argc, argv);
+    } catch (const std::exception& e) {
+        FileLog(L"FAILED: unhandled C++ exception: %S", e.what());
+        return 1;
+    } catch (...) {
+        FileLog(L"FAILED: unhandled unknown C++ exception");
+        return 1;
+    }
 }

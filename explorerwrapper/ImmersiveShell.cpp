@@ -97,8 +97,12 @@ LRESULT TaskmanWndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
 			GUID SID_Unknown;
 			CLSIDFromString(L"{914d9b3a-5e53-4e14-bbba-46062acb35a4}", &SID_Unknown);
 
-			IServiceProvider* ImmersiveShell;
-			if (CoCreateInstance(guidImmersiveShell, 0, 0x404u, IID_IServiceProvider, (LPVOID*)&ImmersiveShell) >= 0)
+			// 7explorer fork: RAII holder. The service provider used to be leaked
+			// here (once per shell lifetime, or once per message while the
+			// QueryService below kept failing); only ShellHookService is
+			// intentionally kept alive.
+			Win7ExplorerRestorer::ComPtr<IServiceProvider> ImmersiveShell;
+			if (CoCreateInstance(guidImmersiveShell, 0, 0x404u, IID_IServiceProvider, ImmersiveShell.PutVoid()) >= 0)
 			{
 				ImmersiveShell->QueryService(SID_ImmersiveShellHookService, SID_Unknown, (void**)&ShellHookService);
 			}

@@ -28,6 +28,14 @@ CRegistryManager::CRegistryManager()
 {
 }
 
+// 7explorer fork: release the lazily opened keys (previously held raw with
+// no destructor; behavior is unchanged, the handles are just closed now).
+CRegistryManager::~CRegistryManager()
+{
+	if (m_hKeyMachine) { RegCloseKey(m_hKeyMachine); m_hKeyMachine = NULL; }
+	if (m_hKeyUser) { RegCloseKey(m_hKeyUser); m_hKeyUser = NULL; }
+}
+
 LSTATUS CRegistryManager::QueryValue(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType)
 {
 	_OpenKeys();

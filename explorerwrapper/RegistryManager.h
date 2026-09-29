@@ -11,6 +11,7 @@ private:
 
 public:
 	CRegistryManager();
+	~CRegistryManager();
 
 	LSTATUS QueryValue(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType = nullptr);
 	HRESULT QueryValueWithFallback(LPCWSTR lpValueName, LPBYTE lpData, DWORD cbData, LPDWORD lpType = nullptr, DWORD dwDefault = 0);

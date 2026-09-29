@@ -61,6 +61,9 @@ ULONG COSVersion::BuildRevision()
             (LPBYTE)&ubr,
             (LPDWORD)&ubr_size
         );
+        // 7explorer fork: the key was leaked on every call (NscTree calls
+        // this on hot paths); close it before returning.
+        RegCloseKey(hKey);
     }
     return ubr;
 }
