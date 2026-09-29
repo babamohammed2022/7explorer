@@ -36,7 +36,6 @@ The following functionality is currently working or partially working:
 
 * Windows 7 Explorer shell running on modern Windows
 * Windows 7-style desktop and taskbar
-* Windows 7 Start Menu integration
 * Compatibility wrapper for modern Windows
 * Reversible shell configuration
 * Emergency shell switching
