@@ -20,5 +20,6 @@ void SafeCreateTwinUI_UWP();
 
 // Called after the system CLSID_SysTray object is created.
 void OnSystemSysTrayCreated();
+void OnSysTrayCreateBegin();
 
 } // namespace ex7

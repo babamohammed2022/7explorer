@@ -685,6 +685,7 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	bool w81SysTray = false;
 	if (rclsid == CLSID_SysTray)
 	{
+		ex7::OnSysTrayCreateBegin();
 		w81SysTray = ex7::w81::TryCreateSysTray(pUnkOuter, riid, ppv, &result);
 		if (w81SysTray && riid == IID_IOleCommandTarget && *ppv && ex7::w81::WrapSysTray())
 		{

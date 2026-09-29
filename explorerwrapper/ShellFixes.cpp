@@ -553,7 +553,7 @@ LSTATUS WINAPI RegQueryValueExW_Hook(HKEY k, LPCWSTR val, LPDWORD res, LPDWORD t
 
 void PatchStobjectRegistry()
 {
-	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) == 0) { LogLine(L"[ex7] Win32BatteryFlyout=0: not patched"); return; }
+	if (ReadAdvancedDword(L"Win32BatteryFlyout", 0) == 0) { LogLine(L"[ex7] Win32BatteryFlyout=0: not patched"); return; }
 	HMODULE st = GetModuleHandleW(L"stobject.dll");
 	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
 	if (!st || !kb) { LogLine(L"[ex7] Win32 flyout: stobject=%p kernelbase=%p", st, kb); return; }
@@ -582,8 +582,14 @@ void PatchStobjectRegistry()
 // verb-only CLSID that opens Network Connections. Only if the system has none.
 void RegisterConnectTo()
 {
-	if (ReadAdvancedDword(L"FixConnectTo", 1) == 0) return;
 	const wchar_t key[] = L"Software\\Classes\\CLSID\\{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}";
+	if (ReadAdvancedDword(L"FixConnectTo", 0) == 0) {
+		// test16: opt-in. Remove the per-user key written by test15 (suspect
+		// of the black screen on 24H2).
+		LSTATUS d = RegDeleteTreeW(HKEY_CURRENT_USER, key);
+		LogLine(L"[ex7] Connect To: disabled (FixConnectTo=0), per-user key removed=%d", d);
+		return;
+	}
 	HKEY h = nullptr;
 	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) == ERROR_SUCCESS) {
 		RegCloseKey(h); LogLine(L"[ex7] Connect To: system CLSID present, untouched"); return;
@@ -642,13 +648,14 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes, pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test16), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
 	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
 	SafeInvoke(L"EnsureTransparencyEffects", EnsureTransparencyEffects);
+	LogLine(L"[ex7] shell fixes done");
 }
 
 // Sentinel: ImmersiveInitFailures counts start-ups that began UWP init but
@@ -692,6 +699,7 @@ void SafeCreateTwinUI_UWP()
 
 namespace ex7 {
 // dllmain: system CLSID_SysTray instance created (8.1 path not taken).
+void OnSysTrayCreateBegin() { LogLine(L"[ex7] SysTray: CoCreateInstance start"); }
 void OnSystemSysTrayCreated()
 {
 	LogLine(L"[ex7] SysTray: system stobject in use (8.1 active=%d)", ex7::w81::IsActive());
