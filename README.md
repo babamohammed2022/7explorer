@@ -30,6 +30,8 @@ The shell switcher is designed to avoid requiring a permanent modification of Wi
 
 ## Project Status
 
+This project tries to make the UWP apps (Settings, Snipping tool, etc) run on the Windows 7 explorer and tries to reduce the incompatibility.
+
 ### Working
 
 The following functionality is currently working or partially working:
