@@ -105,7 +105,10 @@ removes everything, like unchecking the box.
                    #   delete link + recovery task)
 --hotkey           # resident Ctrl+Alt+Shift+S instance (one per session)
 --recover-login    # body of the recovery task (no UI; do not run by hand)
---lang=it|--lang=en  # force the switcher UI language
+--lang=<code>        # force the switcher UI language
+                   #   (en it de es fr ja pl pt-BR ru zh-CN; default: system
+                   #   language, English fallback; same codes work in
+                   #   WIN7EXPLORERRESTORER_LANG; process-local only)
 ```
 
 ## Hotkey: Ctrl+Alt+Shift+S

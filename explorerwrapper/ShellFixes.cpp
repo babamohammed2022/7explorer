@@ -13,7 +13,9 @@
 //    * "Connect To" uses ::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B} (Win7 network
 //      "Connect To" pop-up), which does not exist any more. Redirect to
 //      Network Connections shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E},
-//      fallback ms-settings:network.
+//      fallback ms-settings:network. The Start menu binds the CLSID directly
+//      (no ShellExecute), so failed activations are also retried as Network
+//      Connections in Shell32_CoCreateInstance (shell32_wrappers.cpp).
 //    Every call is logged with dbgprintf so unknown targets can be captured
 //    with DebugView.
 // 2) "Help and Support" name: the Start menu item shows the display name of
@@ -27,6 +29,7 @@
 #include "ShellFixes.h"
 #include "SafeGuards.h"
 #include "OptionConfig.h"
+#include "AutoPlay.h"
 #include <shellapi.h>
 #include <commctrl.h>
 #include "MinHook.h"
@@ -1575,7 +1578,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[Win7ExplorerRestorer] ---- 7explorer shell fixes (test36), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[Win7ExplorerRestorer] ---- 7explorer shell fixes (test39), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
@@ -1590,6 +1593,7 @@ void InstallShellFixes(HMODULE hSelf)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
 	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
+	SafeInvoke(L"EnsureAutoPlayDefaults", EnsureAutoPlayDefaults);
 	SafeInvoke(L"EnsureTransparencyEffects", EnsureTransparencyEffects);
 	LogLine(L"[Win7ExplorerRestorer] shell fixes done");
 }

@@ -90,8 +90,15 @@ static UiView g_view = VIEW_SETUP;
 static BOOL g_reinstall = FALSE;   // Setup shows the reinstall variant
 static BOOL g_installed = FALSE;   // private copy + state\install.json seen
 
-// ---- bilingual UI (English default; Italian for Italian systems, or
-// WIN7EXPLORERRESTORER_LANG/--lang override). The switcher itself must also work in English.
+// ---- multilingual UI (test39): English default; the system UI language selects
+// de/es/fr/it/ja/pl/pt-BR/ru/zh-CN when it matches, otherwise English.
+// WIN7EXPLORERRESTORER_LANG/--lang=<code> forces one (codes: en it de es fr ja pl
+// pt-BR ru zh-CN; legacy single letters "i"/"e" still mean it/en). The switcher
+// itself must also work in English: every table is compile-count-checked and TR()
+// falls back to English for any missing entry. Non-ASCII is written as \uXXXX so
+// the source stays plain ASCII (no /utf-8 needed). The language choice affects
+// ONLY this process (never any Windows-wide setting).
+typedef enum { UI_EN = 0, UI_IT, UI_DE, UI_ES, UI_FR, UI_JA, UI_PL, UI_PTBR, UI_RU, UI_ZHCN, UI_LANG_COUNT } UiLang;
 typedef enum {
     TR_SUBTITLE, TR_GROUPBOX, TR_NATIVE_NAME, TR_WIN7EXPLORERRESTORER_NAME, TR_NONE_NAME,
     TR_UNKNOWN_NAME, TR_BTN_SWITCH, TR_BTN_CANCEL, TR_BTN_BROWSE,
@@ -118,7 +125,7 @@ typedef enum {
     TR_UNINSTALL_DONE,
     TR_COUNT
 } TRID;
-static const WCHAR* TR_EN[TR_COUNT] = {
+static const WCHAR* TR_EN[] = {
     L"Switches the running Explorer shell at runtime. No logout needed.",
     L"Select Explorer shell",
     L"Native Windows Explorer",
@@ -207,7 +214,7 @@ static const WCHAR* TR_EN[TR_COUNT] = {
     L"Windows 7 Explorer Restorer will be removed: you will be switched back to Windows Explorer and the private files will be deleted.\r\n\r\nProceed?",
     L"Windows 7 Explorer Restorer was removed.",
 };
-static const WCHAR* TR_IT[TR_COUNT] = {
+static const WCHAR* TR_IT[] = {
     L"Scambia al volo la shell Explorer attiva. Nessun logout richiesto.",
     L"Seleziona la shell Explorer",
     L"Esplora risorse Windows nativo",
@@ -297,8 +304,890 @@ static const WCHAR* TR_IT[TR_COUNT] = {
     L"Windows 7 Explorer Restorer verr\u00e0 rimosso: si torner\u00e0 a Esplora risorse e i file privati verranno eliminati.\r\n\r\nProcedere?",
     L"Windows 7 Explorer Restorer rimosso.",
 };
-static BOOL g_uiItalian;   // FALSE = English UI (default)
-static const WCHAR* TR(TRID id) { return (g_uiItalian ? TR_IT : TR_EN)[id]; }
+static const WCHAR* TR_DE[] = {
+    L"Wechselt die laufende Explorer-Shell zur Laufzeit. Keine Abmeldung n\u00f6tig.",
+    L"Explorer-Shell ausw\u00e4hlen",
+    L"Nativer Windows-Explorer",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(keine erkannt)",
+    L"Unbekannter Explorer (siehe Pfad)",
+    L"Wechseln",
+    L"Abbrechen",
+    L"Durchsuchen\u2026",
+    L"Windows 7 Explorer automatisch bei der Anmeldung starten\r\n(setzt den "
+    L"benutzerspezifischen Shell-Wert, reversibel \u2014 Details: "
+    L"docs/avvio-al-login.md)",
+    L"Aktuelle Shell: %s\r\nPID %lu \u2014 %s",
+    L"Ziel: %s\r\n%s",
+    L"Explorer wird neu gestartet.\r\nNicht gespeicherte Arbeit geht ggf. "
+    L"verloren.\r\n\r\nFortfahren?",
+    L"Zielprogramm nicht gefunden:\r\n%s\r\n\r\nEs wurde nichts gewechselt.",
+    L"Stopp der aktuellen Shell verweigert: die ausf\u00fchrbare Datei\r\nist kein "
+    L"erkannter Explorer:\r\n%s\r\n\r\nEs wurde nichts gewechselt.",
+    L"Die gew\u00e4hlte Shell l\u00e4uft bereits.",
+    L"Windows 7 Explorer konnte nicht gestartet werden:\r\n%s\r\nCreateProcess-Fehler "
+    L"%lu.\r\n\r\nVersuche, die native Shell wiederherzustellen\u2026",
+    L"KRITISCH: KEINE Shell konnte gestartet werden.\r\nAuch die native "
+    L"Wiederherstellung schlug fehl (Fehler %lu).\r\n\r\nWiederherstellung: "
+    L"Strg+Alt+Umschalt+S \u00f6ffnet diesen Switcher; oder Strg+Umschalt+Esc \u2192 "
+    L"Task-Manager \u2192 Neuen Task ausf\u00fchren \u2192 %s",
+    L"Die native Shell konnte nicht gestartet werden:\r\n%s\r\nCreateProcess-Fehler "
+    L"%lu.\r\n\r\nStart von %s wiederholen?",
+    L"%ls des automatischen Starts bei der Anmeldung war nicht m\u00f6glich (Fehler "
+    L"%lu).\r\nSonst wurde nichts ge\u00e4ndert.",
+    L"Windows 7 Explorer wird bei der Anmeldung gestartet. \u00dcbernommen (alles "
+    L"reversibel):\r\n\u2022 benutzerspezifischer Shell-Wert (HKCU ...\\Winlogon\\Shell) \u2014 "
+    L"vorheriger Wert gespeichert;\r\n\u2022 Verkn\u00fcpfung im Autostart-Ordner (Fallback + "
+    L"Hotkey-Neustart);\r\n\u2022 Wiederherstellungsaufgabe \"7explorer Shell Recovery\" "
+    L"(~30 s nach der Anmeldung:\r\n   l\u00e4uft die private Shell nicht, stellt sie "
+    L"alles wieder her).\r\n\r\nZum R\u00fcckg\u00e4ngigmachen aller drei das Kontrollk\u00e4stchen "
+    L"deaktivieren (der vorherige Wert wird\r\nbyte-identisch wiederhergestellt). "
+    L"Details: docs/avvio-al-login.md",
+    L"Die private Win7ExplorerRestorer-Datei w\u00e4hlen (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0Alle Dateien\0*.*\0",
+    L"Vorgang mit der Autostart-Verkn\u00fcpfung fehlgeschlagen (Fehler %lu).",
+    L"Systemstandard",
+    L"English",
+    L"Italiano",
+    L"Design anpassen\u2026",
+    L"DEINE Windows-7-Designdatei w\u00e4hlen (aero.msstyles)",
+    L"Designdateien\0*.msstyles\0Alle Dateien\0*.*\0",
+    L"Design installiert nach:\r\n%s\r\n\r\nShell wechseln (z. B. nativ \u2192 "
+    L"Win7ExplorerRestorer), um es anzuwenden.\r\nDie Datei geh\u00f6rt DIR: sie wurde "
+    L"nur lokal kopiert, nichts heruntergeladen oder weitergegeben.",
+    L"Die Designdatei konnte nicht kopiert werden (Fehler %lu):\r\n%s",
+    L"Automatischer Start bei der Anmeldung nicht m\u00f6glich:\r\n%s\r\n\r\nIn diesem "
+    L"Ordner m\u00fcssen explorer.exe UND wrp64.dll vorhanden sein\r\n(der Shell-Wert "
+    L"zeigt nie auf fehlende Dateien).",
+    L"Automatischer Start bei der Anmeldung entfernt.\r\nDer vorherige Shell-Wert "
+    L"wurde wiederhergestellt, Fallback-Verkn\u00fcpfung\r\nund "
+    L"Wiederherstellungsaufgabe wurden gel\u00f6scht.",
+    L"Der benutzerspezifische Shell-Wert wurde gesetzt, aber die "
+    L"Wiederherstellungsaufgabe\r\nkonnte nicht registriert werden (Fehler "
+    L"%lu).\r\nDer automatische Start funktioniert trotzdem; es fehlt nur das "
+    L"automatische\r\nSicherheitsnetz bei der Anmeldung (Details: "
+    L"docs/avvio-al-login.md).",
+    L"Windows 7 Explorer Restorer ist noch nicht installiert",
+    L"Zur Verwendung muss eine Datei von Microsoft heruntergeladen, gepr\u00fcft und "
+    L"vorbereitet werden. Eine Internetverbindung ist nur beim ersten Mal n\u00f6tig.",
+    L"Windows 7 Explorer Restorer neu installieren?",
+    L"Die private explorer.exe-Kopie wird erneut heruntergeladen und vorbereitet. "
+    L"Falls sie verwendet wird, wird zuerst zum Windows-Explorer "
+    L"zur\u00fcckgewechselt.",
+    L"Installieren",
+    L"Neu installieren",
+    L"Abbrechen",
+    L"Keine Administratorrechte n\u00f6tig.",
+    L"Es dauert etwa eine Minute.",
+    L"Installation l\u00e4uft\u2026",
+    L"Installation fehlgeschlagen (Exitcode %lu).\r\n\r\n%s",
+    L"Installation fehlgeschlagen \u2014 siehe Details.",
+    L"Installation abgebrochen.",
+    L"Das Installationsprogramm wurde nicht gefunden:\r\n%s\r\n\r\nWin7ExplorerRestorer."
+    L"exe neben diesen Switcher kopieren (selber Ordner) und erneut versuchen.",
+    L"Installationsprogramm nicht gefunden.",
+    L"Das Installationsprogramm konnte nicht gestartet werden (Fehler %lu):\r\n%s",
+    L"W\u00e4hlen, welcher Explorer als Windows-Shell dient. Der Wechsel ist sofort "
+    L"wirksam, keine Abmeldung n\u00f6tig.",
+    L"Standard-Systemshell",
+    L"  \u2013 in Verwendung",
+    L"Windows 7 Explorer Restorer bei jeder Anmeldung verwenden",
+    L"Weitere Informationen",
+    L"Neu installieren",
+    L"Deinstallieren",
+    L"Sprache",
+    L"Win7ExplorerRestorer verwenden",
+    L"Nativen Explorer verwenden",
+    L"Der Desktop startet kurz neu.",
+    L"Der automatische Start bei der Anmeldung setzt den benutzerspezifischen "
+    L"Shell-Wert (HKCU) auf die private explorer.exe \u2014 der Windows-Standardweg, "
+    L"ohne Rechteerh\u00f6hung, vollst\u00e4ndig reversibel (der vorherige Wert wird "
+    L"gespeichert und byte-identisch wiederhergestellt).\r\n\r\nDazu kommen zwei "
+    L"Sicherheitsnetze: eine Verkn\u00fcpfung im Autostart-Ordner und eine geplante "
+    L"Aufgabe (\"7explorer Shell Recovery\"), die ~30 s nach der Anmeldung die "
+    L"Shell pr\u00fcft.\r\n\r\nZum R\u00fcckg\u00e4ngigmachen das Kontrollk\u00e4stchen deaktivieren.",
+    L"Neuinstallation abgeschlossen.\r\n\r\nJetzt zu Windows 7 Explorer Restorer "
+    L"zur\u00fcckwechseln?",
+    L"Windows 7 Explorer Restorer wird entfernt: es wird zum Windows-Explorer "
+    L"zur\u00fcckgewechselt und die privaten Dateien werden gel\u00f6scht.\r\n\r\nFortfahren?",
+    L"Windows 7 Explorer Restorer wurde entfernt.",
+};
+static const WCHAR* TR_ES[] = {
+    L"Cambia la shell de Explorer en ejecuci\u00f3n al momento. No hace falta cerrar "
+    L"sesi\u00f3n.",
+    L"Seleccionar la shell de Explorer",
+    L"Explorador de Windows nativo",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(ninguna detectada)",
+    L"Explorador desconocido (ver ruta)",
+    L"Cambiar",
+    L"Cancelar",
+    L"Examinar\u2026",
+    L"Iniciar Windows 7 Explorer autom\u00e1ticamente al iniciar sesi\u00f3n\r\n(establece el "
+    L"valor Shell del usuario, reversible \u2014 detalles: docs/avvio-al-login.md)",
+    L"Shell actual: %s\r\nPID %lu \u2014 %s",
+    L"Destino: %s\r\n%s",
+    L"Explorer se reiniciar\u00e1.\r\nEl trabajo no guardado podr\u00eda "
+    L"perderse.\r\n\r\n\u00bfContinuar?",
+    L"Ejecutable de destino no encontrado:\r\n%s\r\n\r\nNo se cambi\u00f3 nada.",
+    L"Negada la detenci\u00f3n de la shell actual: su ejecutable\r\nno es un explorer "
+    L"reconocido:\r\n%s\r\n\r\nNo se cambi\u00f3 nada.",
+    L"La shell seleccionada ya est\u00e1 en ejecuci\u00f3n.",
+    L"No se pudo iniciar Windows 7 Explorer:\r\n%s\r\nError %lu de "
+    L"CreateProcess.\r\n\r\nIntentando restaurar la shell nativa\u2026",
+    L"CR\u00cdTICO: no se pudo iniciar NINGUNA shell.\r\nLa restauraci\u00f3n nativa tambi\u00e9n "
+    L"fall\u00f3 (error %lu).\r\n\r\nRecuperaci\u00f3n: Ctrl+Alt+May\u00fas+S abre este conmutador; "
+    L"o Ctrl+May\u00fas+Esc \u2192 Administrador de tareas \u2192 Ejecutar nueva tarea \u2192 %s",
+    L"No se pudo iniciar la shell nativa:\r\n%s\r\nError %lu de "
+    L"CreateProcess.\r\n\r\n\u00bfReintentar el inicio de %s?",
+    L"No se pudo %ls el inicio autom\u00e1tico al iniciar sesi\u00f3n (error %lu).\r\nNo se "
+    L"cambi\u00f3 nada m\u00e1s.",
+    L"Windows 7 Explorer se iniciar\u00e1 al iniciar sesi\u00f3n. Aplicado (todo "
+    L"reversible):\r\n\u2022 valor Shell del usuario (HKCU ...\\Winlogon\\Shell) \u2014 valor "
+    L"anterior guardado;\r\n\u2022 v\u00ednculo en la carpeta Inicio (reserva + reinicio con "
+    L"tecla r\u00e1pida);\r\n\u2022 tarea de recuperaci\u00f3n \"7explorer Shell Recovery\" (~30 s "
+    L"despu\u00e9s del inicio de sesi\u00f3n:\r\n   si la shell privada no est\u00e1 viva, lo "
+    L"restaura todo).\r\n\r\nDesmarca la casilla para deshacer las tres cosas (el "
+    L"valor anterior se restaura\r\nbyte por byte). Detalles: "
+    L"docs/avvio-al-login.md",
+    L"Selecciona el Win7ExplorerRestorer privado (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0Todos los archivos\0*.*\0",
+    L"Fall\u00f3 la operaci\u00f3n del v\u00ednculo en Inicio (error %lu).",
+    L"Predeterminado del sistema",
+    L"English",
+    L"Italiano",
+    L"Personalizar tema\u2026",
+    L"Selecciona TU archivo de tema de Windows 7 (aero.msstyles)",
+    L"Archivos de tema\0*.msstyles\0Todos los archivos\0*.*\0",
+    L"Tema instalado en:\r\n%s\r\n\r\nCambia de shell (p. ej. nativa \u2192 "
+    L"Win7ExplorerRestorer) para aplicarlo.\r\nEl archivo es TUYO: solo se copi\u00f3 "
+    L"localmente, nada descargado ni compartido.",
+    L"No se pudo copiar el archivo de tema (error %lu):\r\n%s",
+    L"No se puede activar el inicio autom\u00e1tico al iniciar sesi\u00f3n:\r\n%s\r\n\r\nEn esa "
+    L"carpeta deben existir explorer.exe y wrp64.dll\r\n(el valor Shell nunca "
+    L"apunta a archivos ausentes).",
+    L"Inicio autom\u00e1tico eliminado.\r\nSe restaur\u00f3 el valor Shell anterior y se "
+    L"eliminaron el v\u00ednculo\r\nde reserva y la tarea de recuperaci\u00f3n.",
+    L"El valor Shell del usuario se estableci\u00f3, pero la tarea de recuperaci\u00f3n\r\nno "
+    L"se pudo registrar (error %lu).\r\nEl inicio autom\u00e1tico funciona igual; solo "
+    L"falta la red de seguridad\r\nautom\u00e1tica al iniciar sesi\u00f3n (detalles: "
+    L"docs/avvio-al-login.md).",
+    L"Windows 7 Explorer Restorer a\u00fan no est\u00e1 instalado",
+    L"Para usarlo hay que descargar un archivo de Microsoft, verificarlo y "
+    L"prepararlo. Solo la primera vez se necesita conexi\u00f3n a Internet.",
+    L"\u00bfReinstalar Windows 7 Explorer Restorer?",
+    L"La copia privada de explorer.exe se descargar\u00e1 y preparar\u00e1 de nuevo. Si "
+    L"est\u00e1 en uso, primero volver\u00e1s al Explorador de Windows.",
+    L"Instalar",
+    L"Reinstalar",
+    L"Interrumpir",
+    L"No se necesitan derechos de administrador.",
+    L"Se necesita cerca de un minuto.",
+    L"Instalaci\u00f3n en curso\u2026",
+    L"Instalaci\u00f3n fallida (c\u00f3digo %lu).\r\n\r\n%s",
+    L"Instalaci\u00f3n fallida \u2014 ver detalles.",
+    L"Instalaci\u00f3n interrumpida.",
+    L"No se encontr\u00f3 el instalador:\r\n%s\r\n\r\nCopia Win7ExplorerRestorer.exe junto a "
+    L"este conmutador (misma carpeta) e int\u00e9ntalo de nuevo.",
+    L"Instalador no encontrado.",
+    L"No se pudo iniciar el instalador (error %lu):\r\n%s",
+    L"Elige qu\u00e9 Explorer usar como shell de Windows. El cambio es inmediato y no "
+    L"requiere cerrar sesi\u00f3n.",
+    L"Shell predeterminada del sistema",
+    L"  \u2013 en uso",
+    L"Usar Windows 7 Explorer Restorer en cada inicio de sesi\u00f3n",
+    L"M\u00e1s informaci\u00f3n",
+    L"Reinstalar",
+    L"Desinstalar",
+    L"Idioma",
+    L"Usar Win7ExplorerRestorer",
+    L"Usar el Explorador nativo",
+    L"El escritorio se reiniciar\u00e1 brevemente.",
+    L"El inicio autom\u00e1tico establece el valor Shell del usuario (HKCU) en el "
+    L"explorer.exe privado \u2014 el m\u00e9todo est\u00e1ndar de Windows, sin elevaci\u00f3n, "
+    L"totalmente reversible (el valor anterior se guarda y se restaura byte por "
+    L"byte).\r\n\r\nTambi\u00e9n a\u00f1ade dos redes de seguridad: un v\u00ednculo en la carpeta "
+    L"Inicio y una tarea programada (\"7explorer Shell Recovery\") que comprueba la "
+    L"shell ~30 s despu\u00e9s del inicio de sesi\u00f3n.\r\n\r\nDesmarca la casilla para "
+    L"deshacerlo todo.",
+    L"Reinstalaci\u00f3n completada.\r\n\r\n\u00bfVolver ahora a Windows 7 Explorer Restorer?",
+    L"Windows 7 Explorer Restorer ser\u00e1 eliminado: volver\u00e1s al Explorador de "
+    L"Windows y se borrar\u00e1n los archivos privados.\r\n\r\n\u00bfProceder?",
+    L"Windows 7 Explorer Restorer fue eliminado.",
+};
+static const WCHAR* TR_FR[] = {
+    L"Bascule \u00e0 chaud la shell Explorer active. Aucune d\u00e9connexion requise.",
+    L"S\u00e9lectionner la shell Explorer",
+    L"Explorateur Windows natif",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(aucune d\u00e9tect\u00e9e)",
+    L"Explorateur inconnu (voir le chemin)",
+    L"Basculer",
+    L"Annuler",
+    L"Parcourir\u2026",
+    L"D\u00e9marrer Windows 7 Explorer automatiquement \u00e0 l'ouverture de "
+    L"session\r\n(d\u00e9finit la valeur Shell de l'utilisateur, r\u00e9versible \u2014 d\u00e9tails : "
+    L"docs/avvio-al-login.md)",
+    L"Shell actuelle : %s\r\nPID %lu \u2014 %s",
+    L"Cible : %s\r\n%s",
+    L"Explorer va red\u00e9marrer.\r\nLe travail non enregistr\u00e9 pourrait \u00eatre "
+    L"perdu.\r\n\r\nContinuer ?",
+    L"Ex\u00e9cutable cible introuvable :\r\n%s\r\n\r\nRien n'a \u00e9t\u00e9 bascul\u00e9.",
+    L"Arr\u00eat de la shell actuelle refus\u00e9 : son ex\u00e9cutable\r\nn'est pas un explorer "
+    L"reconnu :\r\n%s\r\n\r\nRien n'a \u00e9t\u00e9 bascul\u00e9.",
+    L"La shell s\u00e9lectionn\u00e9e est d\u00e9j\u00e0 en cours d'ex\u00e9cution.",
+    L"Impossible de d\u00e9marrer Windows 7 Explorer :\r\n%s\r\nErreur CreateProcess "
+    L"%lu.\r\n\r\nTentative de restauration de la shell native\u2026",
+    L"CRITIQUE : impossible de d\u00e9marrer AUCUNE shell.\r\nLa restauration native a "
+    L"aussi \u00e9chou\u00e9 (erreur %lu).\r\n\r\nR\u00e9cup\u00e9ration : Ctrl+Alt+Maj+S ouvre ce "
+    L"s\u00e9lecteur ; ou Ctrl+Maj+\u00c9chap \u2192 Gestionnaire des t\u00e2ches \u2192 Ex\u00e9cuter une "
+    L"nouvelle t\u00e2che \u2192 %s",
+    L"Impossible de d\u00e9marrer la shell native :\r\n%s\r\nErreur CreateProcess "
+    L"%lu.\r\n\r\nR\u00e9essayer de d\u00e9marrer %s ?",
+    L"Impossible de %ls le d\u00e9marrage automatique \u00e0 l'ouverture de session (erreur "
+    L"%lu).\r\nRien d'autre n'a \u00e9t\u00e9 modifi\u00e9.",
+    L"Windows 7 Explorer d\u00e9marrera \u00e0 l'ouverture de session. Appliqu\u00e9 (tout "
+    L"r\u00e9versible) :\r\n\u2022 valeur Shell de l'utilisateur (HKCU ...\\Winlogon\\Shell) \u2014 "
+    L"valeur pr\u00e9c\u00e9dente enregistr\u00e9e ;\r\n\u2022 lien dans le dossier D\u00e9marrage (secours "
+    L"+ red\u00e9marrage par raccourci) ;\r\n\u2022 t\u00e2che de r\u00e9cup\u00e9ration \"7explorer Shell "
+    L"Recovery\" (~30 s apr\u00e8s l'ouverture de session :\r\n   si la shell priv\u00e9e "
+    L"n'est pas active, elle restaure tout).\r\n\r\nD\u00e9cochez la case pour tout "
+    L"annuler (la valeur pr\u00e9c\u00e9dente est restaur\u00e9e\r\n\u00e0 l'octet pr\u00e8s). D\u00e9tails : "
+    L"docs/avvio-al-login.md",
+    L"S\u00e9lectionnez le Win7ExplorerRestorer priv\u00e9 (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0Tous les fichiers\0*.*\0",
+    L"\u00c9chec de l'op\u00e9ration sur le lien du dossier D\u00e9marrage (erreur %lu).",
+    L"D\u00e9faut du syst\u00e8me",
+    L"English",
+    L"Italiano",
+    L"Personnaliser le th\u00e8me\u2026",
+    L"S\u00e9lectionnez VOTRE fichier de th\u00e8me Windows 7 (aero.msstyles)",
+    L"Fichiers de th\u00e8me\0*.msstyles\0Tous les fichiers\0*.*\0",
+    L"Th\u00e8me install\u00e9 dans :\r\n%s\r\n\r\nBasculez de shell (p. ex. native \u2192 "
+    L"Win7ExplorerRestorer) pour l'appliquer.\r\nLe fichier reste \u00e0 VOUS : il a "
+    L"seulement \u00e9t\u00e9 copi\u00e9 localement, rien de t\u00e9l\u00e9charg\u00e9 ni partag\u00e9.",
+    L"Impossible de copier le fichier de th\u00e8me (erreur %lu) :\r\n%s",
+    L"Impossible d'activer le d\u00e9marrage automatique \u00e0 l'ouverture de session "
+    L":\r\n%s\r\n\r\nexplorer.exe et wrp64.dll doivent exister dans ce dossier\r\n(la "
+    L"valeur Shell ne pointe jamais vers des fichiers manquants).",
+    L"D\u00e9marrage automatique supprim\u00e9.\r\nLa valeur Shell pr\u00e9c\u00e9dente a \u00e9t\u00e9 restaur\u00e9e "
+    L"; le lien\r\nde secours et la t\u00e2che de r\u00e9cup\u00e9ration ont \u00e9t\u00e9 supprim\u00e9s.",
+    L"La valeur Shell de l'utilisateur a \u00e9t\u00e9 d\u00e9finie, mais la t\u00e2che de "
+    L"r\u00e9cup\u00e9ration\r\nn'a pas pu \u00eatre inscrite (erreur %lu).\r\nLe d\u00e9marrage "
+    L"automatique fonctionne quand m\u00eame ; il manque juste le filet\r\nde s\u00e9curit\u00e9 "
+    L"automatique \u00e0 l'ouverture de session (d\u00e9tails : docs/avvio-al-login.md).",
+    L"Windows 7 Explorer Restorer n'est pas encore install\u00e9",
+    L"Pour l'utiliser, un fichier doit \u00eatre t\u00e9l\u00e9charg\u00e9 depuis Microsoft, v\u00e9rifi\u00e9 "
+    L"et pr\u00e9par\u00e9. Une connexion Internet n'est n\u00e9cessaire que la premi\u00e8re fois.",
+    L"R\u00e9installer Windows 7 Explorer Restorer ?",
+    L"La copie priv\u00e9e d'explorer.exe sera de nouveau t\u00e9l\u00e9charg\u00e9e et pr\u00e9par\u00e9e. Si "
+    L"elle est utilis\u00e9e, vous reviendrez d'abord \u00e0 l'Explorateur Windows.",
+    L"Installer",
+    L"R\u00e9installer",
+    L"Interrompre",
+    L"Aucun droit d'administrateur requis.",
+    L"Environ une minute est n\u00e9cessaire.",
+    L"Installation en cours\u2026",
+    L"\u00c9chec de l'installation (code %lu).\r\n\r\n%s",
+    L"\u00c9chec de l'installation \u2014 voir les d\u00e9tails.",
+    L"Installation interrompue.",
+    L"Programme d'installation introuvable :\r\n%s\r\n\r\nCopiez "
+    L"Win7ExplorerRestorer.exe \u00e0 c\u00f4t\u00e9 de ce s\u00e9lecteur (m\u00eame dossier) et "
+    L"r\u00e9essayez.",
+    L"Programme d'installation introuvable.",
+    L"Impossible de d\u00e9marrer le programme d'installation (erreur %lu) :\r\n%s",
+    L"Choisissez l'Explorateur \u00e0 utiliser comme shell Windows. Le basculement est "
+    L"imm\u00e9diat, sans d\u00e9connexion.",
+    L"Shell par d\u00e9faut du syst\u00e8me",
+    L"  \u2013 utilis\u00e9",
+    L"Utiliser Windows 7 Explorer Restorer \u00e0 chaque ouverture de session",
+    L"Plus d'informations",
+    L"R\u00e9installer",
+    L"D\u00e9sinstaller",
+    L"Langue",
+    L"Utiliser Win7ExplorerRestorer",
+    L"Utiliser l'Explorateur natif",
+    L"Le bureau red\u00e9marrera bri\u00e8vement.",
+    L"Le d\u00e9marrage automatique d\u00e9finit la valeur Shell de l'utilisateur (HKCU) "
+    L"sur l'explorer.exe priv\u00e9 \u2014 la m\u00e9thode standard de Windows, sans \u00e9l\u00e9vation, "
+    L"enti\u00e8rement r\u00e9versible (la valeur pr\u00e9c\u00e9dente est enregistr\u00e9e et restaur\u00e9e \u00e0 "
+    L"l'octet pr\u00e8s).\r\n\r\nIl ajoute aussi deux filets de s\u00e9curit\u00e9 : un lien dans le "
+    L"dossier D\u00e9marrage et une t\u00e2che planifi\u00e9e (\"7explorer Shell Recovery\") qui "
+    L"v\u00e9rifie la shell ~30 s apr\u00e8s l'ouverture de session.\r\n\r\nD\u00e9cochez la case "
+    L"pour tout annuler.",
+    L"R\u00e9installation termin\u00e9e.\r\n\r\nRevenir maintenant \u00e0 Windows 7 Explorer "
+    L"Restorer ?",
+    L"Windows 7 Explorer Restorer va \u00eatre supprim\u00e9 : vous reviendrez \u00e0 "
+    L"l'Explorateur Windows et les fichiers priv\u00e9s seront effac\u00e9s.\r\n\r\nContinuer ?",
+    L"Windows 7 Explorer Restorer a \u00e9t\u00e9 supprim\u00e9.",
+};
+static const WCHAR* TR_JA[] = {
+    L"\u5b9f\u884c\u4e2d\u306e Explorer \u30b7\u30a7\u30eb\u3092\u5373\u6642\u306b\u5207\u308a\u66ff\u3048\u307e\u3059\u3002\u30ed\u30b0\u30aa\u30d5\u306f\u4e0d\u8981\u3067\u3059\u3002",
+    L"Explorer \u30b7\u30a7\u30eb\u3092\u9078\u629e",
+    L"\u30cd\u30a4\u30c6\u30a3\u30d6 Windows \u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(\u691c\u51fa\u306a\u3057)",
+    L"\u4e0d\u660e\u306a\u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc (\u30d1\u30b9\u3092\u53c2\u7167)",
+    L"\u5207\u308a\u66ff\u3048",
+    L"\u30ad\u30e3\u30f3\u30bb\u30eb",
+    L"\u53c2\u7167\u2026",
+    L"\u30ed\u30b0\u30aa\u30f3\u6642\u306b Windows 7 Explorer \u3092\u81ea\u52d5\u7684\u306b\u958b\u59cb\u3059\u308b\r\n(\u30e6\u30fc\u30b6\u30fc\u3054\u3068\u306e Shell \u5024\u3092\u8a2d\u5b9a\u3001\u5143\u306b\u623b\u305b\u307e\u3059 \u2014 \u8a73\u7d30: "
+    L"docs/avvio-al-login.md)",
+    L"\u73fe\u5728\u306e\u30b7\u30a7\u30eb: %s\r\nPID %lu \u2014 %s",
+    L"\u5bfe\u8c61: %s\r\n%s",
+    L"Explorer \u304c\u518d\u8d77\u52d5\u3055\u308c\u307e\u3059\u3002\r\n\u4fdd\u5b58\u3057\u3066\u3044\u306a\u3044\u4f5c\u696d\u306f\u5931\u308f\u308c\u308b\u53ef\u80fd\u6027\u304c\u3042\u308a\u307e\u3059\u3002\r\n\r\n\u7d9a\u884c\u3057\u307e\u3059\u304b?",
+    L"\u5bfe\u8c61\u306e\u5b9f\u884c\u30d5\u30a1\u30a4\u30eb\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093:\r\n%s\r\n\r\n\u4f55\u3082\u5207\u308a\u66ff\u3048\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
+    L"\u73fe\u5728\u306e\u30b7\u30a7\u30eb\u3092\u505c\u6b62\u3067\u304d\u307e\u305b\u3093: \u5b9f\u884c\u30d5\u30a1\u30a4\u30eb\u304c\r\n\u8a8d\u8b58\u3055\u308c\u305f\u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc\u3067\u306f\u3042\u308a\u307e\u305b\u3093:\r\n%s\r\n\r\n\u4f55\u3082\u5207\u308a\u66ff\u3048\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
+    L"\u9078\u629e\u3057\u305f\u30b7\u30a7\u30eb\u306f\u65e2\u306b\u5b9f\u884c\u4e2d\u3067\u3059\u3002",
+    L"Windows 7 Explorer \u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f:\r\n%s\r\nCreateProcess \u30a8\u30e9\u30fc %lu\u3002\r\n\r\n\u30cd\u30a4\u30c6\u30a3\u30d6 "
+    L"\u30b7\u30a7\u30eb\u306e\u5fa9\u5143\u3092\u8a66\u307f\u3066\u3044\u307e\u3059\u2026",
+    L"\u91cd\u5927: \u3069\u306e\u30b7\u30a7\u30eb\u3082\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\r\n\u30cd\u30a4\u30c6\u30a3\u30d6\u306e\u5fa9\u5143\u3082\u5931\u6557\u3057\u307e\u3057\u305f (\u30a8\u30e9\u30fc %lu)\u3002\r\n\r\n\u5fa9\u65e7: Ctrl+Alt+Shift+S "
+    L"\u3067\u3053\u306e\u30b9\u30a4\u30c3\u30c1\u30e3\u30fc\u3092\u958b\u304d\u307e\u3059\u3002\u307e\u305f\u306f Ctrl+Shift+Esc \u2192 \u30bf\u30b9\u30af \u30de\u30cd\u30fc\u30b8\u30e3\u30fc \u2192 \u65b0\u3057\u3044\u30bf\u30b9\u30af\u306e\u5b9f\u884c \u2192 %s",
+    L"\u30cd\u30a4\u30c6\u30a3\u30d6 \u30b7\u30a7\u30eb\u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f:\r\n%s\r\nCreateProcess \u30a8\u30e9\u30fc %lu\u3002\r\n\r\n%s \u306e\u958b\u59cb\u3092\u518d\u8a66\u884c\u3057\u307e\u3059\u304b?",
+    L"\u30ed\u30b0\u30aa\u30f3\u6642\u306e\u81ea\u52d5\u958b\u59cb\u3092%ls\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f (\u30a8\u30e9\u30fc %lu)\u3002\r\n\u4ed6\u306b\u306f\u4f55\u3082\u5909\u66f4\u3057\u3066\u3044\u307e\u305b\u3093\u3002",
+    L"\u30ed\u30b0\u30aa\u30f3\u6642\u306b Windows 7 Explorer \u304c\u958b\u59cb\u3055\u308c\u307e\u3059\u3002\u9069\u7528\u6e08\u307f (\u3059\u3079\u3066\u5143\u306b\u623b\u305b\u307e\u3059):\r\n\u2022 \u30e6\u30fc\u30b6\u30fc\u3054\u3068\u306e Shell \u5024 "
+    L"(HKCU ...\\Winlogon\\Shell) \u2014 \u4ee5\u524d\u306e\u5024\u3092\u4fdd\u5b58\u6e08\u307f;\r\n\u2022 \u30b9\u30bf\u30fc\u30c8\u30a2\u30c3\u30d7 \u30d5\u30a9\u30eb\u30c0\u30fc\u5185\u306e\u30ea\u30f3\u30af (\u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af + "
+    L"\u30db\u30c3\u30c8\u30ad\u30fc\u518d\u8d77\u52d5);\r\n\u2022 \u56de\u5fa9\u30bf\u30b9\u30af \"7explorer Shell Recovery\" (\u30ed\u30b0\u30aa\u30f3\u7d04 30 \u79d2\u5f8c:\r\n   \u30d7\u30e9\u30a4\u30d9\u30fc\u30c8 "
+    L"\u30b7\u30a7\u30eb\u304c\u52d5\u4f5c\u3057\u3066\u3044\u306a\u3051\u308c\u3070\u3059\u3079\u3066\u5fa9\u5143\u3057\u307e\u3059)\u3002\r\n\r\n3 \u3064\u3059\u3079\u3066\u3092\u5143\u306b\u623b\u3059\u306b\u306f\u30c1\u30a7\u30c3\u30af\u3092\u5916\u3057\u3066\u304f\u3060\u3055\u3044 "
+    L"(\u4ee5\u524d\u306e\u5024\u304c\r\n\u30d0\u30a4\u30c8\u5358\u4f4d\u3067\u5fa9\u5143\u3055\u308c\u307e\u3059)\u3002\u8a73\u7d30: docs/avvio-al-login.md",
+    L"\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u306e Win7ExplorerRestorer \u3092\u9078\u629e (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0\u3059\u3079\u3066\u306e\u30d5\u30a1\u30a4\u30eb\0*.*\0",
+    L"\u30b9\u30bf\u30fc\u30c8\u30a2\u30c3\u30d7 \u30d5\u30a9\u30eb\u30c0\u30fc\u306e\u30ea\u30f3\u30af\u64cd\u4f5c\u306b\u5931\u6557\u3057\u307e\u3057\u305f (\u30a8\u30e9\u30fc %lu)\u3002",
+    L"\u30b7\u30b9\u30c6\u30e0\u306e\u65e2\u5b9a\u5024",
+    L"English",
+    L"Italiano",
+    L"\u30c6\u30fc\u30de\u306e\u30ab\u30b9\u30bf\u30de\u30a4\u30ba\u2026",
+    L"\u304a\u4f7f\u3044\u306e Windows 7 \u30c6\u30fc\u30de \u30d5\u30a1\u30a4\u30eb\u3092\u9078\u629e (aero.msstyles)",
+    L"\u30c6\u30fc\u30de \u30d5\u30a1\u30a4\u30eb\0*.msstyles\0\u3059\u3079\u3066\u306e\u30d5\u30a1\u30a4\u30eb\0*.*\0",
+    L"\u30c6\u30fc\u30de\u306e\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u5148:\r\n%s\r\n\r\n\u9069\u7528\u3059\u308b\u306b\u306f\u30b7\u30a7\u30eb\u3092\u5207\u308a\u66ff\u3048\u3066\u304f\u3060\u3055\u3044 (\u4f8b: \u30cd\u30a4\u30c6\u30a3\u30d6 \u2192 "
+    L"Win7ExplorerRestorer)\u3002\r\n\u30d5\u30a1\u30a4\u30eb\u306f\u304a\u5ba2\u69d8\u306e\u3082\u306e\u3067\u3059: \u30ed\u30fc\u30ab\u30eb\u306b\u30b3\u30d4\u30fc\u3057\u305f\u3060\u3051\u3067\u3001\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9\u3084\u5171\u6709\u306f\u3057\u3066\u3044\u307e\u305b\u3093\u3002",
+    L"\u30c6\u30fc\u30de \u30d5\u30a1\u30a4\u30eb\u3092\u30b3\u30d4\u30fc\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f (\u30a8\u30e9\u30fc %lu):\r\n%s",
+    L"\u30ed\u30b0\u30aa\u30f3\u6642\u306e\u81ea\u52d5\u958b\u59cb\u3092\u6709\u52b9\u306b\u3067\u304d\u307e\u305b\u3093:\r\n%s\r\n\r\n\u305d\u306e\u30d5\u30a9\u30eb\u30c0\u30fc\u306b\u306f explorer.exe \u3068 wrp64.dll "
+    L"\u306e\u4e21\u65b9\u304c\u5fc5\u8981\u3067\u3059\r\n(Shell \u5024\u304c\u5b58\u5728\u3057\u306a\u3044\u30d5\u30a1\u30a4\u30eb\u3092\u6307\u3059\u3053\u3068\u306f\u3042\u308a\u307e\u305b\u3093)\u3002",
+    L"\u30ed\u30b0\u30aa\u30f3\u6642\u306e\u81ea\u52d5\u958b\u59cb\u3092\u524a\u9664\u3057\u307e\u3057\u305f\u3002\r\n\u4ee5\u524d\u306e Shell \u5024\u3092\u5fa9\u5143\u3057\u3001\u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af \u30ea\u30f3\u30af\u3068\r\n\u56de\u5fa9\u30bf\u30b9\u30af\u3092\u524a\u9664\u3057\u307e\u3057\u305f\u3002",
+    L"\u30e6\u30fc\u30b6\u30fc\u3054\u3068\u306e Shell \u5024\u306f\u8a2d\u5b9a\u3055\u308c\u307e\u3057\u305f\u304c\u3001\u56de\u5fa9\u30bf\u30b9\u30af\u3092\r\n\u767b\u9332\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f (\u30a8\u30e9\u30fc "
+    L"%lu)\u3002\r\n\u81ea\u52d5\u958b\u59cb\u306f\u52d5\u4f5c\u3057\u307e\u3059\u3002\u30ed\u30b0\u30aa\u30f3\u6642\u306e\u81ea\u52d5\u5b89\u5168\u30cd\u30c3\u30c8\u304c\r\n\u306a\u3044\u3060\u3051\u3067\u3059 (\u8a73\u7d30: docs/avvio-al-login.md)\u3002",
+    L"Windows 7 Explorer Restorer \u306f\u307e\u3060\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u3055\u308c\u3066\u3044\u307e\u305b\u3093",
+    L"\u4f7f\u7528\u3059\u308b\u306b\u306f\u3001Microsoft \u304b\u3089\u30d5\u30a1\u30a4\u30eb\u3092\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9\u3057\u3066\u691c\u8a3c\u30fb\u6e96\u5099\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8\u63a5\u7d9a\u304c\u5fc5\u8981\u306a\u306e\u306f\u521d\u56de\u306e\u307f\u3067\u3059\u3002",
+    L"Windows 7 Explorer Restorer \u3092\u518d\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u3057\u307e\u3059\u304b?",
+    L"\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u306e explorer.exe \u30b3\u30d4\u30fc\u3092\u518d\u5ea6\u30c0\u30a6\u30f3\u30ed\u30fc\u30c9\u3057\u3066\u6e96\u5099\u3057\u307e\u3059\u3002\u4f7f\u7528\u4e2d\u306e\u5834\u5408\u306f\u3001\u5148\u306b\u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc\u306b\u623b\u308a\u307e\u3059\u3002",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb",
+    L"\u518d\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb",
+    L"\u4e2d\u6b62",
+    L"\u7ba1\u7406\u8005\u6a29\u9650\u306f\u4e0d\u8981\u3067\u3059\u3002",
+    L"\u7d04 1 \u5206\u304b\u304b\u308a\u307e\u3059\u3002",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u5b9f\u884c\u4e2d\u2026",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u306b\u5931\u6557\u3057\u307e\u3057\u305f (\u7d42\u4e86\u30b3\u30fc\u30c9 %lu)\u3002\r\n\r\n%s",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u306b\u5931\u6557\u3057\u307e\u3057\u305f \u2014 \u8a73\u7d30\u3092\u53c2\u7167\u3002",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u3092\u4e2d\u6b62\u3057\u307e\u3057\u305f\u3002",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30e9\u30fc\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093:\r\n%s\r\n\r\nWin7ExplorerRestorer.exe \u3092\u3053\u306e\u30b9\u30a4\u30c3\u30c1\u30e3\u30fc\u306e\u96a3 (\u540c\u3058\u30d5\u30a9\u30eb\u30c0\u30fc) "
+    L"\u306b\u30b3\u30d4\u30fc\u3057\u3066\u518d\u8a66\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30e9\u30fc\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093\u3002",
+    L"\u30a4\u30f3\u30b9\u30c8\u30fc\u30e9\u30fc\u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f (\u30a8\u30e9\u30fc %lu):\r\n%s",
+    L"Windows \u30b7\u30a7\u30eb\u3068\u3057\u3066\u4f7f\u7528\u3059\u308b Explorer \u3092\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u5207\u308a\u66ff\u3048\u306f\u5373\u6642\u3067\u3001\u30ed\u30b0\u30aa\u30d5\u306f\u4e0d\u8981\u3067\u3059\u3002",
+    L"\u65e2\u5b9a\u306e\u30b7\u30b9\u30c6\u30e0 \u30b7\u30a7\u30eb",
+    L"  \u2013 \u4f7f\u7528\u4e2d",
+    L"\u30ed\u30b0\u30aa\u30f3\u3054\u3068\u306b Windows 7 Explorer Restorer \u3092\u4f7f\u7528\u3059\u308b",
+    L"\u8a73\u7d30\u60c5\u5831",
+    L"\u518d\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb",
+    L"\u30a2\u30f3\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb",
+    L"\u8a00\u8a9e",
+    L"Win7ExplorerRestorer \u3092\u4f7f\u7528",
+    L"\u30cd\u30a4\u30c6\u30a3\u30d6 \u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc\u3092\u4f7f\u7528",
+    L"\u30c7\u30b9\u30af\u30c8\u30c3\u30d7\u304c\u77ed\u6642\u9593\u518d\u8d77\u52d5\u3057\u307e\u3059\u3002",
+    L"\u30ed\u30b0\u30aa\u30f3\u6642\u306e\u81ea\u52d5\u958b\u59cb\u3067\u306f\u3001\u30e6\u30fc\u30b6\u30fc\u3054\u3068\u306e Shell \u5024 (HKCU) \u3092\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u306e explorer.exe \u306b\u8a2d\u5b9a\u3057\u307e\u3059 \u2014 \u6a19\u6e96\u7684\u306a "
+    L"Windows \u306e\u65b9\u6cd5\u3067\u3001\u6607\u683c\u4e0d\u8981\u3001\u5b8c\u5168\u306b\u5143\u306b\u623b\u305b\u307e\u3059 (\u4ee5\u524d\u306e\u5024\u306f\u4fdd\u5b58\u3055\u308c\u30d0\u30a4\u30c8\u5358\u4f4d\u3067\u5fa9\u5143\u3055\u308c\u307e\u3059)\u3002\r\n\r\n\u3055\u3089\u306b 2 "
+    L"\u3064\u306e\u5b89\u5168\u30cd\u30c3\u30c8\u3092\u8ffd\u52a0\u3057\u307e\u3059: \u30b9\u30bf\u30fc\u30c8\u30a2\u30c3\u30d7 \u30d5\u30a9\u30eb\u30c0\u30fc\u5185\u306e\u30ea\u30f3\u30af\u3068\u3001\u30ed\u30b0\u30aa\u30f3\u7d04 30 \u79d2\u5f8c\u306b\u30b7\u30a7\u30eb\u3092\u78ba\u8a8d\u3059\u308b\u30b9\u30b1\u30b8\u30e5\u30fc\u30eb \u30bf\u30b9\u30af "
+    L"(\"7explorer Shell Recovery\") \u3067\u3059\u3002\r\n\r\n\u3059\u3079\u3066\u3092\u5143\u306b\u623b\u3059\u306b\u306f\u30c1\u30a7\u30c3\u30af\u3092\u5916\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    L"\u518d\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\r\n\r\n\u4eca\u3059\u3050 Windows 7 Explorer Restorer \u306b\u623b\u308a\u307e\u3059\u304b?",
+    L"Windows 7 Explorer Restorer \u3092\u524a\u9664\u3057\u307e\u3059: \u30a8\u30af\u30b9\u30d7\u30ed\u30fc\u30e9\u30fc\u306b\u623b\u308a\u3001\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8 "
+    L"\u30d5\u30a1\u30a4\u30eb\u304c\u524a\u9664\u3055\u308c\u307e\u3059\u3002\r\n\r\n\u7d9a\u884c\u3057\u307e\u3059\u304b?",
+    L"Windows 7 Explorer Restorer \u3092\u524a\u9664\u3057\u307e\u3057\u305f\u3002",
+};
+static const WCHAR* TR_PL[] = {
+    L"Prze\u0142\u0105cza dzia\u0142aj\u0105c\u0105 pow\u0142ok\u0119 Eksploratora w locie. Wylogowanie nie jest "
+    L"potrzebne.",
+    L"Wybierz pow\u0142ok\u0119 Eksploratora",
+    L"Natywny Eksplorator Windows",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(nie wykryto \u017cadnej)",
+    L"Nieznany eksplorator (zobacz \u015bcie\u017ck\u0119)",
+    L"Prze\u0142\u0105cz",
+    L"Anuluj",
+    L"Przegl\u0105daj\u2026",
+    L"Uruchom Eksploratora Windows 7 automatycznie przy logowaniu\r\n(ustawia "
+    L"warto\u015b\u0107 Shell u\u017cytkownika, odwracalne \u2014 szczeg\u00f3\u0142y: docs/avvio-al-login.md)",
+    L"Bie\u017c\u0105ca pow\u0142oka: %s\r\nPID %lu \u2014 %s",
+    L"Cel: %s\r\n%s",
+    L"Eksplorator zostanie uruchomiony ponownie.\r\nNiezapisana praca mo\u017ce zosta\u0107 "
+    L"utracona.\r\n\r\nKontynuowa\u0107?",
+    L"Nie znaleziono docelowego pliku wykonywalnego:\r\n%s\r\n\r\nNiczego nie "
+    L"prze\u0142\u0105czono.",
+    L"Odmowa zatrzymania bie\u017c\u0105cej pow\u0142oki: jej plik wykonywalny\r\nnie jest "
+    L"rozpoznanym eksploratorem:\r\n%s\r\n\r\nNiczego nie prze\u0142\u0105czono.",
+    L"Wybrana pow\u0142oka ju\u017c dzia\u0142a.",
+    L"Nie mo\u017cna uruchomi\u0107 Eksploratora Windows 7:\r\n%s\r\nB\u0142\u0105d CreateProcess "
+    L"%lu.\r\n\r\nPr\u00f3ba przywr\u00f3cenia pow\u0142oki natywnej\u2026",
+    L"KRYTYCZNE: nie mo\u017cna uruchomi\u0107 \u017bADNEJ pow\u0142oki.\r\nPrzywracanie natywne te\u017c "
+    L"si\u0119 nie powiod\u0142o (b\u0142\u0105d %lu).\r\n\r\nOdzyskiwanie: Ctrl+Alt+Shift+S otwiera ten "
+    L"prze\u0142\u0105cznik; lub Ctrl+Shift+Esc \u2192 Mened\u017cer zada\u0144 \u2192 Uruchom nowe zadanie \u2192 "
+    L"%s",
+    L"Nie mo\u017cna uruchomi\u0107 pow\u0142oki natywnej:\r\n%s\r\nB\u0142\u0105d CreateProcess "
+    L"%lu.\r\n\r\nPonowi\u0107 uruchamianie %s?",
+    L"Nie mo\u017cna %ls automatycznego uruchamiania przy logowaniu (b\u0142\u0105d "
+    L"%lu).\r\nNiczego innego nie zmieniono.",
+    L"Eksplorator Windows 7 b\u0119dzie uruchamiany przy logowaniu. Zastosowano "
+    L"(wszystko odwracalne):\r\n\u2022 warto\u015b\u0107 Shell u\u017cytkownika (HKCU "
+    L"...\\Winlogon\\Shell) \u2014 poprzednia warto\u015b\u0107 zapisana;\r\n\u2022 \u0142\u0105cze w folderze "
+    L"Autostart (awaryjne + restart skr\u00f3tem);\r\n\u2022 zadanie odzyskiwania \"7explorer "
+    L"Shell Recovery\" (~30 s po zalogowaniu:\r\n   je\u015bli prywatna pow\u0142oka nie "
+    L"dzia\u0142a, przywr\u00f3ca wszystko).\r\n\r\nOdznacz pole, aby cofn\u0105\u0107 wszystkie trzy "
+    L"(poprzednia warto\u015b\u0107 zostanie\r\nprzywr\u00f3cona bajt w bajt). Szczeg\u00f3\u0142y: "
+    L"docs/avvio-al-login.md",
+    L"Wybierz prywatny Win7ExplorerRestorer (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0Wszystkie pliki\0*.*\0",
+    L"Operacja \u0142\u0105cza w folderze Autostart nie powiod\u0142a si\u0119 (b\u0142\u0105d %lu).",
+    L"Domy\u015blne systemu",
+    L"English",
+    L"Italiano",
+    L"Dostosuj motyw\u2026",
+    L"Wybierz TW\u00d3J plik motywu Windows 7 (aero.msstyles)",
+    L"Pliki motyw\u00f3w\0*.msstyles\0Wszystkie pliki\0*.*\0",
+    L"Motyw zainstalowany w:\r\n%s\r\n\r\nPrze\u0142\u0105cz pow\u0142ok\u0119 (np. natywna \u2192 "
+    L"Win7ExplorerRestorer), aby go zastosowa\u0107.\r\nPlik jest TW\u00d3J: zosta\u0142 tylko "
+    L"skopiowany lokalnie, nic nie pobrano ani nie udost\u0119pniono.",
+    L"Nie mo\u017cna skopiowa\u0107 pliku motywu (b\u0142\u0105d %lu):\r\n%s",
+    L"Nie mo\u017cna w\u0142\u0105czy\u0107 automatycznego uruchamiania przy logowaniu:\r\n%s\r\n\r\nW tym "
+    L"folderze musz\u0105 istnie\u0107 explorer.exe i wrp64.dll\r\n(warto\u015b\u0107 Shell nigdy nie "
+    L"wskazuje brakuj\u0105cych plik\u00f3w).",
+    L"Automatyczne uruchamianie przy logowaniu usuni\u0119te.\r\nPoprzednia warto\u015b\u0107 "
+    L"Shell zosta\u0142a przywr\u00f3cona, a \u0142\u0105cze\r\nawaryjne i zadanie odzyskiwania "
+    L"usuni\u0119te.",
+    L"Warto\u015b\u0107 Shell u\u017cytkownika zosta\u0142a ustawiona, ale zadania odzyskiwania\r\nnie "
+    L"mo\u017cna by\u0142o zarejestrowa\u0107 (b\u0142\u0105d %lu).\r\nAutomatyczne uruchamianie dzia\u0142a; "
+    L"brakuje tylko automatycznej\r\nsiatki bezpiecze\u0144stwa przy logowaniu "
+    L"(szczeg\u00f3\u0142y: docs/avvio-al-login.md).",
+    L"Program Windows 7 Explorer Restorer nie jest jeszcze zainstalowany",
+    L"Aby go u\u017cywa\u0107, trzeba pobra\u0107 plik od Microsoft, zweryfikowa\u0107 go i "
+    L"przygotowa\u0107. Po\u0142\u0105czenie z Internetem jest potrzebne tylko za pierwszym "
+    L"razem.",
+    L"Zainstalowa\u0107 ponownie program Windows 7 Explorer Restorer?",
+    L"Prywatna kopia explorer.exe zostanie pobrana i przygotowana ponownie. Je\u015bli "
+    L"jest u\u017cywana, najpierw nast\u0105pi powr\u00f3t do Eksploratora Windows.",
+    L"Zainstaluj",
+    L"Zainstaluj ponownie",
+    L"Przerwij",
+    L"Uprawnienia administratora nie s\u0105 potrzebne.",
+    L"Potrzeba oko\u0142o minuty.",
+    L"Trwa instalacja\u2026",
+    L"Instalacja nie powiod\u0142a si\u0119 (kod wyj\u015bcia %lu).\r\n\r\n%s",
+    L"Instalacja nie powiod\u0142a si\u0119 \u2014 zobacz szczeg\u00f3\u0142y.",
+    L"Instalacja przerwana.",
+    L"Nie znaleziono instalatora:\r\n%s\r\n\r\nSkopiuj Win7ExplorerRestorer.exe obok "
+    L"tego prze\u0142\u0105cznika (ten sam folder) i spr\u00f3buj ponownie.",
+    L"Nie znaleziono instalatora.",
+    L"Nie mo\u017cna uruchomi\u0107 instalatora (b\u0142\u0105d %lu):\r\n%s",
+    L"Wybierz Eksploratora u\u017cywanego jako pow\u0142oka Windows. Prze\u0142\u0105czenie jest "
+    L"natychmiastowe i nie wymaga wylogowania.",
+    L"Domy\u015blna pow\u0142oka systemu",
+    L"  \u2013 w u\u017cyciu",
+    L"U\u017cywaj Windows 7 Explorer Restorer przy ka\u017cdym logowaniu",
+    L"Wi\u0119cej informacji",
+    L"Zainstaluj ponownie",
+    L"Odinstaluj",
+    L"J\u0119zyk",
+    L"U\u017cywaj Win7ExplorerRestorer",
+    L"U\u017cywaj natywnego Eksploratora",
+    L"Pulpit zostanie na chwil\u0119 uruchomiony ponownie.",
+    L"Automatyczne uruchamianie przy logowaniu ustawia warto\u015b\u0107 Shell u\u017cytkownika "
+    L"(HKCU) na prywatny explorer.exe \u2014 standardowa metoda Windows, bez "
+    L"podnoszenia uprawnie\u0144, w pe\u0142ni odwracalna (poprzednia warto\u015b\u0107 jest "
+    L"zapisywana i przywr\u00f3cana bajt w bajt).\r\n\r\nDodaje te\u017c dwie siatki "
+    L"bezpiecze\u0144stwa: \u0142\u0105cze w folderze Autostart i zaplanowane zadanie "
+    L"(\"7explorer Shell Recovery\"), kt\u00f3re sprawdza pow\u0142ok\u0119 ~30 s po "
+    L"zalogowaniu.\r\n\r\nOdznacz pole, aby cofn\u0105\u0107 wszystko.",
+    L"Ponowna instalacja zako\u0144czona.\r\n\r\nWr\u00f3ci\u0107 teraz do Windows 7 Explorer "
+    L"Restorer?",
+    L"Program Windows 7 Explorer Restorer zostanie usuni\u0119ty: nast\u0105pi powr\u00f3t do "
+    L"Eksploratora Windows, a prywatne pliki zostan\u0105 usuni\u0119te.\r\n\r\nKontynuowa\u0107?",
+    L"Program Windows 7 Explorer Restorer zosta\u0142 usuni\u0119ty.",
+};
+static const WCHAR* TR_PTBR[] = {
+    L"Alterna a shell do Explorer em execu\u00e7\u00e3o imediatamente. N\u00e3o \u00e9 preciso sair.",
+    L"Selecionar a shell do Explorer",
+    L"Explorador de Arquivos nativo",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(nenhuma detectada)",
+    L"Explorer desconhecido (ver caminho)",
+    L"Alternar",
+    L"Cancelar",
+    L"Procurar\u2026",
+    L"Iniciar o Windows 7 Explorer automaticamente ao entrar\r\n(define o valor "
+    L"Shell do usu\u00e1rio, revers\u00edvel \u2014 detalhes: docs/avvio-al-login.md)",
+    L"Shell atual: %s\r\nPID %lu \u2014 %s",
+    L"Destino: %s\r\n%s",
+    L"O Explorer ser\u00e1 reiniciado.\r\nO trabalho n\u00e3o salvo poder\u00e1 ser "
+    L"perdido.\r\n\r\nContinuar?",
+    L"Execut\u00e1vel de destino n\u00e3o encontrado:\r\n%s\r\n\r\nNada foi alternado.",
+    L"Recusa em parar a shell atual: seu execut\u00e1vel\r\nn\u00e3o \u00e9 um explorer "
+    L"reconhecido:\r\n%s\r\n\r\nNada foi alternado.",
+    L"A shell selecionada j\u00e1 est\u00e1 em execu\u00e7\u00e3o.",
+    L"Falha ao iniciar o Windows 7 Explorer:\r\n%s\r\nErro %lu de "
+    L"CreateProcess.\r\n\r\nTentando restaurar a shell nativa\u2026",
+    L"CR\u00cdTICO: n\u00e3o foi poss\u00edvel iniciar NENHUMA shell.\r\nA restaura\u00e7\u00e3o nativa "
+    L"tamb\u00e9m falhou (erro %lu).\r\n\r\nRecupera\u00e7\u00e3o: Ctrl+Alt+Shift+S abre este "
+    L"alternador; ou Ctrl+Shift+Esc \u2192 Gerenciador de Tarefas \u2192 Executar nova "
+    L"tarefa \u2192 %s",
+    L"Falha ao iniciar a shell nativa:\r\n%s\r\nErro %lu de CreateProcess.\r\n\r\nTentar "
+    L"iniciar %s de novo?",
+    L"N\u00e3o foi poss\u00edvel %ls a inicializa\u00e7\u00e3o autom\u00e1tica ao entrar (erro %lu).\r\nNada "
+    L"mais foi alterado.",
+    L"O Windows 7 Explorer ser\u00e1 iniciado ao entrar. Aplicado (tudo "
+    L"revers\u00edvel):\r\n\u2022 valor Shell do usu\u00e1rio (HKCU ...\\Winlogon\\Shell) \u2014 valor "
+    L"anterior salvo;\r\n\u2022 link na pasta Inicializar (reserva + rein\u00edcio por tecla "
+    L"de atalho);\r\n\u2022 tarefa de recupera\u00e7\u00e3o \"7explorer Shell Recovery\" (~30 s ap\u00f3s "
+    L"a entrada:\r\n   se a shell privada n\u00e3o estiver ativa, restaura "
+    L"tudo).\r\n\r\nDesmarque a caixa para desfazer as tr\u00eas coisas (o valor anterior "
+    L"\u00e9 restaurado\r\nbyte por byte). Detalhes: docs/avvio-al-login.md",
+    L"Selecione o Win7ExplorerRestorer privado (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0Todos os arquivos\0*.*\0",
+    L"A opera\u00e7\u00e3o do link em Inicializar falhou (erro %lu).",
+    L"Padr\u00e3o do sistema",
+    L"English",
+    L"Italiano",
+    L"Personalizar tema\u2026",
+    L"Selecione O SEU arquivo de tema do Windows 7 (aero.msstyles)",
+    L"Arquivos de tema\0*.msstyles\0Todos os arquivos\0*.*\0",
+    L"Tema instalado em:\r\n%s\r\n\r\nAlterne a shell (ex.: nativa \u2192 "
+    L"Win7ExplorerRestorer) para aplic\u00e1-lo.\r\nO arquivo \u00e9 SEU: foi apenas copiado "
+    L"localmente, nada baixado ou compartilhado.",
+    L"N\u00e3o foi poss\u00edvel copiar o arquivo de tema (erro %lu):\r\n%s",
+    L"N\u00e3o \u00e9 poss\u00edvel ativar a inicializa\u00e7\u00e3o autom\u00e1tica ao entrar:\r\n%s\r\n\r\nNessa "
+    L"pasta devem existir explorer.exe e wrp64.dll\r\n(o valor Shell nunca aponta "
+    L"para arquivos ausentes).",
+    L"Inicializa\u00e7\u00e3o autom\u00e1tica removida.\r\nO valor Shell anterior foi restaurado e "
+    L"o link de reserva\r\ne a tarefa de recupera\u00e7\u00e3o foram exclu\u00eddos.",
+    L"O valor Shell do usu\u00e1rio foi definido, mas a tarefa de recupera\u00e7\u00e3o\r\nn\u00e3o "
+    L"p\u00f4de ser registrada (erro %lu).\r\nA inicializa\u00e7\u00e3o autom\u00e1tica funciona; s\u00f3 "
+    L"falta a rede de seguran\u00e7a\r\nautom\u00e1tica ao entrar (detalhes: "
+    L"docs/avvio-al-login.md).",
+    L"O Windows 7 Explorer Restorer ainda n\u00e3o est\u00e1 instalado",
+    L"Para us\u00e1-lo, \u00e9 preciso baixar um arquivo da Microsoft, verific\u00e1-lo e "
+    L"prepar\u00e1-lo. A conex\u00e3o com a Internet s\u00f3 \u00e9 necess\u00e1ria na primeira vez.",
+    L"Reinstalar o Windows 7 Explorer Restorer?",
+    L"A c\u00f3pia privada do explorer.exe ser\u00e1 baixada e preparada de novo. Se "
+    L"estiver em uso, voc\u00ea voltar\u00e1 antes ao Explorador de Arquivos.",
+    L"Instalar",
+    L"Reinstalar",
+    L"Interromper",
+    L"N\u00e3o s\u00e3o necess\u00e1rios direitos de administrador.",
+    L"\u00c9 necess\u00e1rio cerca de um minuto.",
+    L"Instala\u00e7\u00e3o em andamento\u2026",
+    L"Instala\u00e7\u00e3o falhou (c\u00f3digo %lu).\r\n\r\n%s",
+    L"Instala\u00e7\u00e3o falhou \u2014 ver detalhes.",
+    L"Instala\u00e7\u00e3o interrompida.",
+    L"O instalador n\u00e3o foi encontrado:\r\n%s\r\n\r\nCopie Win7ExplorerRestorer.exe para "
+    L"junto deste alternador (mesma pasta) e tente de novo.",
+    L"Instalador n\u00e3o encontrado.",
+    L"N\u00e3o foi poss\u00edvel iniciar o instalador (erro %lu):\r\n%s",
+    L"Escolha qual Explorer usar como shell do Windows. A altern\u00e2ncia \u00e9 imediata "
+    L"e n\u00e3o exige sair.",
+    L"Shell padr\u00e3o do sistema",
+    L"  \u2013 em uso",
+    L"Usar o Windows 7 Explorer Restorer a cada entrada",
+    L"Mais informa\u00e7\u00f5es",
+    L"Reinstalar",
+    L"Desinstalar",
+    L"Idioma",
+    L"Usar Win7ExplorerRestorer",
+    L"Usar o Explorer nativo",
+    L"A \u00e1rea de trabalho ser\u00e1 reiniciada brevemente.",
+    L"A inicializa\u00e7\u00e3o autom\u00e1tica define o valor Shell do usu\u00e1rio (HKCU) para o "
+    L"explorer.exe privado \u2014 o jeito padr\u00e3o do Windows, sem eleva\u00e7\u00e3o, totalmente "
+    L"revers\u00edvel (o valor anterior \u00e9 salvo e restaurado byte por byte).\r\n\r\nTamb\u00e9m "
+    L"adiciona duas redes de seguran\u00e7a: um link na pasta Inicializar e uma tarefa "
+    L"agendada (\"7explorer Shell Recovery\") que verifica a shell ~30 s ap\u00f3s a "
+    L"entrada.\r\n\r\nDesmarque a caixa para desfazer tudo.",
+    L"Reinstala\u00e7\u00e3o conclu\u00edda.\r\n\r\nVoltar agora ao Windows 7 Explorer Restorer?",
+    L"O Windows 7 Explorer Restorer ser\u00e1 removido: voc\u00ea voltar\u00e1 ao Explorador de "
+    L"Arquivos e os arquivos privados ser\u00e3o exclu\u00eddos.\r\n\r\nProsseguir?",
+    L"O Windows 7 Explorer Restorer foi removido.",
+};
+static const WCHAR* TR_RU[] = {
+    L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0435\u0442 \u0440\u0430\u0431\u043e\u0442\u0430\u044e\u0449\u0443\u044e \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443 Explorer \u043d\u0430 \u043b\u0435\u0442\u0443. \u0412\u044b\u0445\u043e\u0434 \u0438\u0437 \u0441\u0438\u0441\u0442\u0435\u043c\u044b \u043d\u0435 "
+    L"\u043d\u0443\u0436\u0435\u043d.",
+    L"\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443 Explorer",
+    L"\u0421\u0442\u0430\u043d\u0434\u0430\u0440\u0442\u043d\u044b\u0439 \u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a Windows",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(\u043d\u0435 \u043e\u0431\u043d\u0430\u0440\u0443\u0436\u0435\u043d\u0430)",
+    L"\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0439 \u043f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a (\u0441\u043c. \u043f\u0443\u0442\u044c)",
+    L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u044c",
+    L"\u041e\u0442\u043c\u0435\u043d\u0430",
+    L"\u041e\u0431\u0437\u043e\u0440\u2026",
+    L"\u0417\u0430\u043f\u0443\u0441\u043a\u0430\u0442\u044c Windows 7 Explorer \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435\r\n(\u0437\u0430\u0434\u0430\u0451\u0442 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 "
+    L"Shell \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f, \u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e \u2014 \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438: docs/avvio-al-login.md)",
+    L"\u0422\u0435\u043a\u0443\u0449\u0430\u044f \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0430: %s\r\nPID %lu \u2014 %s",
+    L"\u0426\u0435\u043b\u044c: %s\r\n%s",
+    L"\u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a \u0431\u0443\u0434\u0435\u0442 \u043f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0449\u0435\u043d.\r\n\u041d\u0435\u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u0430\u044f \u0440\u0430\u0431\u043e\u0442\u0430 \u043c\u043e\u0436\u0435\u0442 \u0431\u044b\u0442\u044c "
+    L"\u043f\u043e\u0442\u0435\u0440\u044f\u043d\u0430.\r\n\r\n\u041f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c?",
+    L"\u0426\u0435\u043b\u0435\u0432\u043e\u0439 \u0438\u0441\u043f\u043e\u043b\u043d\u044f\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d:\r\n%s\r\n\r\n\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u043e.",
+    L"\u041e\u0442\u043a\u0430\u0437 \u043e\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0442\u044c \u0442\u0435\u043a\u0443\u0449\u0443\u044e \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443: \u0435\u0451 \u0438\u0441\u043f\u043e\u043b\u043d\u044f\u0435\u043c\u044b\u0439 \u0444\u0430\u0439\u043b\r\n\u043d\u0435 \u044f\u0432\u043b\u044f\u0435\u0442\u0441\u044f "
+    L"\u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u043d\u043d\u044b\u043c \u043f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a\u043e\u043c:\r\n%s\r\n\r\n\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u043e.",
+    L"\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u0430\u044f \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0430 \u0443\u0436\u0435 \u0437\u0430\u043f\u0443\u0449\u0435\u043d\u0430.",
+    L"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c Windows 7 Explorer:\r\n%s\r\n\u041e\u0448\u0438\u0431\u043a\u0430 CreateProcess "
+    L"%lu.\r\n\r\n\u041f\u043e\u043f\u044b\u0442\u043a\u0430 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0448\u0442\u0430\u0442\u043d\u0443\u044e \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443\u2026",
+    L"\u041a\u0420\u0418\u0422\u0418\u0427\u0415\u0421\u041a\u0418: \u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u041d\u0418 \u041e\u0414\u041d\u0423 \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443.\r\n\u0428\u0442\u0430\u0442\u043d\u043e\u0435 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 "
+    L"\u0442\u043e\u0436\u0435 \u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c (\u043e\u0448\u0438\u0431\u043a\u0430 %lu).\r\n\r\n\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435: Ctrl+Alt+Shift+S \u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442 "
+    L"\u044d\u0442\u043e\u0442 \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0442\u0435\u043b\u044c; \u0438\u043b\u0438 Ctrl+Shift+Esc \u2192 \u0414\u0438\u0441\u043f\u0435\u0442\u0447\u0435\u0440 \u0437\u0430\u0434\u0430\u0447 \u2192 \u0417\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u043d\u043e\u0432\u0443\u044e "
+    L"\u0437\u0430\u0434\u0430\u0447\u0443 \u2192 %s",
+    L"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0448\u0442\u0430\u0442\u043d\u0443\u044e \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443:\r\n%s\r\n\u041e\u0448\u0438\u0431\u043a\u0430 CreateProcess "
+    L"%lu.\r\n\r\n\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0437\u0430\u043f\u0443\u0441\u043a %s?",
+    L"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c %ls \u0430\u0432\u0442\u043e\u0437\u0430\u043f\u0443\u0441\u043a \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435 (\u043e\u0448\u0438\u0431\u043a\u0430 %lu).\r\n\u0411\u043e\u043b\u044c\u0448\u0435 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 "
+    L"\u0438\u0437\u043c\u0435\u043d\u0435\u043d\u043e.",
+    L"Windows 7 Explorer \u0431\u0443\u0434\u0435\u0442 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u0442\u044c\u0441\u044f \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435. \u041f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u043e (\u0432\u0441\u0451 "
+    L"\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e):\r\n\u2022 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 Shell \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f (HKCU ...\\Winlogon\\Shell) \u2014 "
+    L"\u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e;\r\n\u2022 \u044f\u0440\u043b\u044b\u043a \u0432 \u043f\u0430\u043f\u043a\u0435 \u00ab\u0410\u0432\u0442\u043e\u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u00bb (\u0437\u0430\u043f\u0430\u0441\u043d\u043e\u0439 + "
+    L"\u043f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u043a \u0433\u043e\u0440\u044f\u0447\u0435\u0439 \u043a\u043b\u0430\u0432\u0438\u0448\u0435\u0439);\r\n\u2022 \u0437\u0430\u0434\u0430\u0447\u0430 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f \"7explorer Shell "
+    L"Recovery\" (~30 \u0441 \u043f\u043e\u0441\u043b\u0435 \u0432\u0445\u043e\u0434\u0430:\r\n   \u0435\u0441\u043b\u0438 \u0447\u0430\u0441\u0442\u043d\u0430\u044f \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0430 \u043d\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442, "
+    L"\u0432\u043e\u0441\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0435\u0442 \u0432\u0441\u0451).\r\n\r\n\u0421\u043d\u0438\u043c\u0438\u0442\u0435 \u0444\u043b\u0430\u0436\u043e\u043a, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0432\u0441\u0435 \u0442\u0440\u0438 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f "
+    L"(\u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0431\u0443\u0434\u0435\u0442\r\n\u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u043f\u043e\u0431\u0430\u0439\u0442\u043e\u0432\u043e). \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438: "
+    L"docs/avvio-al-login.md",
+    L"\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0441\u0442\u043d\u044b\u0439 Win7ExplorerRestorer (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0\u0412\u0441\u0435 \u0444\u0430\u0439\u043b\u044b\0*.*\0",
+    L"\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u044f \u0441 \u044f\u0440\u043b\u044b\u043a\u043e\u043c \u0432 \u00ab\u0410\u0432\u0442\u043e\u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435\u00bb \u043d\u0435 \u0443\u0434\u0430\u043b\u0430\u0441\u044c (\u043e\u0448\u0438\u0431\u043a\u0430 %lu).",
+    L"\u0421\u0438\u0441\u0442\u0435\u043c\u043d\u043e\u0435 \u043f\u043e \u0443\u043c\u043e\u043b\u0447\u0430\u043d\u0438\u044e",
+    L"English",
+    L"Italiano",
+    L"\u041d\u0430\u0441\u0442\u0440\u043e\u0438\u0442\u044c \u0442\u0435\u043c\u0443\u2026",
+    L"\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0412\u0410\u0428 \u0444\u0430\u0439\u043b \u0442\u0435\u043c\u044b Windows 7 (aero.msstyles)",
+    L"\u0424\u0430\u0439\u043b\u044b \u0442\u0435\u043c\0*.msstyles\0\u0412\u0441\u0435 \u0444\u0430\u0439\u043b\u044b\0*.*\0",
+    L"\u0422\u0435\u043c\u0430 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0430 \u0432:\r\n%s\r\n\r\n\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443 (\u043d\u0430\u043f\u0440. \u0448\u0442\u0430\u0442\u043d\u0430\u044f \u2192 "
+    L"Win7ExplorerRestorer), \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c \u0435\u0451.\r\n\u0424\u0430\u0439\u043b \u0412\u0410\u0428: \u043e\u043d \u0431\u044b\u043b \u0442\u043e\u043b\u044c\u043a\u043e "
+    L"\u0441\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e, \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u0441\u043a\u0430\u0447\u0430\u043d\u043e \u0438 \u043d\u0435 \u043f\u0435\u0440\u0435\u0434\u0430\u043d\u043e.",
+    L"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0444\u0430\u0439\u043b \u0442\u0435\u043c\u044b (\u043e\u0448\u0438\u0431\u043a\u0430 %lu):\r\n%s",
+    L"\u041d\u0435\u0432\u043e\u0437\u043c\u043e\u0436\u043d\u043e \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0430\u0432\u0442\u043e\u0437\u0430\u043f\u0443\u0441\u043a \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435:\r\n%s\r\n\r\n\u0412 \u044d\u0442\u043e\u0439 \u043f\u0430\u043f\u043a\u0435 \u0434\u043e\u043b\u0436\u043d\u044b \u0431\u044b\u0442\u044c "
+    L"explorer.exe \u0438 wrp64.dll\r\n(\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 Shell \u043d\u0438\u043a\u043e\u0433\u0434\u0430 \u043d\u0435 \u0443\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u043d\u0430 "
+    L"\u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0435 \u0444\u0430\u0439\u043b\u044b).",
+    L"\u0410\u0432\u0442\u043e\u0437\u0430\u043f\u0443\u0441\u043a \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435 \u0443\u0434\u0430\u043b\u0451\u043d.\r\n\u041f\u0440\u0435\u0436\u043d\u0435\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 Shell \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043e, "
+    L"\u0437\u0430\u043f\u0430\u0441\u043d\u043e\u0439 \u044f\u0440\u043b\u044b\u043a\r\n\u0438 \u0437\u0430\u0434\u0430\u0447\u0430 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u044b.",
+    L"\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435 Shell \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f \u0437\u0430\u0434\u0430\u043d\u043e, \u043d\u043e \u0437\u0430\u0434\u0430\u0447\u0443 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f\r\n\u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c "
+    L"\u0437\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c (\u043e\u0448\u0438\u0431\u043a\u0430 %lu).\r\n\u0410\u0432\u0442\u043e\u0437\u0430\u043f\u0443\u0441\u043a \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442; \u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e "
+    L"\u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0430\u044f\r\n\u0441\u0442\u0440\u0430\u0445\u043e\u0432\u043a\u0430 \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435 (\u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438: docs/avvio-al-login.md).",
+    L"Windows 7 Explorer Restorer \u043f\u043e\u043a\u0430 \u043d\u0435 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d",
+    L"\u0414\u043b\u044f \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f \u043d\u0443\u0436\u043d\u043e \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u0444\u0430\u0439\u043b \u0441 \u0441\u0430\u0439\u0442\u0430 Microsoft, \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0438 "
+    L"\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u0438\u0442\u044c \u0435\u0433\u043e. \u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 \u043a \u0418\u043d\u0442\u0435\u0440\u043d\u0435\u0442\u0443 \u043d\u0443\u0436\u043d\u043e \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u043f\u0435\u0440\u0432\u044b\u0439 \u0440\u0430\u0437.",
+    L"\u041f\u0435\u0440\u0435\u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c Windows 7 Explorer Restorer?",
+    L"\u0427\u0430\u0441\u0442\u043d\u0430\u044f \u043a\u043e\u043f\u0438\u044f explorer.exe \u0431\u0443\u0434\u0435\u0442 \u0441\u043a\u0430\u0447\u0430\u043d\u0430 \u0438 \u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u043b\u0435\u043d\u0430 \u0437\u0430\u043d\u043e\u0432\u043e. \u0415\u0441\u043b\u0438 \u043e\u043d\u0430 "
+    L"\u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f, \u0441\u043d\u0430\u0447\u0430\u043b\u0430 \u043f\u0440\u043e\u0438\u0437\u043e\u0439\u0434\u0451\u0442 \u0432\u043e\u0437\u0432\u0440\u0430\u0442 \u043a \u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a\u0443 Windows.",
+    L"\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c",
+    L"\u041f\u0435\u0440\u0435\u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c",
+    L"\u041f\u0440\u0435\u0440\u0432\u0430\u0442\u044c",
+    L"\u041f\u0440\u0430\u0432\u0430 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u0430 \u043d\u0435 \u043d\u0443\u0436\u043d\u044b.",
+    L"\u041f\u043e\u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f \u043e\u043a\u043e\u043b\u043e \u043c\u0438\u043d\u0443\u0442\u044b.",
+    L"\u0412\u044b\u043f\u043e\u043b\u043d\u044f\u0435\u0442\u0441\u044f \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430\u2026",
+    L"\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u043d\u0435 \u0443\u0434\u0430\u043b\u0430\u0441\u044c (\u043a\u043e\u0434 %lu).\r\n\r\n%s",
+    L"\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u043d\u0435 \u0443\u0434\u0430\u043b\u0430\u0441\u044c \u2014 \u0441\u043c. \u043f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438.",
+    L"\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u043f\u0440\u0435\u0440\u0432\u0430\u043d\u0430.",
+    L"\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0449\u0438\u043a \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d:\r\n%s\r\n\r\n\u0421\u043a\u043e\u043f\u0438\u0440\u0443\u0439\u0442\u0435 Win7ExplorerRestorer.exe \u0440\u044f\u0434\u043e\u043c \u0441 "
+    L"\u044d\u0442\u0438\u043c \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0442\u0435\u043b\u0435\u043c (\u0432 \u0442\u0443 \u0436\u0435 \u043f\u0430\u043f\u043a\u0443) \u0438 \u043f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435.",
+    L"\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0449\u0438\u043a \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d.",
+    L"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0449\u0438\u043a (\u043e\u0448\u0438\u0431\u043a\u0430 %lu):\r\n%s",
+    L"\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a \u0434\u043b\u044f \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f \u0432 \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u0435 \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0438 Windows. "
+    L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 \u043c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e\u0435, \u0432\u044b\u0445\u043e\u0434 \u043d\u0435 \u043d\u0443\u0436\u0435\u043d.",
+    L"\u0428\u0442\u0430\u0442\u043d\u0430\u044f \u0441\u0438\u0441\u0442\u0435\u043c\u043d\u0430\u044f \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0430",
+    L"  \u2013 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f",
+    L"\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c Windows 7 Explorer Restorer \u043f\u0440\u0438 \u043a\u0430\u0436\u0434\u043e\u043c \u0432\u0445\u043e\u0434\u0435",
+    L"\u041f\u043e\u0434\u0440\u043e\u0431\u043d\u0435\u0435",
+    L"\u041f\u0435\u0440\u0435\u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c",
+    L"\u0423\u0434\u0430\u043b\u0438\u0442\u044c",
+    L"\u042f\u0437\u044b\u043a",
+    L"\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c Win7ExplorerRestorer",
+    L"\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0448\u0442\u0430\u0442\u043d\u044b\u0439 \u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a",
+    L"\u0420\u0430\u0431\u043e\u0447\u0438\u0439 \u0441\u0442\u043e\u043b \u0431\u0443\u0434\u0435\u0442 \u043d\u0435\u043d\u0430\u0434\u043e\u043b\u0433\u043e \u043f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0449\u0435\u043d.",
+    L"\u0410\u0432\u0442\u043e\u0437\u0430\u043f\u0443\u0441\u043a \u043f\u0440\u0438 \u0432\u0445\u043e\u0434\u0435 \u0437\u0430\u0434\u0430\u0451\u0442 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 Shell \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f (HKCU) \u043d\u0430 \u0447\u0430\u0441\u0442\u043d\u044b\u0439 "
+    L"explorer.exe \u2014 \u0441\u0442\u0430\u043d\u0434\u0430\u0440\u0442\u043d\u044b\u0439 \u0441\u043f\u043e\u0441\u043e\u0431 Windows, \u0431\u0435\u0437 \u043f\u043e\u0432\u044b\u0448\u0435\u043d\u0438\u044f \u043f\u0440\u0430\u0432, \u043f\u043e\u043b\u043d\u043e\u0441\u0442\u044c\u044e "
+    L"\u043e\u0431\u0440\u0430\u0442\u0438\u043c\u043e (\u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u0442\u0441\u044f \u0438 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u0430\u0432\u043b\u0438\u0432\u0430\u0435\u0442\u0441\u044f "
+    L"\u043f\u043e\u0431\u0430\u0439\u0442\u043e\u0432\u043e).\r\n\r\n\u0422\u0430\u043a\u0436\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u044f\u044e\u0442\u0441\u044f \u0434\u0432\u0435 \u0441\u0442\u0440\u0430\u0445\u043e\u0432\u043a\u0438: \u044f\u0440\u043b\u044b\u043a \u0432 \u043f\u0430\u043f\u043a\u0435 "
+    L"\u00ab\u0410\u0432\u0442\u043e\u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u00bb \u0438 \u0437\u0430\u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0437\u0430\u0434\u0430\u0447\u0430 (\"7explorer Shell Recovery\"), "
+    L"\u043f\u0440\u043e\u0432\u0435\u0440\u044f\u044e\u0449\u0430\u044f \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443 ~30 \u0441 \u043f\u043e\u0441\u043b\u0435 \u0432\u0445\u043e\u0434\u0430.\r\n\r\n\u0421\u043d\u0438\u043c\u0438\u0442\u0435 \u0444\u043b\u0430\u0436\u043e\u043a, \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043c\u0435\u043d\u0438\u0442\u044c "
+    L"\u0432\u0441\u0451.",
+    L"\u041f\u0435\u0440\u0435\u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430.\r\n\r\n\u0412\u0435\u0440\u043d\u0443\u0442\u044c\u0441\u044f \u0441\u0435\u0439\u0447\u0430\u0441 \u043a Windows 7 Explorer Restorer?",
+    L"Windows 7 Explorer Restorer \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043b\u0451\u043d: \u043f\u0440\u043e\u0438\u0437\u043e\u0439\u0434\u0451\u0442 \u0432\u043e\u0437\u0432\u0440\u0430\u0442 \u043a \u041f\u0440\u043e\u0432\u043e\u0434\u043d\u0438\u043a\u0443 "
+    L"Windows, \u0447\u0430\u0441\u0442\u043d\u044b\u0435 \u0444\u0430\u0439\u043b\u044b \u0431\u0443\u0434\u0443\u0442 \u0443\u0434\u0430\u043b\u0435\u043d\u044b.\r\n\r\n\u041f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c?",
+    L"Windows 7 Explorer Restorer \u0443\u0434\u0430\u043b\u0451\u043d.",
+};
+static const WCHAR* TR_ZHCN[] = {
+    L"\u5373\u65f6\u5207\u6362\u6b63\u5728\u8fd0\u884c\u7684 Explorer \u5916\u58f3\u3002\u65e0\u9700\u6ce8\u9500\u3002",
+    L"\u9009\u62e9 Explorer \u5916\u58f3",
+    L"\u539f\u751f Windows \u8d44\u6e90\u7ba1\u7406\u5668",
+    L"Win7ExplorerRestorer (Windows 7)",
+    L"(\u672a\u68c0\u6d4b\u5230)",
+    L"\u672a\u77e5\u7684\u8d44\u6e90\u7ba1\u7406\u5668(\u89c1\u8def\u5f84)",
+    L"\u5207\u6362",
+    L"\u53d6\u6d88",
+    L"\u6d4f\u89c8\u2026",
+    L"\u5728\u767b\u5f55\u65f6\u81ea\u52a8\u542f\u52a8 Windows 7 Explorer\r\n(\u8bbe\u7f6e\u6309\u7528\u6237\u7684 Shell \u503c\uff0c\u53ef\u8fd8\u539f \u2014 \u8be6\u60c5: "
+    L"docs/avvio-al-login.md)",
+    L"\u5f53\u524d\u5916\u58f3: %s\r\nPID %lu \u2014 %s",
+    L"\u76ee\u6807: %s\r\n%s",
+    L"\u8d44\u6e90\u7ba1\u7406\u5668\u5c06\u91cd\u65b0\u542f\u52a8\u3002\r\n\u672a\u4fdd\u5b58\u7684\u5de5\u4f5c\u53ef\u80fd\u4f1a\u4e22\u5931\u3002\r\n\r\n\u7ee7\u7eed\u5417?",
+    L"\u627e\u4e0d\u5230\u76ee\u6807\u53ef\u6267\u884c\u6587\u4ef6:\r\n%s\r\n\r\n\u672a\u5207\u6362\u4efb\u4f55\u5185\u5bb9\u3002",
+    L"\u62d2\u7edd\u505c\u6b62\u5f53\u524d\u5916\u58f3: \u5176\u53ef\u6267\u884c\u6587\u4ef6\r\n\u4e0d\u662f\u53ef\u8bc6\u522b\u7684 explorer:\r\n%s\r\n\r\n\u672a\u5207\u6362\u4efb\u4f55\u5185\u5bb9\u3002",
+    L"\u6240\u9009\u5916\u58f3\u5df2\u5728\u8fd0\u884c\u3002",
+    L"\u65e0\u6cd5\u542f\u52a8 Windows 7 Explorer:\r\n%s\r\nCreateProcess \u9519\u8bef %lu\u3002\r\n\r\n\u6b63\u5728\u5c1d\u8bd5\u8fd8\u539f\u539f\u751f\u5916\u58f3\u2026",
+    L"\u4e25\u91cd: \u65e0\u6cd5\u542f\u52a8\u4efb\u4f55\u5916\u58f3\u3002\r\n\u539f\u751f\u8fd8\u539f\u4e5f\u5931\u8d25\u4e86(\u9519\u8bef %lu)\u3002\r\n\r\n\u6062\u590d: Ctrl+Alt+Shift+S \u6253\u5f00\u6b64\u5207\u6362\u5668\uff1b\u6216 "
+    L"Ctrl+Shift+Esc \u2192 \u4efb\u52a1\u7ba1\u7406\u5668 \u2192 \u8fd0\u884c\u65b0\u4efb\u52a1 \u2192 %s",
+    L"\u65e0\u6cd5\u542f\u52a8\u539f\u751f\u5916\u58f3:\r\n%s\r\nCreateProcess \u9519\u8bef %lu\u3002\r\n\r\n\u91cd\u8bd5\u542f\u52a8 %s \u5417?",
+    L"\u65e0\u6cd5%ls\u767b\u5f55\u65f6\u81ea\u52a8\u542f\u52a8(\u9519\u8bef %lu)\u3002\r\n\u672a\u66f4\u6539\u5176\u4ed6\u5185\u5bb9\u3002",
+    L"Windows 7 Explorer \u5c06\u5728\u767b\u5f55\u65f6\u542f\u52a8\u3002\u5df2\u5e94\u7528(\u5168\u90e8\u53ef\u8fd8\u539f):\r\n\u2022 \u6309\u7528\u6237\u7684 Shell \u503c(HKCU "
+    L"...\\Winlogon\\Shell) \u2014 \u5df2\u4fdd\u5b58\u4ee5\u524d\u7684\u503c\uff1b\r\n\u2022 \u542f\u52a8\u6587\u4ef6\u5939\u4e2d\u7684\u94fe\u63a5(\u5907\u7528 + \u70ed\u952e\u91cd\u542f)\uff1b\r\n\u2022 \u6062\u590d\u4efb\u52a1 \"7explorer "
+    L"Shell Recovery\"(\u767b\u5f55\u540e\u7ea6 30 \u79d2:\r\n   \u5982\u679c\u79c1\u6709\u5916\u58f3\u672a\u8fd0\u884c\uff0c\u5219\u8fd8\u539f\u4e00\u5207)\u3002\r\n\r\n\u53d6\u6d88\u9009\u4e2d\u8be5\u590d\u9009\u6846\u53ef\u64a4\u9500\u8fd9\u4e09\u9879(\u4ee5\u524d\u7684\u503c\u5c06\u6309\r\n\u5b57"
+    L"\u8282\u539f\u6837\u8fd8\u539f)\u3002\u8be6\u60c5: docs/avvio-al-login.md",
+    L"\u9009\u62e9\u79c1\u6709\u7684 Win7ExplorerRestorer (explorer.exe)",
+    L"explorer.exe\0explorer.exe\0\u6240\u6709\u6587\u4ef6\0*.*\0",
+    L"\u542f\u52a8\u6587\u4ef6\u5939\u94fe\u63a5\u64cd\u4f5c\u5931\u8d25(\u9519\u8bef %lu)\u3002",
+    L"\u7cfb\u7edf\u9ed8\u8ba4",
+    L"English",
+    L"Italiano",
+    L"\u81ea\u5b9a\u4e49\u4e3b\u9898\u2026",
+    L"\u9009\u62e9\u4f60\u7684 Windows 7 \u4e3b\u9898\u6587\u4ef6 (aero.msstyles)",
+    L"\u4e3b\u9898\u6587\u4ef6\0*.msstyles\0\u6240\u6709\u6587\u4ef6\0*.*\0",
+    L"\u4e3b\u9898\u5df2\u5b89\u88c5\u5230:\r\n%s\r\n\r\n\u5207\u6362\u5916\u58f3(\u4f8b\u5982 \u539f\u751f \u2192 Win7ExplorerRestorer)\u4ee5\u5e94\u7528\u3002\r\n\u8be5\u6587\u4ef6\u5c5e\u4e8e\u4f60: "
+    L"\u4ec5\u5728\u672c\u5730\u590d\u5236\uff0c\u672a\u4e0b\u8f7d\u6216\u5171\u4eab\u4efb\u4f55\u5185\u5bb9\u3002",
+    L"\u65e0\u6cd5\u590d\u5236\u4e3b\u9898\u6587\u4ef6(\u9519\u8bef %lu):\r\n%s",
+    L"\u65e0\u6cd5\u542f\u7528\u767b\u5f55\u65f6\u81ea\u52a8\u542f\u52a8:\r\n%s\r\n\r\n\u8be5\u6587\u4ef6\u5939\u4e2d\u5fc5\u987b\u540c\u65f6\u5b58\u5728 explorer.exe \u548c wrp64.dll\r\n(Shell "
+    L"\u503c\u4ece\u4e0d\u6307\u5411\u7f3a\u5931\u7684\u6587\u4ef6)\u3002",
+    L"\u5df2\u5220\u9664\u767b\u5f55\u65f6\u81ea\u52a8\u542f\u52a8\u3002\r\n\u5df2\u8fd8\u539f\u4ee5\u524d\u7684 Shell \u503c\uff0c\u5e76\u5220\u9664\u4e86\u5907\u7528\u94fe\u63a5\r\n\u548c\u6062\u590d\u4efb\u52a1\u3002",
+    L"\u5df2\u8bbe\u7f6e\u6309\u7528\u6237\u7684 Shell \u503c\uff0c\u4f46\u65e0\u6cd5\u6ce8\u518c\u6062\u590d\u4efb\u52a1\r\n(\u9519\u8bef %lu)\u3002\r\n\u81ea\u52a8\u542f\u52a8\u4ecd\u53ef\u5de5\u4f5c\uff1b\u53ea\u662f\u5728\u767b\u5f55\u65f6\u6ca1\u6709\u81ea\u52a8\u5b89\u5168\u7f51\r\n(\u8be6\u60c5: "
+    L"docs/avvio-al-login.md)\u3002",
+    L"\u5c1a\u672a\u5b89\u88c5 Windows 7 Explorer Restorer",
+    L"\u82e5\u8981\u4f7f\u7528\uff0c\u9700\u8981\u4ece Microsoft \u4e0b\u8f7d\u6587\u4ef6\u5e76\u9a8c\u8bc1\u548c\u51c6\u5907\u3002\u4ec5\u9996\u6b21\u9700\u8981 Internet \u8fde\u63a5\u3002",
+    L"\u91cd\u65b0\u5b89\u88c5 Windows 7 Explorer Restorer \u5417?",
+    L"\u5c06\u91cd\u65b0\u4e0b\u8f7d\u5e76\u51c6\u5907\u79c1\u6709\u7684 explorer.exe \u526f\u672c\u3002\u5982\u679c\u6b63\u5728\u4f7f\u7528\uff0c\u5c06\u5148\u5207\u6362\u56de Windows \u8d44\u6e90\u7ba1\u7406\u5668\u3002",
+    L"\u5b89\u88c5",
+    L"\u91cd\u65b0\u5b89\u88c5",
+    L"\u4e2d\u6b62",
+    L"\u4e0d\u9700\u8981\u7ba1\u7406\u5458\u6743\u9650\u3002",
+    L"\u5927\u7ea6\u9700\u8981\u4e00\u5206\u949f\u3002",
+    L"\u6b63\u5728\u5b89\u88c5\u2026",
+    L"\u5b89\u88c5\u5931\u8d25(\u9000\u51fa\u4ee3\u7801 %lu)\u3002\r\n\r\n%s",
+    L"\u5b89\u88c5\u5931\u8d25 \u2014 \u89c1\u8be6\u60c5\u3002",
+    L"\u5b89\u88c5\u5df2\u4e2d\u6b62\u3002",
+    L"\u627e\u4e0d\u5230\u5b89\u88c5\u7a0b\u5e8f:\r\n%s\r\n\r\n\u8bf7\u5c06 Win7ExplorerRestorer.exe \u590d\u5236\u5230\u6b64\u5207\u6362\u5668\u65c1\u8fb9(\u540c\u4e00\u6587\u4ef6\u5939)\u5e76\u91cd\u8bd5\u3002",
+    L"\u627e\u4e0d\u5230\u5b89\u88c5\u7a0b\u5e8f\u3002",
+    L"\u65e0\u6cd5\u542f\u52a8\u5b89\u88c5\u7a0b\u5e8f(\u9519\u8bef %lu):\r\n%s",
+    L"\u9009\u62e9\u7528\u4f5c Windows \u5916\u58f3\u7684 Explorer\u3002\u5207\u6362\u5373\u65f6\u751f\u6548\uff0c\u65e0\u9700\u6ce8\u9500\u3002",
+    L"\u9ed8\u8ba4\u7cfb\u7edf\u5916\u58f3",
+    L"  \u2013 \u4f7f\u7528\u4e2d",
+    L"\u6bcf\u6b21\u767b\u5f55\u65f6\u4f7f\u7528 Windows 7 Explorer Restorer",
+    L"\u66f4\u591a\u4fe1\u606f",
+    L"\u91cd\u65b0\u5b89\u88c5",
+    L"\u5378\u8f7d",
+    L"\u8bed\u8a00",
+    L"\u4f7f\u7528 Win7ExplorerRestorer",
+    L"\u4f7f\u7528\u539f\u751f Explorer",
+    L"\u684c\u9762\u5c06\u77ed\u6682\u91cd\u542f\u3002",
+    L"\u767b\u5f55\u65f6\u81ea\u52a8\u542f\u52a8\u4f1a\u5c06\u6309\u7528\u6237\u7684 Shell \u503c(HKCU)\u8bbe\u7f6e\u4e3a\u79c1\u6709\u7684 explorer.exe \u2014 \u6807\u51c6\u7684 Windows "
+    L"\u65b9\u5f0f\uff0c\u65e0\u9700\u63d0\u5347\uff0c\u5b8c\u5168\u53ef\u8fd8\u539f(\u4ee5\u524d\u7684\u503c\u4f1a\u88ab\u4fdd\u5b58\u5e76\u6309\u5b57\u8282\u539f\u6837\u8fd8\u539f)\u3002\r\n\r\n\u8fd8\u4f1a\u6dfb\u52a0\u4e24\u9053\u5b89\u5168\u7f51: \u542f\u52a8\u6587\u4ef6\u5939\u4e2d\u7684\u94fe\u63a5\u548c\u8ba1\u5212\u4efb\u52a1(\"7explorer "
+    L"Shell Recovery\")\uff0c\u5728\u767b\u5f55\u540e\u7ea6 30 \u79d2\u68c0\u67e5\u5916\u58f3\u3002\r\n\r\n\u53d6\u6d88\u9009\u4e2d\u8be5\u590d\u9009\u6846\u53ef\u64a4\u9500\u4e00\u5207\u3002",
+    L"\u91cd\u65b0\u5b89\u88c5\u5b8c\u6210\u3002\r\n\r\n\u73b0\u5728\u5207\u6362\u56de Windows 7 Explorer Restorer \u5417?",
+    L"\u5c06\u5220\u9664 Windows 7 Explorer Restorer: \u4f1a\u5207\u6362\u56de Windows \u8d44\u6e90\u7ba1\u7406\u5668\uff0c\u5e76\u5220\u9664\u79c1\u6709\u6587\u4ef6\u3002\r\n\r\n\u7ee7\u7eed\u5417?",
+    L"\u5df2\u5220\u9664 Windows 7 Explorer Restorer\u3002",
+};
+static const WCHAR** TR_TABLES[UI_LANG_COUNT] = {
+    TR_EN, TR_IT, TR_DE, TR_ES, TR_FR, TR_JA, TR_PL, TR_PTBR, TR_RU, TR_ZHCN
+};
+static_assert(ARRAYSIZE(TR_EN) == TR_COUNT, "TR_EN entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_IT) == TR_COUNT, "TR_IT entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_DE) == TR_COUNT, "TR_DE entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_ES) == TR_COUNT, "TR_ES entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_FR) == TR_COUNT, "TR_FR entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_JA) == TR_COUNT, "TR_JA entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_PL) == TR_COUNT, "TR_PL entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_PTBR) == TR_COUNT, "TR_PTBR entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_RU) == TR_COUNT, "TR_RU entries must match TR_COUNT");
+static_assert(ARRAYSIZE(TR_ZHCN) == TR_COUNT, "TR_ZHCN entries must match TR_COUNT");
+static UiLang g_uiLang = UI_EN;   // switcher UI language (process-local)
+static const WCHAR* TR(TRID id)
+{
+    // Bounds-checked with English fallback: the UI always works in English.
+    const WCHAR* s = nullptr;
+    if ((unsigned)id < (unsigned)TR_COUNT && (unsigned)g_uiLang < (unsigned)UI_LANG_COUNT)
+        s = TR_TABLES[g_uiLang][id];
+    if (!s && (unsigned)id < (unsigned)TR_COUNT)
+        s = TR_EN[id];
+    return s ? s : L"";
+}
+
+// Maps a language code ("en", "pt-BR", "zh-CN", legacy "i"/"e", ...) to UiLang.
+// Returns UI_LANG_COUNT when unknown. Never throws (pure comparisons).
+static UiLang LangFromCode(const WCHAR* code)
+{
+    if (!code || !*code) return UI_LANG_COUNT;
+    if (!lstrcmpiW(code, L"en") || !lstrcmpiW(code, L"eng")) return UI_EN;
+    if (!lstrcmpiW(code, L"it") || !lstrcmpiW(code, L"ita")) return UI_IT;
+    if (!lstrcmpiW(code, L"de") || !lstrcmpiW(code, L"deu")) return UI_DE;
+    if (!lstrcmpiW(code, L"es") || !lstrcmpiW(code, L"esp")) return UI_ES;
+    if (!lstrcmpiW(code, L"fr") || !lstrcmpiW(code, L"fra") || !lstrcmpiW(code, L"fre")) return UI_FR;
+    if (!lstrcmpiW(code, L"ja") || !lstrcmpiW(code, L"jpn")) return UI_JA;
+    if (!lstrcmpiW(code, L"pl") || !lstrcmpiW(code, L"pol")) return UI_PL;
+    if (!lstrcmpiW(code, L"pt") || !lstrcmpiW(code, L"pt-BR") || !lstrcmpiW(code, L"ptbr") ||
+        !lstrcmpiW(code, L"por") || !lstrcmpiW(code, L"pt-PT")) return UI_PTBR; // pt-PT shares pt-BR
+    if (!lstrcmpiW(code, L"ru") || !lstrcmpiW(code, L"rus")) return UI_RU;
+    if (!lstrcmpiW(code, L"zh") || !lstrcmpiW(code, L"zh-CN") || !lstrcmpiW(code, L"zhcn") ||
+        !lstrcmpiW(code, L"chs") || !lstrcmpiW(code, L"cht") || !lstrcmpiW(code, L"zh-TW") ||
+        !lstrcmpiW(code, L"zh-HK")) return UI_ZHCN; // Traditional shares Simplified
+    // Legacy single letters (pre-test39 only knew it/en).
+    if (code[0] == L'i' || code[0] == L'I') return UI_IT;
+    if (code[0] == L'e' || code[0] == L'E') return UI_EN;
+    return UI_LANG_COUNT;
+}
+
+// Primary system UI language -> switcher language (English default).
+static UiLang SystemUiLang()
+{
+    switch (PRIMARYLANGID(GetUserDefaultUILanguage())) {
+    case LANG_ITALIAN:    return UI_IT;
+    case LANG_GERMAN:     return UI_DE;
+    case LANG_SPANISH:    return UI_ES;
+    case LANG_FRENCH:     return UI_FR;
+    case LANG_JAPANESE:    return UI_JA;
+    case LANG_POLISH:     return UI_PL;
+    case LANG_PORTUGUESE: return UI_PTBR; // only Brazilian Portuguese translated
+    case LANG_RUSSIAN:    return UI_RU;
+    case LANG_CHINESE:    return UI_ZHCN; // only Simplified Chinese translated
+    default:              return UI_EN;
+    }
+}
+
+// Resolves the switcher UI language: WIN7EXPLORERRESTORER_LANG override, else the
+// system UI language, else English. Reads only our own variable / this process:
+// no Windows-wide setting is ever touched. Exception-safe (English fallback).
+static UiLang ResolveUiLanguage()
+{
+    try {
+        WCHAR l[16]; // stack buffer: RAII by scope, sized for the longest code
+        DWORD n = GetEnvironmentVariableW(L"WIN7EXPLORERRESTORER_LANG", l, ARRAYSIZE(l) - 1);
+        if (n > 0 && n < ARRAYSIZE(l) - 1) {
+            l[n] = 0;
+            UiLang e = LangFromCode(l);
+            if (e != UI_LANG_COUNT) return e;
+        }
+        return SystemUiLang();
+    } catch (...) {
+        return UI_EN;
+    }
+}
+
+// RAII for CommandLineToArgvW (LocalFree on scope exit, never leaks).
+struct ArgvGuard {
+    LPWSTR* v;
+    explicit ArgvGuard(LPWSTR* p) : v(p) {}
+    ~ArgvGuard() { if (v) LocalFree(v); }
+private:
+    ArgvGuard(const ArgvGuard&);
+    ArgvGuard& operator=(const ArgvGuard&);
+};
 
 #define IDC_RADIO_NATIVE  101
 #define IDC_RADIO_WIN7EXPLORERRESTORER     102
@@ -2368,19 +3257,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     (void)hPrevInstance; (void)nCmdShow;
     g_hInst = hInstance;
 
-    // UI language: WIN7EXPLORERRESTORER_LANG=it|en > primary system UI language (English
-    // default; the tool always works in English).
-    {
-        WCHAR l[8];
-        DWORD n = GetEnvironmentVariableW(L"WIN7EXPLORERRESTORER_LANG", l, 7);
-        if (n > 0 && n < 7 && (l[0] == L'i' || l[0] == L'I'))
-            g_uiItalian = TRUE;
-        else if (n > 0 && n < 7 && (l[0] == L'e' || l[0] == L'E'))
-            g_uiItalian = FALSE;
-        else
-            g_uiItalian = (PRIMARYLANGID(GetUserDefaultUILanguage()) ==
-                           LANG_ITALIAN);
-    }
+    // UI language (test39): explicit WIN7EXPLORERRESTORER_LANG > system UI language
+    // (English fallback). Process-local only.
+    g_uiLang = ResolveUiLanguage();
 
     ResolveShellPaths();
 
@@ -2396,26 +3275,30 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     //                      previous Shell value, deletes link + task)
     //   --hotkey           resident Ctrl+Alt+Shift+S instance
     //   --recover-login    body of the recovery task (no UI)
+    //   --lang=<code>      force the switcher UI language
+    //                      (en it de es fr ja pl pt-BR ru zh-CN)
     {
         int argc = 0;
-        LPWSTR* argv =
-            lpCmdLine && *lpCmdLine ? CommandLineToArgvW(GetCommandLineW(), &argc)
-                                    : NULL;
+        ArgvGuard argv(lpCmdLine && *lpCmdLine ? CommandLineToArgvW(GetCommandLineW(), &argc)
+                                             : NULL);
         int mode = 0;   // 0=GUI, 1=win7explorerestorer, 2=native, 3=install, 4=uninstall,
                         // 5=hotkey, 6=recover
         BOOL logonLink = FALSE;
         for (int i = 1; i < argc; i++) {
-            if (!lstrcmpiW(argv[i], L"--apply-win7explorerestorer"))        mode = 1;
-            else if (!lstrcmpiW(argv[i], L"--apply-native"))   mode = 2;
-            else if (!lstrcmpiW(argv[i], L"--install-login"))  mode = 3;
-            else if (!lstrcmpiW(argv[i], L"--uninstall-login"))mode = 4;
-            else if (!lstrcmpiW(argv[i], L"--hotkey"))         mode = 5;
-            else if (!lstrcmpiW(argv[i], L"--recover-login"))  mode = 6;
-            else if (!lstrcmpiW(argv[i], L"--logon"))          logonLink = TRUE;
-            else if (!lstrcmpiW(argv[i], L"--lang=it"))        g_uiItalian = TRUE;
-            else if (!lstrcmpiW(argv[i], L"--lang=en"))        g_uiItalian = FALSE;
+            if (!lstrcmpiW(argv.v[i], L"--apply-win7explorerestorer"))        mode = 1;
+            else if (!lstrcmpiW(argv.v[i], L"--apply-native"))   mode = 2;
+            else if (!lstrcmpiW(argv.v[i], L"--install-login"))  mode = 3;
+            else if (!lstrcmpiW(argv.v[i], L"--uninstall-login"))mode = 4;
+            else if (!lstrcmpiW(argv.v[i], L"--hotkey"))         mode = 5;
+            else if (!lstrcmpiW(argv.v[i], L"--recover-login"))  mode = 6;
+            else if (!lstrcmpiW(argv.v[i], L"--logon"))          logonLink = TRUE;
+            else if (!_wcsnicmp(argv.v[i], L"--lang=", 7)) {
+                // Forced switcher UI language (never touches Windows settings).
+                UiLang forced = UI_LANG_COUNT;
+                try { forced = LangFromCode(argv.v[i] + 7); } catch (...) { forced = UI_LANG_COUNT; }
+                if (forced != UI_LANG_COUNT) g_uiLang = forced;
+            }
         }
-        if (argv) LocalFree(argv);
 
         SwLog(L"started (mode %d%s)", mode, logonLink ? L", logon link" : L"");
         if (mode == 5)

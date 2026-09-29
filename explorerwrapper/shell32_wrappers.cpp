@@ -314,7 +314,19 @@ HRESULT WINAPI Shell32_CoCreateInstance(
 	__out  LPVOID* ppv
 )
 {
+	// Win7 "Connect To" (::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}) no longer
+	// exists on Windows 10/11, and the Start menu binds it directly (no
+	// ShellExecute call is ever issued, so the ShellFixes remap/verb cannot
+	// fire): the button opens nothing. Per Microsoft documentation it must
+	// open Network Connections (shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}),
+	// so a failed activation is retried there. Only failed binds are touched.
+	static const GUID kWin7ConnectTo = { 0x38A98528, 0x6CBF, 0x4CA9, { 0x8D, 0xC0, 0xB1, 0xE1, 0xD1, 0x0F, 0x7B, 0x1B } };
+	static const GUID kNetworkConnections = { 0x7007ACC7, 0x3202, 0x11D1, { 0xAA, 0xD2, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E } };
 	HRESULT result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, riid, ppv);
+	if (result != S_OK && rclsid == kWin7ConnectTo) {
+		dbgprintf(L"Shell32_CoCreateInstance: Connect To failed, retrying as Network Connections\n");
+		result = CoCreateInstance(kNetworkConnections, pUnkOuter, dwClsContext, riid, ppv);
+	}
 	if (rclsid == CLSID_ProgramsFolderAndFastItems && result != S_OK)
 	{
 		IShellFolder* ShellFolder;
