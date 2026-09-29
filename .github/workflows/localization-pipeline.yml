@@ -1,0 +1,78 @@
+name: localization-pipeline
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/localization-pipeline.yml
+      - tools/build_resources.py
+      - tools/embed_catalog.py
+      - tools/check_pe_resources.py
+      - tools/verify_catalog.py
+      - installer/ex7selfcontained/**
+      - localization/**
+      - switcher/**
+      - windhawk/**
+permissions:
+  contents: read  # log upload only, no branch commits
+jobs:
+  windows-acceptance:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: amd64
+      - name: Static gates (catalog verify + resource build + determinism)
+        shell: cmd
+        run: |
+          python tools\verify_catalog.py ^
+            --catalog-dir localization\catalog ^
+            --constraints localization\constraints\shell32.dll.constraints.json ^
+            --constraints localization\constraints\explorer.exe.constraints.json
+          if errorlevel 1 exit /b 1
+          python tools\build_resources.py
+          if errorlevel 1 exit /b 1
+          python tools\embed_catalog.py
+          python tools\embed_catalog.py
+          git diff --exit-code -- explorerwrapper/ex7_languages.rc installer/ex7selfcontained/lang_catalog.h
+          if errorlevel 1 exit /b 1
+      - name: Compile-check Windhawk PoC mods (x64, stub api)
+        shell: cmd
+        run: |
+          if not exist wh-obj mkdir wh-obj
+          if not exist ci-run mkdir ci-run
+          cl /nologo /c /std:c++17 /W4 /EHsc /I windhawk\compat /Fo"wh-obj\\" windhawk\ex7-userinit-shell.cpp windhawk\ex7-fake-explorer-path.cpp windhawk\compat\wh_stubs.cpp > ci-run\windhawk-clcheck.log 2>&1
+          if errorlevel 1 (type ci-run\windhawk-clcheck.log & exit /b 1)
+          type ci-run\windhawk-clcheck.log
+      - name: Build installer (msbuild)
+        shell: cmd
+        run: |
+          if not exist ci-run mkdir ci-run
+          msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m > ci-run\msbuild.log 2>&1
+          if errorlevel 1 (type ci-run\msbuild.log & exit /b 1)
+          msbuild switcher\shell_switcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m > ci-run\msbuild-switcher.log 2>&1
+          if errorlevel 1 (type ci-run\msbuild-switcher.log & exit /b 1)
+      - name: Full run against the real Microsoft binary (download->verify->patch->rewrite)
+        shell: cmd
+        run: |
+          copy /Y installer\ex7selfcontained\bin\ex7selfcontained.exe ci-run\
+          cd ci-run
+          ex7selfcontained.exe > run.out 2>&1
+          if errorlevel 1 (type run.out & exit /b 1)
+      - name: Verify generated resources inside the produced PE
+        shell: cmd
+        run: python tools\check_pe_resources.py ci-run\explorer.exe
+      - name: Upload run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: localization-pipeline-${{ github.run_id }}
+          path: |
+            ci-run/run.out
+            ci-run/msbuild.log
+            ci-run/msbuild-switcher.log
+            ci-run/windhawk-clcheck.log
+            ci-run/log/**
+            ci-run/state/**
+          if-no-files-found: warn

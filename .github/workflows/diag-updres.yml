@@ -1,0 +1,47 @@
+name: diag-updres-experiments
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/diag-updres.yml
+      - ci/updres/**
+permissions:
+  contents: read  # log upload only, no branch commits
+jobs:
+  experiments:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download pristine explorer.exe (symbol server)
+        shell: pwsh
+        run: |
+          mkdir exp | Out-Null
+          $url = "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"
+          Invoke-WebRequest -Uri $url -OutFile exp\pristine.exe -TimeoutSec 60
+          (Get-Item exp\pristine.exe).Length
+      - name: Run UpdateResource experiments
+        shell: pwsh
+        run: |
+          & {
+            try {
+              Add-Type -Path ci\updres\Program.cs -ErrorAction Stop
+              Write-Host "Add-Type OK"
+              [RU]::V1AndV2()
+              [RU]::V3()
+              [RU]::V4()
+              [RU]::V5()
+              foreach ($line in [RU]::Log) { Write-Host $line }
+              Write-Host "experiments DONE"
+            } catch {
+              Write-Host ("EXPERIMENT ERROR: " + $_)
+              Write-Host ($_.ScriptStackTrace)
+            }
+          } *>&1 | Tee-Object -FilePath exp\updres.out
+          exit 0
+      - name: Upload experiment logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-updres-${{ github.run_id }}
+          path: exp/
+          if-no-files-found: warn

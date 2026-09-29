@@ -1,0 +1,253 @@
+name: selfcontained-ci
+
+# CI del bootstrap self-contained:
+#  - test Python (patcher/analyzer/verifier) sempre;
+#  - build MSVC di wrp64.dll (con MinHook clonato, come da README) e di
+#    ex7selfcontained.exe;
+#  - verifica SUL FILE REALE scaricato dai server Microsoft: hash, header,
+#    patch Python vs C++ byte-per-byte, import risultanti verso wrp64.dll;
+#  - su tag "v*-test*": pre-release con gli eseguibili compilati QUI.
+#  Nessun binario Microsoft viene caricato negli artifact o nella release.
+on:
+  push:
+    branches: [main, "arena/**"]
+    tags: ["v*-test*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # serve al job prerelease (GITHUB_TOKEN del fork)
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: amd64
+
+      - name: Python test suite (patcher / analyzer / catalog verifier)
+        run: python tests/run_tests.py
+
+      - name: Regenerate embedded theme and verify it matches the commit
+        shell: cmd
+        run: |
+          python tools\theme\build_theme.py --final --out work-theme-check\7explorer_theme.msstyles
+          fc /b work-theme-check\7explorer_theme.msstyles explorerwrapper\res\7explorer_theme.msstyles
+
+      - name: Catalog verify + deterministic generation (twice, diff-exit)
+        shell: cmd
+        run: |
+          python tools\embed_catalog.py
+          python tools\embed_catalog.py
+          git diff --exit-code -- explorerwrapper/ex7_languages.rc installer/ex7selfcontained/lang_catalog.h
+
+      - name: Clone and build MinHook (libMinHook.x64.lib, non committata)
+        shell: cmd
+        run: |
+          git clone https://github.com/TsudaKageyu/minhook.git minhook
+          cd minhook\build\VC17
+          msbuild MinHookVC17.sln /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:LogFile=..\..\..\msbuild-minhook.log
+          copy /Y .\lib\Release\libMinHook.x64.lib ..\..\..\explorerwrapper\
+
+      - name: Build wrp64.dll (Release x64)
+        shell: cmd
+        run: msbuild explorerwrapper.sln /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-wrp64.log
+
+      - name: Build ex7selfcontained.exe (Release x64)
+        shell: cmd
+        run: msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-ex7selfcontained.log
+
+      - name: Build 7explorer-shell-switcher.exe (Release x64, static CRT)
+        shell: cmd
+        run: msbuild switcher\shell_switcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:m /flp:v=m;LogFile=msbuild-switcher.log
+
+      - name: Download reference explorer.exe and re-verify pinned identity
+        shell: cmd
+        run: |
+          if not exist work mkdir work
+          if not exist logs mkdir logs
+          echo --- download --- > logs\run-verify.txt
+          curl.exe -L -o work\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe" 2>> logs\run-verify.txt
+          if errorlevel 1 exit /b 1
+
+      - name: Re-verify hash (allow-list), size and signature
+        shell: pwsh
+        run: |
+          $expected = @(
+            '5769e5b25c7bfbc20dbfdca2f17b751f6d968e03412705de4a16c99b2626e21b',
+            '6a671b92a69755de6fd063fcbe4ba926d83b49f78c42dbaeed8cdb6bbc57576a')
+          $h = (Get-FileHash -Algorithm SHA256 work\explorer-ref.exe).Hash.ToLower()
+          $s = (Get-Item work\explorer-ref.exe).Length
+          "--- hash+size ---"     | Add-Content logs\run-verify.txt
+          "sha256: $h"            | Add-Content logs\run-verify.txt
+          "size: $s"              | Add-Content logs\run-verify.txt
+          if (-not ($expected -contains $h)) { throw "SHA256 NOT IN ALLOW-LIST: $h" }
+          if ($s -ne 2872320) { throw "SIZE MISMATCH: $s" }
+          $sig = Get-AuthenticodeSignature work\explorer-ref.exe
+          "signature: $($sig.Status) | $($sig.SignerCertificate.Subject)" | Add-Content logs\run-verify.txt
+          # NotSigned is EXPECTED for symbol-server copies of Win7 binaries
+          # (they are catalog-signed at OS level, not embedded); log it.
+          if ($sig.Status -ne 'Valid' -and $sig.Status -ne 'NotSigned') { throw "UNEXPECTED SIGNATURE STATUS: $($sig.Status)" }
+
+      - name: Dump PE headers of the reference (log evidence)
+        shell: cmd
+        run: |
+          echo --- pe headers --- >> logs\run-verify.txt
+          python tools\analyze_mui.py work\explorer-ref.exe --dump-headers >> logs\run-verify.txt 2>&1
+          if errorlevel 1 exit /b 1
+
+      - name: Structure probe of the reference menus (NO text extracted)
+        shell: cmd
+        run: |
+          python tools\structure_probe.py work\explorer-ref.exe --out logs\structure-ref.json
+          if errorlevel 1 exit /b 1
+
+      - name: Patch imports on the REAL file with the Python reference
+        run: python tools\patch_imports.py work\explorer-ref.exe work\explorer-py.exe
+
+      - name: Patch imports with the C++ build and compare byte-for-byte
+        shell: cmd
+        run: |
+          installer\ex7selfcontained\bin\ex7selfcontained.exe --selftest-importpatch work\explorer-ref.exe > logs\selftest.txt 2>&1
+          if errorlevel 1 exit /b 1
+          fc /b work\explorer-ref.exe.ex7patched work\explorer-py.exe >> logs\selftest.txt 2>&1
+          if errorlevel 1 exit /b 1
+
+      - name: Verify the patched imports resolve to wrp64.dll
+        shell: cmd
+        run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers | findstr /i "wrp64.dll"
+
+      - name: Inspect the C++-patched imports once more (log evidence)
+        run: python tools\analyze_mui.py work\explorer-ref.exe.ex7patched --dump-headers
+
+      # ---- v0.0.3: generated-resource pipeline, END-TO-END on real Windows
+      - name: "E2E run — installer download/patch/localize (no .mui anywhere)"
+        shell: cmd
+        run: |
+          mkdir e2e
+          copy /Y installer\ex7selfcontained\bin\ex7selfcontained.exe e2e\
+          cd e2e
+          ex7selfcontained.exe > run.out 2>&1
+          if errorlevel 1 (type run.out & exit /b 1)
+          type run.out
+      - name: "E2E proof — generated resources verified in the REAL PE"
+        shell: cmd
+        run: |
+          python tools\check_pe_resources.py e2e\explorer.exe ^
+            > logs\check-pe-resources.txt 2>&1
+          if errorlevel 1 (type logs\check-pe-resources.txt & exit /b 1)
+          type logs\check-pe-resources.txt
+      - name: "E2E rerun — idempotency (second run rewrites identically)"
+        shell: cmd
+        run: |
+          cd e2e
+          ex7selfcontained.exe --offline > run2.out 2>&1
+          if errorlevel 1 (type run2.out & exit /b 1)
+          cd ..
+          python tools\check_pe_resources.py e2e\explorer.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Create test bundle zip (all-in-one, no extra downloads)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bundle | Out-Null
+          Copy-Item Release\wrp64.dll bundle\
+          Copy-Item installer\ex7selfcontained\bin\ex7selfcontained.exe bundle\
+          Copy-Item switcher\bin\7explorer-shell-switcher.exe bundle\
+          New-Item -ItemType Directory -Force bundle\windhawk | Out-Null
+          Copy-Item windhawk\*.cpp bundle\windhawk\
+          Copy-Item installer\ex7selfcontained\README.md bundle\BOOTSTRAP-README.md
+          Copy-Item windhawk\README.md bundle\WINDHAWK-README.md
+          Copy-Item switcher\README.md bundle\SWITCHER-README.md
+          Compress-Archive -Path bundle\* -DestinationPath ex7-test-bundle.zip -Force
+          Get-Item ex7-test-bundle.zip | Select-Object Name,Length
+
+      - name: Produce SHA256SUMS for the CI-built binaries
+        shell: pwsh
+        run: |
+          $items = @("Release\wrp64.dll", "installer\ex7selfcontained\bin\ex7selfcontained.exe", "switcher\bin\7explorer-shell-switcher.exe", "ex7-test-bundle.zip")
+          $lines = foreach ($i in $items) { $h=(Get-FileHash -Algorithm SHA256 $i).Hash.ToLower(); "$h  $(Split-Path $i -Leaf)" }
+          $lines | Set-Content -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
+      - name: Collect run logs (uploaded as artifact, never committed)
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force collect-logs | Out-Null
+          Get-ChildItem msbuild-*.log -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName ("collect-logs\" + $_.BaseName + ".txt") -Force }
+          if (Test-Path logs) { Copy-Item logs\* collect-logs\ -Force -ErrorAction SilentlyContinue }
+          Get-ChildItem collect-logs | Select-Object Name,Length
+
+      - name: Surface build errors as annotations
+        if: failure()
+        shell: pwsh
+        run: |
+          # Compiler/linker errors as workflow annotations: readable from the
+          # API even when the full logs cannot be downloaded.
+          foreach ($log in Get-ChildItem msbuild-*.log -ErrorAction SilentlyContinue) {
+            $n = 0
+            Select-String -Path $log.FullName -Pattern ": (error|fatal error) " |
+              Select-Object -First 40 | ForEach-Object {
+                $n++
+                Write-Host ("::error title={0}:{1}::{2}" -f $log.Name, $_.LineNumber, $_.Line.Trim())
+              }
+            if ($n -eq 0) {
+              Write-Host ("::error title={0}::msbuild failed with no error lines - see artifact {1}" -f $log.Name, 'ex7selfcontained-binaries')
+            }
+          }
+
+      - name: Upload artifacts (NO Microsoft binaries)
+        if: always()  # anche in caso di fallimento: servono i log di build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ex7selfcontained-binaries
+          path: |
+            Release/wrp64.dll
+            installer/ex7selfcontained/bin/ex7selfcontained.exe
+            switcher/bin/7explorer-shell-switcher.exe
+            ex7-test-bundle.zip
+            SHA256SUMS.txt
+            msbuild-wrp64.log
+            msbuild-ex7selfcontained.log
+            msbuild-switcher.log
+            msbuild-minhook.log
+            collect-logs/
+          retention-days: 30
+
+  prerelease:
+    needs: build
+    runs-on: windows-latest
+    # solo sui tag di test, mai sulle branch
+    if: startsWith(github.ref, 'refs/tags/') && contains(github.ref, '-test')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ex7selfcontained-binaries
+      - name: Publish pre-release with CI-built binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -File | Select-Object -ExpandProperty FullName
+          gh release create "$env:TAG" --prerelease `
+            --title "7explorer $env:TAG (reference test build)" `
+            --notes-file docs/RELEASE_NOTES_test.md `
+            "Release/wrp64.dll#wrp64.dll" `
+            "installer/ex7selfcontained/bin/ex7selfcontained.exe#ex7selfcontained.exe" `
+            "switcher/bin/7explorer-shell-switcher.exe#7explorer-shell-switcher.exe" `
+            "ex7-test-bundle.zip#ex7-test-bundle.zip" `
+            "windhawk/ex7-userinit-shell.cpp#ex7-userinit-shell.wh.cpp" `
+            "windhawk/ex7-fake-explorer-path.cpp#ex7-fake-explorer-path.wh.cpp" `
+            "windhawk/README.md#windhawk-POC-README.md" `
+            "SHA256SUMS.txt"
+          if ($LASTEXITCODE -ne 0) { throw "release create failed" }
+          gh release view "$env:TAG"

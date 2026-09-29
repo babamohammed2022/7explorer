@@ -1,0 +1,35 @@
+# Diagnostic only: resolves the exit call stack of the Win7 explorer.exe
+# 6.1.7601.17514 with the public PDB. No binaries committed.
+name: diag-explorer-exit
+on:
+  push:
+    branches: ["arena/**"]
+    paths: [".github/workflows/diag-explorer-exit.yml", "tools/explorer_sym.py"]
+  workflow_dispatch:
+permissions:
+  contents: read  # log upload only, no branch commits
+jobs:
+  sym:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Download + resolve
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force work, ci-logs | Out-Null
+          curl.exe -s -L -o work\explorer.exe https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442c0000/explorer.exe
+          (Get-FileHash -Algorithm SHA256 work\explorer.exe).Hash | Add-Content ci-logs\explorer-exit.txt
+          $dbg = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"
+          & "$dbg\symchk.exe" /r work\explorer.exe /s "srv*$pwd\work\sym*https://msdl.microsoft.com/download/symbols" 2>&1 | Add-Content ci-logs\explorer-exit.txt
+          pip install pefile capstone | Out-Null
+          python tools\explorer_sym.py work\explorer.exe "$pwd\work\sym" "$dbg\dbghelp.dll" 2B911 5AFF5 *>> ci-logs\explorer-exit.txt
+      - name: Upload diag logs as artifact (no branch commits)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-explorer-exit-${{ github.run_id }}
+          path: ci-logs/
+          if-no-files-found: warn

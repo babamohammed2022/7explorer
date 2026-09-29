@@ -1,0 +1,1789 @@
+{
+ "source": "explorer.exe.mui Win7 6.1.7600 en-US: dump strutturale completo (analyze_mui --templates), NESSUN testo UI. Sostituisce il template PROVVISORIO.",
+ "source_sha256": "4cc514a7d9afae763cdd21932ee722ae4a787c968bab971c3b1d30044151cfe3",
+ "source_file_size": 22016,
+ "time_date_stamp": "0x4A5BC954",
+ "machine": "0x8664",
+ "menus": {
+  "205/lang:0409": {
+   "version": 0,
+   "levels": [
+    [
+     {
+      "flags": 144,
+      "popup": true,
+      "cmd": null,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 408,
+      "text": {
+       "len": 17,
+       "accel": "A"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 421,
+      "text": {
+       "len": 29,
+       "accel": "C"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 0
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 403,
+      "text": {
+       "len": 16,
+       "accel": "d"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 405,
+      "text": {
+       "len": 21,
+       "accel": "t"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 404,
+      "text": {
+       "len": 26,
+       "accel": "i"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 407,
+      "text": {
+       "len": 17,
+       "accel": "S"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 416,
+      "text": {
+       "len": 5,
+       "accel": "U"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 0
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 420,
+      "text": {
+       "len": 19,
+       "accel": "k"
+      }
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 0
+     },
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 424,
+      "text": {
+       "len": 17,
+       "accel": "L"
+      }
+     },
+     {
+      "flags": 128,
+      "popup": false,
+      "cmd": 413,
+      "text": {
+       "len": 11,
+       "accel": "r"
+      }
+     }
+    ]
+   ]
+  },
+  "211/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 129,
+      "popup": true,
+      "help_id": 0,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 32755,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 11,
+       "accel": "r"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 32756,
+      "bResInfo": 128,
+      "popup": false,
+      "text": {
+       "len": 14,
+       "accel": "x"
+      }
+     }
+    ]
+   ]
+  },
+  "212/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 129,
+      "popup": true,
+      "help_id": 0,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6601,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 40,
+       "accel": "S"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6602,
+      "bResInfo": 1,
+      "popup": true,
+      "text": {
+       "len": 20,
+       "accel": "R"
+      },
+      "help_id": 0,
+      "popup_level": 2
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6603,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 10,
+       "accel": "h"
+      }
+     },
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 0,
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6604,
+      "bResInfo": 128,
+      "popup": false,
+      "text": {
+       "len": 5,
+       "accel": "x"
+      }
+     }
+    ],
+    [
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 128,
+      "popup": false
+     }
+    ]
+   ]
+  },
+  "213/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 0,
+      "bResInfo": 129,
+      "popup": true,
+      "help_id": 0,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6701,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 13,
+       "accel": "S"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 6702,
+      "bResInfo": 128,
+      "popup": false,
+      "text": {
+       "len": 16,
+       "accel": "P"
+      }
+     }
+    ]
+   ]
+  },
+  "6003/lang:0409": {
+   "version": 0,
+   "levels": [
+    [
+     {
+      "flags": 144,
+      "popup": true,
+      "cmd": null,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "flags": 0,
+      "popup": false,
+      "cmd": 1,
+      "text": {
+       "len": 17,
+       "accel": "n"
+      }
+     },
+     {
+      "flags": 128,
+      "popup": false,
+      "cmd": 2,
+      "text": {
+       "len": 20,
+       "accel": "I"
+      }
+     }
+    ]
+   ]
+  },
+  "12000/lang:0409": {
+   "version": 1,
+   "levels": [
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 129,
+      "popup": true,
+      "help_id": 0,
+      "popup_level": 1
+     }
+    ],
+    [
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 403,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 8,
+       "accel": "s"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 405,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 21,
+       "accel": "t"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 404,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 26,
+       "accel": "i"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 65493,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 20,
+       "accel": "R"
+      }
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 65492,
+      "bResInfo": 0,
+      "popup": false,
+      "text": {
+       "len": 21,
+       "accel": "M"
+      }
+     },
+     {
+      "dwType": 2048,
+      "dwState": 0,
+      "cmd": 4294967295,
+      "bResInfo": 0,
+      "popup": false
+     },
+     {
+      "dwType": 0,
+      "dwState": 0,
+      "cmd": 65491,
+      "bResInfo": 128,
+      "popup": false,
+      "text": {
+       "len": 18,
+       "accel": "C"
+      }
+     }
+    ]
+   ]
+  }
+ },
+ "dialogs": {
+  "6/lang:0409": {
+   "ex": true,
+   "help_id": 0,
+   "ex_style": 0,
+   "style": 2429026504,
+   "rect": [
+    0,
+    0,
+    252,
+    218
+   ],
+   "menu": {
+    "kind": "null"
+   },
+   "window_class": {
+    "kind": "null"
+   },
+   "title": {
+    "len": 7,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 0,
+    "italic": 0,
+    "charset": 0,
+    "face": "MS Shell Dlg"
+   },
+   "controls": [
+    {
+     "id": 1105,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242819,
+     "rect": [
+      13,
+      18,
+      200,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 17,
+      "accel": "L",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1102,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242819,
+     "rect": [
+      13,
+      32,
+      200,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 22,
+      "accel": "u",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1139,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242819,
+     "rect": [
+      13,
+      46,
+      200,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 16,
+      "accel": "i",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 65535,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      13,
+      63,
+      100,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 28,
+      "accel": "T",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1142,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1344339971,
+     "rect": [
+      117,
+      60,
+      110,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "COMBOBOX"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 65535,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      13,
+      81,
+      100,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 17,
+      "accel": "b",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1143,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1344339971,
+     "rect": [
+      117,
+      78,
+      110,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "COMBOBOX"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 65535,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177287,
+     "rect": [
+      7,
+      7,
+      238,
+      91
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 18,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 65535,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308480,
+     "rect": [
+      13,
+      113,
+      171,
+      16
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 72,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1140,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      188,
+      113,
+      50,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 13,
+      "accel": "C",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 65535,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177287,
+     "rect": [
+      7,
+      102,
+      238,
+      34
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 17,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1144,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308480,
+     "rect": [
+      13,
+      151,
+      220,
+      16
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 103,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1141,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242819,
+     "rect": [
+      13,
+      171,
+      200,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 37,
+      "accel": "P",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1145,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177287,
+     "rect": [
+      7,
+      140,
+      238,
+      48
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 30,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1114,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      7,
+      200,
+      256,
+      8
+     ],
+     "class": {
+      "kind": "string",
+      "value": "SysLink"
+     },
+     "text": {
+      "len": 38,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    }
+   ]
+  },
+  "10/lang:0409": {
+   "ex": true,
+   "help_id": 0,
+   "ex_style": 0,
+   "style": 2429026504,
+   "rect": [
+    0,
+    0,
+    252,
+    218
+   ],
+   "menu": {
+    "kind": "null"
+   },
+   "window_class": {
+    "kind": "null"
+   },
+   "title": {
+    "len": 8,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 0,
+    "italic": 0,
+    "charset": 0,
+    "face": "MS Shell Dlg"
+   },
+   "controls": [
+    {
+     "id": 1106,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      7,
+      7,
+      223,
+      12
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 44,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1137,
+     "help_id": 0,
+     "ex_style": 512,
+     "style": 1350631424,
+     "rect": [
+      7,
+      20,
+      236,
+      160
+     ],
+     "class": {
+      "kind": "string",
+      "value": "SysTreeView32"
+     },
+     "text": {
+      "len": 12,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1138,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1484783616,
+     "rect": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "class": {
+      "kind": "string",
+      "value": "SysTreeView32"
+     },
+     "text": {
+      "len": 5,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    }
+   ]
+  },
+  "20/lang:0409": {
+   "ex": true,
+   "help_id": 0,
+   "ex_style": 0,
+   "style": 2160593096,
+   "rect": [
+    0,
+    0,
+    272,
+    81
+   ],
+   "menu": {
+    "kind": "null"
+   },
+   "window_class": {
+    "kind": "null"
+   },
+   "title": {
+    "len": 17,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 0,
+    "italic": 0,
+    "charset": 0,
+    "face": "MS Shell Dlg"
+   },
+   "controls": [
+    {
+     "id": 4610,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242819,
+     "rect": [
+      7,
+      62,
+      139,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 36,
+      "accel": "D",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1006,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      159,
+      60,
+      50,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 7,
+      "accel": "R",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 5,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242817,
+     "rect": [
+      215,
+      60,
+      50,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 7,
+      "accel": "I",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177296,
+     "rect": [
+      7,
+      51,
+      258,
+      1
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177283,
+     "rect": [
+      7,
+      7,
+      21,
+      20
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "ordinal": 32515
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1007,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      34,
+      7,
+      224,
+      37
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 201,
+      "accel": null,
+      "placeholders": [
+       "%s",
+       "%s"
+      ]
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    }
+   ]
+  },
+  "23/lang:0409": {
+   "ex": true,
+   "help_id": 0,
+   "ex_style": 0,
+   "style": 2160593356,
+   "rect": [
+    0,
+    0,
+    320,
+    137
+   ],
+   "menu": {
+    "kind": "null"
+   },
+   "window_class": {
+    "kind": "null"
+   },
+   "title": {
+    "len": 17,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 0,
+    "italic": 0,
+    "charset": 0,
+    "face": "MS Shell Dlg"
+   },
+   "controls": [
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308480,
+     "rect": [
+      48,
+      18,
+      256,
+      8
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 43,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308480,
+     "rect": [
+      48,
+      37,
+      256,
+      18
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 99,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177283,
+     "rect": [
+      14,
+      12,
+      20,
+      20
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "ordinal": 32515
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342373889,
+     "rect": [
+      256,
+      112,
+      50,
+      16
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 5,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1009,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      48,
+      67,
+      256,
+      18
+     ],
+     "class": {
+      "kind": "string",
+      "value": "SysLink"
+     },
+     "text": {
+      "len": 77,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1008,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342251011,
+     "rect": [
+      48,
+      93,
+      256,
+      18
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 47,
+      "accel": "N",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    }
+   ]
+  },
+  "205/lang:0409": {
+   "ex": true,
+   "help_id": 0,
+   "ex_style": 0,
+   "style": 2429026504,
+   "rect": [
+    0,
+    0,
+    252,
+    218
+   ],
+   "menu": {
+    "kind": "null"
+   },
+   "window_class": {
+    "kind": "null"
+   },
+   "title": {
+    "len": 10,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 0,
+    "italic": 0,
+    "charset": 0,
+    "face": "MS Shell Dlg"
+   },
+   "controls": [
+    {
+     "id": 1134,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      7,
+      7,
+      170,
+      16
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 92,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1131,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      192,
+      4,
+      53,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 13,
+      "accel": "C",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 65535,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      7,
+      35,
+      72,
+      8
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 21,
+      "accel": "b",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1133,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1344339971,
+     "rect": [
+      83,
+      32,
+      100,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "COMBOBOX"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1136,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342252291,
+     "rect": [
+      14,
+      68,
+      224,
+      10
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 62,
+      "accel": "p",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1135,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342252291,
+     "rect": [
+      14,
+      82,
+      224,
+      20
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 74,
+      "accel": "m",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 300,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177287,
+     "rect": [
+      7,
+      55,
+      238,
+      50
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 7,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1116,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      7,
+      200,
+      256,
+      8
+     ],
+     "class": {
+      "kind": "string",
+      "value": "SysLink"
+     },
+     "text": {
+      "len": 52,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    }
+   ]
+  },
+  "1036/lang:0409": {
+   "ex": true,
+   "help_id": 0,
+   "ex_style": 0,
+   "style": 2429026504,
+   "rect": [
+    0,
+    0,
+    251,
+    274
+   ],
+   "menu": {
+    "kind": "null"
+   },
+   "window_class": {
+    "kind": "null"
+   },
+   "title": {
+    "len": 20,
+    "accel": null
+   },
+   "font": {
+    "points": 8,
+    "weight": 0,
+    "italic": 0,
+    "charset": 0,
+    "face": "MS Shell Dlg"
+   },
+   "controls": [
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      7,
+      7,
+      238,
+      16
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 80,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1123,
+     "help_id": 0,
+     "ex_style": 512,
+     "style": 1350631425,
+     "rect": [
+      7,
+      26,
+      238,
+      169
+     ],
+     "class": {
+      "kind": "string",
+      "value": "SysTreeView32"
+     },
+     "text": {
+      "len": 18,
+      "accel": "t",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342177287,
+     "rect": [
+      7,
+      202,
+      238,
+      44
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 16,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      14,
+      214,
+      191,
+      8
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 38,
+      "accel": "N",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1307,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1350770690,
+     "rect": [
+      211,
+      212,
+      27,
+      12
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "EDIT"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1305,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1350697142,
+     "rect": [
+      221,
+      212,
+      11,
+      12
+     ],
+     "class": {
+      "kind": "string",
+      "value": "msctls_updown32"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 4294967295,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342308352,
+     "rect": [
+      14,
+      230,
+      191,
+      8
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "STATIC"
+     },
+     "text": {
+      "len": 49,
+      "accel": "J",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1309,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1350770690,
+     "rect": [
+      211,
+      228,
+      27,
+      12
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "EDIT"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1308,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1350697142,
+     "rect": [
+      221,
+      228,
+      11,
+      12
+     ],
+     "class": {
+      "kind": "string",
+      "value": "msctls_updown32"
+     },
+     "text": null,
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1037,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      7,
+      253,
+      80,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 21,
+      "accel": "D",
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 1,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242817,
+     "rect": [
+      140,
+      253,
+      50,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 2,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    },
+    {
+     "id": 2,
+     "help_id": 0,
+     "ex_style": 0,
+     "style": 1342242816,
+     "rect": [
+      194,
+      253,
+      50,
+      14
+     ],
+     "class": {
+      "kind": "atom",
+      "name": "BUTTON"
+     },
+     "text": {
+      "len": 6,
+      "accel": null,
+      "placeholders": []
+     },
+     "extra_hex": "",
+     "extra_looks_textual": false
+    }
+   ]
+  }
+ },
+ "accelerators": {
+  "251/lang:0409": [
+   {
+    "fVirt": 16,
+    "key": 115,
+    "cmd": 305,
+    "last": false
+   },
+   {
+    "fVirt": 3,
+    "key": 9,
+    "cmd": 41008,
+    "last": false
+   },
+   {
+    "fVirt": 7,
+    "key": 9,
+    "cmd": 41008,
+    "last": false
+   },
+   {
+    "fVirt": 11,
+    "key": 9,
+    "cmd": 41008,
+    "last": false
+   },
+   {
+    "fVirt": 15,
+    "key": 9,
+    "cmd": 41008,
+    "last": false
+   },
+   {
+    "fVirt": 3,
+    "key": 116,
+    "cmd": 41061,
+    "last": false
+   },
+   {
+    "fVirt": 3,
+    "key": 117,
+    "cmd": 41008,
+    "last": false
+   },
+   {
+    "fVirt": 19,
+    "key": 13,
+    "cmd": 413,
+    "last": false
+   },
+   {
+    "fVirt": 11,
+    "key": 90,
+    "cmd": 416,
+    "last": false
+   },
+   {
+    "fVirt": 3,
+    "key": 114,
+    "cmd": 41093,
+    "last": false
+   },
+   {
+    "fVirt": 147,
+    "key": 77,
+    "cmd": 419,
+    "last": true
+   }
+  ]
+ },
+ "notes": "Font face names and window class names (SysLink, SysTreeView32, ...) are public Win32 API identifiers, not prose text. Any extra data blob that LOOKS textual is flagged and must be reviewed before use."
+}

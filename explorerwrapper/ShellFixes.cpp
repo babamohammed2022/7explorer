@@ -1,0 +1,1662 @@
+// 7explorer fork — see ShellFixes.h.
+//
+// 1) Remapping of Win7 shell targets (documented CLSIDs):
+//    * "Customize..." in the notification overflow launches
+//        ::{26EE0668-A00A-44D7-9371-BEB064C98683}\0\::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}
+//      (Control Panel category view \ Notification Area Icons). Windows 10/11
+//      no longer resolve that category path ("file not found"); the item
+//      itself is still reachable as shell:::{05D7B0F4-...} - and the page
+//      STILL EXISTS on 24H2/25H2 (test31: CLSID registered, window opens),
+//      although on 24H2 it renders EMPTY. Routing (incl. the built-in
+//      recreation, NotifyIconsDialog) is decided by NotifyIconsUseSettings,
+//      see LaunchRemap below; final fallback is ms-settings:taskbar.
+//    * "Connect To" uses ::{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B} (Win7 network
+//      "Connect To" pop-up), which does not exist any more. Redirect to
+//      Network Connections shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E},
+//      fallback ms-settings:network.
+//    Every call is logged with dbgprintf so unknown targets can be captured
+//    with DebugView.
+// 2) "Help and Support" name: the Start menu item shows the display name of
+//    CLSID {2559a1f1-21d7-11d4-bdaf-00c04f60b9f0}. When its LocalizedString
+//    cannot be resolved Windows falls back to the English default value.
+//    We point a per-user LocalizedString at this DLL (string 7021, localized
+//    by ex7_languages.rc). Opt-out: FixHelpAndSupportName = 0.
+// 3) DWM transparency: accent policies are rendered opaque when the Windows
+//    "transparency effects" switch (Personalize\EnableTransparency) is 0.
+//    Opt-out: KeepSystemTransparency = 1.
+#include "ShellFixes.h"
+#include "SafeGuards.h"
+#include "OptionConfig.h"
+#include <shellapi.h>
+#include <commctrl.h>
+#include "MinHook.h"
+#include "LegacyBatteryFlyout.h"
+#include "NetworkIcon.h"
+#include "FlyoutFrames.h"
+#include "ImmersiveMenus.h"
+#include "NotifyIconsDialog.h"
+#include "TrayMenus.h"
+#include "UwpHost.h"
+#include <shobjidl.h>
+#include "dbgprint.h"
+#include <shlwapi.h>
+#include <tlhelp32.h>
+
+void CreateTwinUI_UWP(); // ImmersiveShell.cpp
+namespace ex7 { void RetryDeferredTwinUI(); }
+
+namespace ex7 {
+namespace {
+
+const wchar_t kNotifyIconsClsid[] = L"05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9";
+const wchar_t kConnectToClsid[]   = L"38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B";
+const wchar_t kHelpClsidKey[]     = L"Software\\Classes\\CLSID\\{2559a1f1-21d7-11d4-bdaf-00c04f60b9f0}";
+const wchar_t kAdvancedKey[]      = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+const wchar_t kPersonalizeKey[]   = L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
+
+// ------------------------------------------------------------ diagnostic log
+// %TEMP%\7explorer-shellfix.log (capped at 256 KB). Written in addition to
+// OutputDebugString so users without DebugView can send it. Opt-out:
+// ShellFixLog = 0.
+bool g_logEnabled = true;
+SRWLOCK g_logLock = SRWLOCK_INIT;
+
+void LogLine(LPCWSTR fmt, ...)
+{
+	wchar_t msg[1024];
+	va_list ap;
+	va_start(ap, fmt);
+	wvnsprintfW(msg, ARRAYSIZE(msg) - 3, fmt, ap);
+	va_end(ap);
+	OutputDebugStringW(msg);
+	if (!g_logEnabled) return;
+
+	wchar_t path[MAX_PATH];
+	DWORD n = GetTempPathW(MAX_PATH, path);
+	if (!n || n > MAX_PATH - 32) return;
+	StringCchCatW(path, MAX_PATH, L"7explorer-shellfix.log");
+
+	AcquireSRWLockExclusive(&g_logLock);
+	ScopedHandle h(CreateFileW(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+	if (h.Get() != INVALID_HANDLE_VALUE) {
+		LARGE_INTEGER size = {};
+		if (GetFileSizeEx(h.Get(), &size) && size.QuadPart > 256 * 1024) {
+			// test33: rotate instead of stopping (a full log hid everything
+			// after the first minutes): current -> .old, start a new file.
+			CloseHandle(h.Release());
+			wchar_t old[MAX_PATH];
+			StringCchCopyW(old, MAX_PATH, path); StringCchCatW(old, MAX_PATH, L".old");
+			MoveFileExW(path, old, MOVEFILE_REPLACE_EXISTING);
+			h.Reset(CreateFileW(path, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
+				nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+			if (h.Get() == INVALID_HANDLE_VALUE) { ReleaseSRWLockExclusive(&g_logLock); return; }
+		}
+		SYSTEMTIME st; GetLocalTime(&st);
+		char line[3200];
+		wchar_t full[1100];
+		wnsprintfW(full, ARRAYSIZE(full), L"%02u:%02u:%02u.%03u [%u] %s\r\n",
+			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, GetCurrentThreadId(), msg);
+		int len = WideCharToMultiByte(CP_UTF8, 0, full, -1, line, sizeof(line), nullptr, nullptr);
+		if (len > 1) {
+			DWORD written = 0;
+			WriteFile(h.Get(), line, (DWORD)(len - 1), &written, nullptr);
+		}
+	}
+	ReleaseSRWLockExclusive(&g_logLock);
+}
+
+typedef BOOL(WINAPI* ShellExecuteExW_t)(SHELLEXECUTEINFOW*);
+typedef HINSTANCE(WINAPI* ShellExecuteW_t)(HWND, LPCWSTR, LPCWSTR, LPCWSTR, LPCWSTR, INT);
+ShellExecuteExW_t g_origShellExecuteExW = nullptr;
+ShellExecuteW_t g_origShellExecuteW = nullptr;
+
+// ------------------------------------------------------------ registry
+DWORD ReadAdvancedDword(const wchar_t* name, DWORD def)
+{
+	DWORD v = def, cb = sizeof(v), type = 0;
+	ScopedRegKey k;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, kAdvancedKey, 0, KEY_READ, k.Put()) == ERROR_SUCCESS &&
+		RegQueryValueExW(k.Get(), name, nullptr, &type, (LPBYTE)&v, &cb) == ERROR_SUCCESS &&
+		type == REG_DWORD)
+		return v;
+	ScopedRegKey m;
+	cb = sizeof(v);
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kAdvancedKey, 0, KEY_READ, m.Put()) == ERROR_SUCCESS &&
+		RegQueryValueExW(m.Get(), name, nullptr, &type, (LPBYTE)&v, &cb) == ERROR_SUCCESS &&
+		type == REG_DWORD)
+		return v;
+	return def;
+}
+
+void WriteAdvancedDword(const wchar_t* name, DWORD v)
+{
+	ScopedRegKey k;
+	if (RegCreateKeyExW(HKEY_CURRENT_USER, kAdvancedKey, 0, nullptr, 0, KEY_SET_VALUE,
+		nullptr, k.Put(), nullptr) == ERROR_SUCCESS)
+		RegSetValueExW(k.Get(), name, 0, REG_DWORD, (const BYTE*)&v, sizeof(v));
+}
+
+// ------------------------------------------------------------ remapping
+struct Remap {
+	const wchar_t* explorerArgs; // passed to %windir%\explorer.exe
+	const wchar_t* fallbackUri;  // ms-settings: URI
+};
+
+bool Contains(const wchar_t* s, const wchar_t* needle)
+{
+	return s && *s && StrStrIW(s, needle) != nullptr;
+}
+
+const Remap* FindRemap(const wchar_t* target)
+{
+	static const Remap notify = { L"shell:::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}", L"ms-settings:taskbar" };
+	static const Remap connect = { L"shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}", L"ms-settings:network" };
+	if (Contains(target, kNotifyIconsClsid) || Contains(target, L"Microsoft.NotificationAreaIcons")) return &notify;
+	if (Contains(target, kConnectToClsid)) return &connect;
+	return nullptr;
+}
+
+// Parsing name of an IDList (RAII-owned string), empty on failure.
+bool IdListName(PCIDLIST_ABSOLUTE pidl, wchar_t* out, size_t cch)
+{
+	out[0] = 0;
+	if (!pidl) return false;
+	ScopedCoTaskMem name;
+	if (FAILED(SHGetNameFromIDList(pidl, SIGDN_DESKTOPABSOLUTEPARSING, name.PutStr())) || !name.Str())
+		return false;
+	return SUCCEEDED(StringCchCopyW(out, cch, name.Str()));
+}
+
+bool ClsidRegistered(const wchar_t* clsidNoBraces)
+{
+	wchar_t key[96];
+	wnsprintfW(key, ARRAYSIZE(key), L"CLSID\\{%s}", clsidNoBraces);
+	HKEY k;
+	if (RegOpenKeyExW(HKEY_CLASSES_ROOT, key, 0, KEY_READ, &k) != ERROR_SUCCESS) return false;
+	RegCloseKey(k);
+	return true;
+}
+
+DWORD OsBuild();
+BOOL ActivateSettingsFallback(LPCWSTR uri);
+
+BOOL LaunchSettingsUri(const wchar_t* uri, HWND hwnd)
+{
+	SHELLEXECUTEINFOW fb = { sizeof(fb) };
+	fb.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+	fb.hwnd = hwnd; fb.lpFile = uri; fb.nShow = SW_SHOWNORMAL;
+	int before = ex7::uwp::CountAppWindows();
+	BOOL ok = g_origShellExecuteExW(&fb);
+	if (ok) LogLine(L"[ex7] opened %s", uri);
+	else {
+		LogLine(L"[ex7] %s failed (%u): activation fallback", uri, GetLastError());
+		ok = ActivateSettingsFallback(uri);
+		if (!ok && ex7::uwp::EnsureHost(L"Settings activation failed")) { // native host, then once more
+			Sleep(2500);
+			ok = g_origShellExecuteExW(&fb) || ActivateSettingsFallback(uri);
+			LogLine(L"[ex7] %s retry after UWP host: %d", uri, ok);
+		}
+		if (!ok) { // at any cost: classic Control Panel
+			wchar_t cp[MAX_PATH]; GetSystemDirectoryW(cp, MAX_PATH); StringCchCatW(cp, MAX_PATH, L"\\control.exe");
+			SHELLEXECUTEINFOW c = { sizeof(c) }; c.fMask = SEE_MASK_FLAG_NO_UI; c.lpFile = cp; c.nShow = SW_SHOWNORMAL;
+			ok = g_origShellExecuteExW(&c);
+			LogLine(L"[ex7] %s: all Settings paths failed, Control Panel -> %d", uri, ok);
+			return ok;
+		}
+	}
+	if (ok) ex7::uwp::WatchActivation(0, uri, nullptr, before);
+	return ok;
+}
+
+BOOL LaunchRemap(const Remap* r, HWND hwnd, int nShow)
+{
+	// "Customize..." (taskbar properties + overflow). NotifyIconsUseSettings:
+	// 0 = auto (default): the system "Notification Area Icons" page when its
+	//     CLSID is registered (it still exists on 24H2/25H2 - test29 wrongly
+	//     assumed it was removed), otherwise the built-in window;
+	// 1 = Settings, 2 = system page only, 3 = built-in window always.
+	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid)) {
+		DWORD mode = ReadAdvancedDword(L"NotifyIconsUseSettings", 0);
+		bool pageOk = ClsidRegistered(kNotifyIconsClsid);
+		LogLine(L"[ex7][notifyicons] mode=%u page registered=%d build=%u", mode, pageOk, OsBuild());
+		if (mode == 3 || (mode == 0 && !pageOk)) {
+			bool ok = ShowNotifyIconsDialog();
+			LogLine(L"[ex7][notifyicons] built-in dialog started=%d", ok ? 1 : 0);
+			if (ok) return TRUE;
+		}
+		if (mode == 1 || (!pageOk && mode != 2)) return LaunchSettingsUri(r->fallbackUri, hwnd);
+	}
+	wchar_t explorer[MAX_PATH];
+	if (!ExpandEnvironmentStringsW(L"%SystemRoot%\\explorer.exe", explorer, MAX_PATH))
+		StringCchCopyW(explorer, MAX_PATH, L"explorer.exe");
+
+	SHELLEXECUTEINFOW sei = { sizeof(sei) };
+	sei.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
+	sei.hwnd = hwnd;
+	sei.lpFile = explorer;
+	sei.lpParameters = r->explorerArgs;
+	sei.nShow = nShow ? nShow : SW_SHOWNORMAL;
+	if (g_origShellExecuteExW(&sei)) {
+		LogLine(L"[ex7] remapped to explorer %s", r->explorerArgs);
+		return TRUE;
+	}
+	LogLine(L"[ex7] explorer %s failed (%u), trying %s", r->explorerArgs, GetLastError(), r->fallbackUri);
+	SHELLEXECUTEINFOW fb = { sizeof(fb) };
+	fb.fMask = SEE_MASK_NOASYNC;
+	fb.hwnd = hwnd;
+	fb.lpFile = r->fallbackUri;
+	fb.nShow = SW_SHOWNORMAL;
+	return g_origShellExecuteExW(&fb) || ActivateSettingsFallback(r->fallbackUri);
+}
+
+struct ExecCtx {
+	SHELLEXECUTEINFOW* sei;
+	BOOL handled;
+	BOOL result;
+};
+
+// ------------------------------------------------------------ UWP launch shim
+// Packaged apps in the Start menu are AppsFolder items whose parsing name is
+// the AppUserModelID ("<PackageFamilyName>!<AppId>"). Launching them through
+// the AppsFolder verb depends on shell state the Win7 explorer does not
+// fully provide; IApplicationActivationManager::ActivateApplication is the
+// documented way to start a packaged app from a desktop process
+// (learn.microsoft.com: IApplicationActivationManager). Opt-out UwpActivationShim=0.
+const CLSID kCLSID_AAM = { 0x45BA127D, 0x10A8, 0x46EA, { 0x8A, 0xB7, 0x56, 0xEA, 0x90, 0x78, 0x94, 0x3C } };
+
+bool ExtractAumid(const wchar_t* s, wchar_t* out, size_t cch)
+{
+	if (!s || !*s) return false;
+	static const wchar_t* prefixes[] = {
+		L"shell:AppsFolder\\", L"shell:::{4234d49b-0245-4df3-b780-3893943456e1}\\", L"::{4234d49b-0245-4df3-b780-3893943456e1}\\" };
+	const wchar_t* p = s;
+	for (const wchar_t* pre : prefixes) {
+		int n = lstrlenW(pre);
+		if (StrCmpNIW(s, pre, n) == 0) { p = s + n; break; }
+	}
+	if (p == s && StrChrW(s, L'\\')) return false; // a path, not an AUMID
+	int len = lstrlenW(p);
+	if (len < 3 || len >= (int)cch || !StrChrW(p, L'!')) return false;
+	for (const wchar_t* q = p; *q; ++q)
+		if (*q == L'\\' || *q == L'/' || *q == L':' || *q == L' ' || *q == L'"') return false;
+	lstrcpynW(out, p, (int)cch);
+	return true;
+}
+
+// Settings pages that have a classic Win32 equivalent are opened as such:
+// the immersive Settings app does not come up under the Win7 shell on some
+// builds (volume menu "Open Volume mixer"/"Open Sound settings" did nothing).
+// Opt-out SettingsWin32Remap=0.
+struct Win32Page { const wchar_t* prefix; const wchar_t* file; const wchar_t* params; };
+const Win32Page kWin32Pages[] = {
+	{ L"ms-settings:apps-volume",    L"SndVol.exe",  nullptr },
+	{ L"ms-settings:sound",          L"control.exe", L"mmsys.cpl" },
+	{ L"ms-settings:network",        L"control.exe", L"/name Microsoft.NetworkAndSharingCenter" },
+	{ L"ms-settings:datausage",      L"control.exe", L"ncpa.cpl" },
+	{ L"ms-settings:dateandtime",    L"control.exe", L"timedate.cpl" },
+	{ L"ms-settings:display",        L"control.exe", L"desk.cpl" },
+	{ L"ms-settings:personalization",L"control.exe", L"/name Microsoft.Personalization" },
+	{ L"ms-settings:powersleep",     L"control.exe", L"powercfg.cpl" },
+	{ L"ms-settings:batterysaver",   L"control.exe", L"powercfg.cpl" },
+	{ L"ms-settings:mousetouchpad",  L"control.exe", L"main.cpl" },
+	{ L"ms-settings:regionlanguage", L"control.exe", L"intl.cpl" },
+	{ L"ms-settings:appsfeatures",   L"control.exe", L"appwiz.cpl" },
+	{ L"ms-settings:about",          L"control.exe", L"/name Microsoft.System" },
+	{ L"ms-settings:bluetooth",      L"control.exe", L"bthprops.cpl" },
+	{ L"ms-settings:printers",       L"control.exe", L"printers" },
+};
+
+bool TryWin32Settings(SHELLEXECUTEINFOW* sei, ExecCtx* c)
+{
+	const wchar_t* f = sei->lpFile;
+	if (!f || StrCmpNIW(f, L"ms-settings:", 12) != 0) return false;
+	if (ReadAdvancedDword(L"SettingsWin32Remap", 1) == 0) return false;
+	for (const Win32Page& p : kWin32Pages) {
+		int n = lstrlenW(p.prefix);
+		if (StrCmpNIW(f, p.prefix, n) != 0) continue;
+		wchar_t sys[MAX_PATH], exe[MAX_PATH];
+		GetSystemDirectoryW(sys, MAX_PATH);
+		wnsprintfW(exe, MAX_PATH, L"%s\\%s", sys, p.file);
+		SHELLEXECUTEINFOW x = { sizeof(x) };
+		x.fMask = SEE_MASK_FLAG_NO_UI | (sei->fMask & SEE_MASK_NOCLOSEPROCESS);
+		x.hwnd = sei->hwnd; x.lpFile = exe; x.lpParameters = p.params; x.nShow = SW_SHOWNORMAL;
+		BOOL ok = g_origShellExecuteExW(&x);
+		LogLine(L"[ex7] %s -> %s %s: %d", f, exe, p.params ? p.params : L"", ok);
+		if (!ok) return false;
+		c->handled = TRUE; c->result = TRUE;
+		sei->hInstApp = (HINSTANCE)(INT_PTR)33;
+		if (sei->fMask & SEE_MASK_NOCLOSEPROCESS) sei->hProcess = x.hProcess;
+		return true;
+	}
+	return false;
+}
+
+bool TryActivateAumid(const wchar_t* target, SHELLEXECUTEINFOW* sei, ExecCtx* c)
+{
+	wchar_t aumid[256];
+	if (!ExtractAumid(target, aumid, ARRAYSIZE(aumid))) return false;
+	if (ReadAdvancedDword(L"UwpActivationShim", 1) == 0) return false;
+	if (sei->lpVerb && *sei->lpVerb && lstrcmpiW(sei->lpVerb, L"open")) return false; // runas, properties...
+	int before = ex7::uwp::CountAppWindows();
+	HRESULT hi = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	IApplicationActivationManager* aam = nullptr;
+	DWORD pid = 0;
+	HRESULT hr = CoCreateInstance(kCLSID_AAM, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&aam));
+	if (SUCCEEDED(hr)) {
+		CoAllowSetForegroundWindow(aam, nullptr);
+		hr = aam->ActivateApplication(aumid, sei->lpParameters, AO_NONE, &pid);
+		aam->Release();
+	}
+	if (SUCCEEDED(hi)) CoUninitialize();
+	LogLine(L"[ex7] UWP shim: ActivateApplication(%s) hr=0x%08X pid=%u", aumid, (DWORD)hr, pid);
+	if (FAILED(hr)) { ex7::uwp::EnsureHost(L"ActivateApplication failed"); return false; } // let the normal path try
+	ex7::uwp::WatchActivation(1, aumid, sei->lpParameters, before);
+	c->handled = TRUE; c->result = TRUE;
+	sei->hInstApp = (HINSTANCE)(INT_PTR)33;
+	if (sei->fMask & SEE_MASK_NOCLOSEPROCESS)
+		sei->hProcess = pid ? OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
+	return true;
+}
+
+void TryRemapExec(ExecCtx* c)
+{
+	SHELLEXECUTEINFOW* sei = c->sei;
+	if (!sei || sei->cbSize < sizeof(SHELLEXECUTEINFOW)) return;
+
+	wchar_t pidlName[1024];
+	const wchar_t* target = sei->lpFile;
+	if ((sei->fMask & (SEE_MASK_IDLIST | SEE_MASK_INVOKEIDLIST)) && sei->lpIDList &&
+		IdListName((PCIDLIST_ABSOLUTE)sei->lpIDList, pidlName, ARRAYSIZE(pidlName)))
+		target = (target && *target) ? target : pidlName;
+
+	LogLine(L"[ex7] ShellExecuteEx file=%s params=%s pidl=%s",
+		sei->lpFile ? sei->lpFile : L"", sei->lpParameters ? sei->lpParameters : L"",
+		(target == pidlName) ? pidlName : L"");
+
+	if (TryWin32Settings(sei, c)) return;
+	if (TryActivateAumid(target, sei, c) ||
+		(target != pidlName && sei->lpIDList && IdListName((PCIDLIST_ABSOLUTE)sei->lpIDList, pidlName, ARRAYSIZE(pidlName)) &&
+		 TryActivateAumid(pidlName, sei, c)))
+		return;
+	const Remap* r = FindRemap(target);
+	if (!r) r = FindRemap(sei->lpParameters); // e.g. explorer.exe shell:::{...} / control.exe /name ...
+	if (!r && target != pidlName && sei->lpIDList &&
+		IdListName((PCIDLIST_ABSOLUTE)sei->lpIDList, pidlName, ARRAYSIZE(pidlName)))
+		r = FindRemap(pidlName);
+	if (!r) return;
+
+	c->handled = TRUE;
+	c->result = LaunchRemap(r, sei->hwnd, sei->nShow);
+	if (c->result) {
+		sei->hInstApp = (HINSTANCE)(INT_PTR)33; // > 32 means success
+		if (sei->fMask & SEE_MASK_NOCLOSEPROCESS) sei->hProcess = nullptr;
+	} else {
+		sei->hInstApp = (HINSTANCE)(INT_PTR)SE_ERR_FNF;
+	}
+}
+
+bool IsMsSettings(LPCWSTR f);
+DWORD OsBuild();
+BOOL ActivateSettingsFallback(LPCWSTR uri);
+
+BOOL WINAPI ShellExecuteExW_Hook(SHELLEXECUTEINFOW* sei)
+{
+	ExecCtx c = { sei, FALSE, FALSE };
+	if (!SafeInvokeCtx<ExecCtx>(L"ShellExecuteExW remap", TryRemapExec, &c))
+		c.handled = FALSE; // any fault in our code: behave exactly like before
+	if (c.handled) return c.result;
+	bool settingsUri = false;
+	int before = 0;
+	__try { settingsUri = IsMsSettings(sei->lpFile); } __except (EXCEPTION_EXECUTE_HANDLER) { settingsUri = false; }
+	if (settingsUri) before = ex7::uwp::CountAppWindows();
+	BOOL ok = g_origShellExecuteExW(sei);
+	if (settingsUri && ok) ex7::uwp::WatchActivation(0, sei->lpFile, nullptr, before);
+	if (settingsUri) {
+		DWORD err = ok ? 0 : GetLastError();
+		LogLine(L"[ex7] UWP activation uri=%s method=ShellExecuteEx(protocol) build=%u pid=%u result=%d err=%u",
+			sei->lpFile, OsBuild(), GetCurrentProcessId(), ok, err);
+		if (!ok && ActivateSettingsFallback(sei->lpFile)) {
+			sei->hInstApp = (HINSTANCE)(INT_PTR)33; return TRUE;
+		}
+		if (!ok) SetLastError(err);
+	}
+	return ok;
+}
+
+HINSTANCE WINAPI ShellExecuteW_Hook(HWND hwnd, LPCWSTR op, LPCWSTR file, LPCWSTR params, LPCWSTR dir, INT show)
+{
+	const Remap* r = nullptr;
+	__try { r = FindRemap(file); if (!r) r = FindRemap(params); }
+	__except (SehFilter(L"ShellExecuteW remap", GetExceptionInformation())) { r = nullptr; }
+	if (r) {
+		LogLine(L"[ex7] ShellExecute remap file=%s", file ? file : L"");
+		return LaunchRemap(r, hwnd, show) ? (HINSTANCE)(INT_PTR)33 : (HINSTANCE)(INT_PTR)SE_ERR_FNF;
+	}
+	return g_origShellExecuteW(hwnd, op, file, params, dir, show);
+}
+
+void InstallExecHooks()
+{
+	// MinHook on the shell32 exports instead of explorer's IAT: test12 used
+	// the IAT and never fired (explorer resolves these through delay-load /
+	// shell32-internal paths), a function-body hook catches every caller.
+	HMODULE shell32 = LoadLibraryW(L"shell32.dll");
+	if (!shell32) return;
+	void* exw = (void*)GetProcAddress(shell32, "ShellExecuteExW");
+	void* w = (void*)GetProcAddress(shell32, "ShellExecuteW");
+	MH_Initialize(); // MH_ERROR_ALREADY_INITIALIZED is fine
+	if (exw) {
+		MH_STATUS a = MH_CreateHook(exw, (void*)ShellExecuteExW_Hook, (void**)&g_origShellExecuteExW);
+		MH_STATUS b = MH_EnableHook(exw);
+		LogLine(L"[ex7] ShellExecuteExW minhook create=%d enable=%d (0 = MH_OK, installed)", a, b);
+		if (a != MH_OK) g_origShellExecuteExW = (ShellExecuteExW_t)exw;
+	}
+	if (w) {
+		MH_STATUS a = MH_CreateHook(w, (void*)ShellExecuteW_Hook, (void**)&g_origShellExecuteW);
+		MH_STATUS b = MH_EnableHook(w);
+		LogLine(L"[ex7] ShellExecuteW minhook create=%d enable=%d (0 = MH_OK, installed)", a, b);
+		if (a != MH_OK) g_origShellExecuteW = (ShellExecuteW_t)w;
+	}
+}
+
+// ------------------------------------------------------------ Help name
+HMODULE g_self = nullptr;
+
+void CopyAllValues(HKEY from, HKEY to)
+{
+	for (DWORD i = 0;; ++i) {
+		wchar_t name[256];
+		DWORD cchName = ARRAYSIZE(name), type = 0, cb = 0;
+		LSTATUS st = RegEnumValueW(from, i, name, &cchName, nullptr, &type, nullptr, &cb);
+		if (st == ERROR_NO_MORE_ITEMS) break;
+		if (st != ERROR_SUCCESS || cb > 64 * 1024) continue;
+		BYTE* buf = (BYTE*)HeapAlloc(GetProcessHeap(), 0, cb ? cb : 1);
+		if (!buf) break;
+		cchName = ARRAYSIZE(name);
+		if (RegEnumValueW(from, i, name, &cchName, nullptr, &type, buf, &cb) == ERROR_SUCCESS)
+			RegSetValueExW(to, name, 0, type, buf, cb);
+		HeapFree(GetProcessHeap(), 0, buf);
+	}
+}
+
+void FixHelpAndSupportName()
+{
+	if (ReadAdvancedDword(L"FixHelpAndSupportName", 1) == 0) return;
+
+	ScopedRegKey machine;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kHelpClsidKey, 0, KEY_READ, machine.Put()) != ERROR_SUCCESS) {
+		LogLine(L"[ex7] Help and Support CLSID not registered, skipping");
+		return;
+	}
+	wchar_t dll[MAX_PATH];
+	DWORD n = GetModuleFileNameW(g_self, dll, MAX_PATH);
+	if (!n || n >= MAX_PATH) return;
+	wchar_t value[MAX_PATH + 16];
+	// no printf family here: the wrapper links without the CRT stdio
+	if (FAILED(StringCchCopyW(value, ARRAYSIZE(value), L"@")) ||
+		FAILED(StringCchCatW(value, ARRAYSIZE(value), dll)) ||
+		FAILED(StringCchCatW(value, ARRAYSIZE(value), L",-7021"))) return;
+
+	ScopedRegKey user;
+	DWORD disp = 0;
+	if (RegCreateKeyExW(HKEY_CURRENT_USER, kHelpClsidKey, 0, nullptr, 0, KEY_READ | KEY_WRITE,
+		nullptr, user.Put(), &disp) != ERROR_SUCCESS)
+		return;
+	if (disp == REG_CREATED_NEW_KEY) {
+		// A per-user CLSID key shadows the machine key's values in the merged
+		// HKCR view: copy them first so nothing but the name changes.
+		CopyAllValues(machine.Get(), user.Get());
+	} else {
+		wchar_t cur[MAX_PATH + 16] = {};
+		DWORD cb = sizeof(cur) - sizeof(wchar_t), type = 0;
+		if (RegQueryValueExW(user.Get(), L"LocalizedString", nullptr, &type, (LPBYTE)cur, &cb) == ERROR_SUCCESS &&
+			!StrStrIW(cur, L"wrp64") && !StrStrIW(cur, dll)) {
+			LogLine(L"[ex7] user LocalizedString for Help already customised (%s), leaving it", cur);
+			return;
+		}
+	}
+	RegSetValueExW(user.Get(), L"LocalizedString", 0, REG_EXPAND_SZ, (const BYTE*)value,
+		(DWORD)((lstrlenW(value) + 1) * sizeof(wchar_t)));
+	LogLine(L"[ex7] Help and Support LocalizedString -> %s", value);
+
+	// Tooltip: the machine InfoTip points at a resource id that on current
+	// Windows builds resolves to an unrelated string ("changes apply to all
+	// users..."). Use our own 7001 (localized in ex7_languages.rc).
+	wchar_t tip[MAX_PATH + 16];
+	if (SUCCEEDED(StringCchCopyW(tip, ARRAYSIZE(tip), L"@")) &&
+		SUCCEEDED(StringCchCatW(tip, ARRAYSIZE(tip), dll)) &&
+		SUCCEEDED(StringCchCatW(tip, ARRAYSIZE(tip), L",-7001")))
+	{
+		wchar_t oldTip[512] = {};
+		DWORD cbTip = sizeof(oldTip) - sizeof(wchar_t), tType = 0;
+		if (RegQueryValueExW(machine.Get(), L"InfoTip", nullptr, &tType, (LPBYTE)oldTip, &cbTip) == ERROR_SUCCESS)
+			LogLine(L"[ex7] Help and Support machine InfoTip was %s", oldTip);
+		RegSetValueExW(user.Get(), L"InfoTip", 0, REG_EXPAND_SZ, (const BYTE*)tip,
+			(DWORD)((lstrlenW(tip) + 1) * sizeof(wchar_t)));
+		LogLine(L"[ex7] Help and Support InfoTip -> %s", tip);
+	}
+}
+
+// ------------------------------------------------------------ transparency
+void EnsureTransparencyEffects()
+{
+	if (ReadAdvancedDword(L"KeepSystemTransparency", 0) == 1) return;
+	ScopedRegKey k;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, kPersonalizeKey, 0, KEY_READ | KEY_SET_VALUE, k.Put()) != ERROR_SUCCESS)
+		return;
+	DWORD v = 1, cb = sizeof(v), type = 0;
+	if (RegQueryValueExW(k.Get(), L"EnableTransparency", nullptr, &type, (LPBYTE)&v, &cb) == ERROR_SUCCESS &&
+		type == REG_DWORD && v == 0) {
+		DWORD one = 1;
+		RegSetValueExW(k.Get(), L"EnableTransparency", 0, REG_DWORD, (const BYTE*)&one, sizeof(one));
+		LogLine(L"[ex7] EnableTransparency was 0: enabled (opt-out KeepSystemTransparency=1)");
+	}
+}
+
+// ------------------------------------------------------------ battery icon
+// The power icon is owned by stobject.dll (SysTray). On Windows 10/11 its
+// left click asks for the modern battery flyout, which the Win7 taskbar
+// cannot host, so the click does nothing. We learn which icon is the battery
+// from Shell_NotifyIconW calls coming from stobject (tooltip contains the
+// current battery percentage), subclass its owner window and turn a left
+// click into ms-settings:batterysaver (fallback: Power Options).
+// Default (test15+): observe/log only. BatteryFlyoutFallback = 1 turns a
+// click into ms-settings:batterysaver (never Control Panel).
+typedef BOOL(WINAPI* Shell_NotifyIconW_t)(DWORD, PNOTIFYICONDATAW);
+Shell_NotifyIconW_t g_origNotifyIcon = nullptr;
+HMODULE g_stobject = nullptr;
+volatile HWND g_battHwnd = nullptr;
+volatile UINT g_battId = 0;
+volatile UINT g_battMsg = 0;
+volatile UINT g_battVersion = 0;
+volatile LONG g_battSubclassed = 0;
+volatile LONG g_win32FlyoutQueried = 0;
+const UINT_PTR kBattSubclassId = 0x37E7;
+
+bool LooksLikeBatteryTip(const wchar_t* tip)
+{
+	SYSTEM_POWER_STATUS ps;
+	if (!tip || !*tip || !GetSystemPowerStatus(&ps)) return false;
+	if (ps.BatteryFlag == 128 || ps.BatteryLifePercent > 100) return false; // no battery
+	wchar_t pct[8];
+	wnsprintfW(pct, ARRAYSIZE(pct), L"%u", (UINT)ps.BatteryLifePercent);
+	return StrChrW(tip, L'%') != nullptr && StrStrW(tip, pct) != nullptr;
+}
+
+bool FallbackEnabled() { return ReadAdvancedDword(L"BatteryFlyoutFallback", 0) == 1; }
+
+DWORD TrayOwnerPid()
+{
+	DWORD pid = 0;
+	HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+	if (tray) GetWindowThreadProcessId(tray, &pid);
+	return pid;
+}
+
+// Opt-in fallback only (BatteryFlyoutFallback=1). test13 also fell back to
+// control.exe /name Microsoft.PowerOptions: that was the "Control Panel on
+// battery click" seen on the second start. Removed.
+void LaunchBatterySettings(const wchar_t* reason)
+{
+	LogLine(L"[ex7] battery flyout fallback requested target=ms-settings:batterysaver reason=%s", reason);
+	SHELLEXECUTEINFOW sei = { sizeof(sei) };
+	sei.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
+	sei.lpFile = L"ms-settings:batterysaver";
+	sei.nShow = SW_SHOWNORMAL;
+	BOOL ok = g_origShellExecuteExW ? g_origShellExecuteExW(&sei) : ShellExecuteExW(&sei);
+	LogLine(L"[ex7] battery fallback result=%d err=%u", ok, ok ? 0 : GetLastError());
+}
+
+LRESULT CALLBACK BatterySubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR id, DWORD_PTR)
+{
+	if (msg == g_battMsg && g_battMsg != 0) {
+		UINT iconId, ev;
+		if (g_battVersion >= 4) { ev = LOWORD(lParam); iconId = HIWORD(lParam); }
+		else { ev = (UINT)lParam; iconId = (UINT)wParam; }
+		if (iconId == g_battId) {
+			if (ev == NIN_SELECT || ev == NIN_KEYSELECT || (g_battVersion < 3 && ev == WM_LBUTTONUP)) {
+				LogLine(L"[ex7] battery flyout requested: event=0x%X explorer PID=%u tray owner PID=%u "
+					L"method=%s win32flyout=%d w81=%d", ev, GetCurrentProcessId(), TrayOwnerPid(),
+					ex7::w81::IsActive() ? L"Win8.1 stobject (cache)" : L"system stobject",
+					g_win32FlyoutQueried, ex7::w81::IsActive());
+				if (FallbackEnabled()) {
+					LaunchBatterySettings(L"BatteryFlyoutFallback=1");
+					return 0;
+				}
+				// default: let stobject show its own (Win32) flyout
+			}
+			if (FallbackEnabled() && (ev == WM_LBUTTONDOWN || ev == WM_LBUTTONUP || ev == WM_LBUTTONDBLCLK))
+				return 0;
+		}
+	}
+	if (msg == WM_NCDESTROY) {
+		RemoveWindowSubclass(hwnd, BatterySubclassProc, id);
+		InterlockedExchange(&g_battSubclassed, 0);
+	}
+	return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
+struct NotifyCtx { DWORD msg; PNOTIFYICONDATAW nid; };
+
+void InspectNotify(NotifyCtx* c)
+{
+	PNOTIFYICONDATAW nid = c->nid;
+	if (!nid || nid->cbSize < NOTIFYICONDATAW_V2_SIZE) return;
+	if (c->msg == NIM_SETVERSION && nid->hWnd == g_battHwnd && nid->uID == g_battId) {
+		g_battVersion = nid->uVersion;
+		return;
+	}
+	if (c->msg != NIM_ADD && c->msg != NIM_MODIFY) return;
+	if (!(nid->uFlags & NIF_TIP) || !LooksLikeBatteryTip(nid->szTip)) return;
+	if (g_battHwnd != nid->hWnd || g_battId != nid->uID) {
+		LogLine(L"[ex7] battery icon found hwnd=%p id=%u cb=0x%X tip=%s", nid->hWnd, nid->uID,
+			(nid->uFlags & NIF_MESSAGE) ? nid->uCallbackMessage : 0, nid->szTip);
+	}
+	g_battHwnd = nid->hWnd;
+	g_battId = nid->uID;
+	if (nid->uFlags & NIF_MESSAGE) g_battMsg = nid->uCallbackMessage;
+	if (g_battVersion == 0) g_battVersion = 4; // stobject on Win10+ uses version 4
+
+	if (g_battMsg && InterlockedCompareExchange(&g_battSubclassed, 1, 0) == 0) {
+		if (GetWindowThreadProcessId(nid->hWnd, nullptr) == GetCurrentThreadId() &&
+			SetWindowSubclass(nid->hWnd, BatterySubclassProc, kBattSubclassId, 0))
+			LogLine(L"[ex7] battery owner window subclassed");
+		else {
+			InterlockedExchange(&g_battSubclassed, 0);
+			LogLine(L"[ex7] battery subclass failed (other thread or error %u)", GetLastError());
+		}
+	}
+}
+
+BOOL WINAPI Shell_NotifyIconW_Hook(DWORD msg, PNOTIFYICONDATAW nid)
+{
+	HMODULE caller = nullptr;
+	GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		(LPCWSTR)_ReturnAddress(), &caller);
+	if (caller && caller == (g_stobject ? g_stobject : (g_stobject = GetModuleHandleW(L"stobject.dll")))) {
+		NotifyCtx c = { msg, nid };
+		SafeInvokeCtx<NotifyCtx>(L"Shell_NotifyIconW inspect", InspectNotify, &c);
+	}
+	return g_origNotifyIcon(msg, nid);
+}
+
+void InstallBatteryFix()
+{
+	// Installed always: without the fallback it only logs battery clicks.
+	HMODULE shell32 = LoadLibraryW(L"shell32.dll");
+	void* fn = shell32 ? (void*)GetProcAddress(shell32, "Shell_NotifyIconW") : nullptr;
+	if (!fn) return;
+	MH_Initialize();
+	MH_STATUS a = MH_CreateHook(fn, (void*)Shell_NotifyIconW_Hook, (void**)&g_origNotifyIcon);
+	MH_STATUS b = MH_EnableHook(fn);
+	LogLine(L"[ex7] Shell_NotifyIconW minhook create=%d enable=%d (0 = MH_OK, installed)", a, b);
+	if (a != MH_OK) g_origNotifyIcon = (Shell_NotifyIconW_t)fn;
+}
+
+
+// ------------------------------------------------------------ Win32 battery flyout
+// The system stobject.dll (checked on 26100: strings UseWin32BatteryFlyout,
+// Software\Microsoft\Windows\CurrentVersion\ImmersiveShell,
+// Windows.Internal.ShellExperience.TrayBatteryFlyout, BatMeterFlyout,
+// FlyoutElement) still contains the DirectUI Win32 flyout. By default it asks
+// ShellExperienceHost for the immersive flyout, which never appears under
+// 7explorer ("click does nothing"). We answer UseWin32BatteryFlyout=1 for
+// stobject only (IAT of stobject.dll, no registry write, no admin).
+typedef LSTATUS (WINAPI *RegGetValueW_t)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD);
+typedef LSTATUS (WINAPI *RegQueryValueExW_t)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+RegGetValueW_t g_origRegGetValueW = nullptr;
+RegQueryValueExW_t g_origRegQueryValueExW = nullptr;
+const wchar_t kWin32Flyout[] = L"UseWin32BatteryFlyout";
+
+// test25: same mechanism for SndVolSSO.dll (volume flyout). On 26100 it
+// reads HKLM\Software\Microsoft\Windows NT\CurrentVersion\MTCUVC\EnableMTCUVC:
+// non-zero = immersive "Windows.Internal.ShellExperience.MtcUvc" flyout
+// (never appears under 7explorer), 0 = classic "SndVol.exe -f" flyout.
+volatile LONG g_mtcuvcQueried = 0;
+
+// -1 = not ours, else the DWORD to answer
+int OverrideFor(LPCWSTR v)
+{
+	__try {
+		if (!v) return -1;
+		if (lstrcmpiW(v, kWin32Flyout) == 0) {
+			if (InterlockedExchange(&g_win32FlyoutQueried, 1) == 0)
+				LogLine(L"[ex7] stobject queried UseWin32BatteryFlyout -> 1 (Win32 flyout)");
+			return 1;
+		}
+		if (lstrcmpiW(v, L"EnableMTCUVC") == 0) {
+			if (InterlockedExchange(&g_mtcuvcQueried, 1) == 0)
+				LogLine(L"[ex7] SndVolSSO queried EnableMTCUVC -> 0 (classic volume flyout)");
+			return 0;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return -1;
+}
+
+LSTATUS ReturnDword(DWORD val, LPDWORD type, PVOID data, LPDWORD cb)
+{
+	__try {
+		if (type) *type = REG_DWORD;
+		if (!cb) return data ? ERROR_INVALID_PARAMETER : ERROR_SUCCESS;
+		if (!data) { *cb = sizeof(DWORD); return ERROR_SUCCESS; }
+		if (*cb < sizeof(DWORD)) { *cb = sizeof(DWORD); return ERROR_MORE_DATA; }
+		*(DWORD*)data = val; *cb = sizeof(DWORD);
+		return ERROR_SUCCESS;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) { return ERROR_INVALID_PARAMETER; }
+}
+
+LSTATUS WINAPI RegGetValueW_Hook(HKEY k, LPCWSTR sub, LPCWSTR val, DWORD flags, LPDWORD type, PVOID data, LPDWORD cb)
+{
+	int o = OverrideFor(val);
+	if (o >= 0) return ReturnDword((DWORD)o, type, data, cb);
+	return g_origRegGetValueW(k, sub, val, flags, type, data, cb);
+}
+
+LSTATUS WINAPI RegQueryValueExW_Hook(HKEY k, LPCWSTR val, LPDWORD res, LPDWORD type, LPBYTE data, LPDWORD cb)
+{
+	int o = OverrideFor(val);
+	if (o >= 0) return ReturnDword((DWORD)o, type, data, cb);
+	return g_origRegQueryValueExW(k, val, res, type, data, cb);
+}
+
+HMODULE g_patched[8] = {};
+
+void PatchModuleRegistry(HMODULE m, const wchar_t* what)
+{
+	if (!m) return;
+	for (HMODULE p : g_patched) if (p == m) return;
+	HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
+	if (!kb) return;
+	if (!g_origRegGetValueW) g_origRegGetValueW = (RegGetValueW_t)GetProcAddress(kb, "RegGetValueW");
+	if (!g_origRegQueryValueExW) g_origRegQueryValueExW = (RegQueryValueExW_t)GetProcAddress(kb, "RegQueryValueExW");
+	HMODULE adv = GetModuleHandleW(L"advapi32.dll");
+	static const char* dlls[] = { "api-ms-win-core-registry-l1-1-0.dll", "api-ms-win-core-registry-l1-1-1.dll", "ADVAPI32.dll", "KERNELBASE.dll" };
+	for (const char* d : dlls) {
+		if (g_origRegGetValueW) ChangeImportedAddress(m, (LPSTR)d, (FARPROC)g_origRegGetValueW, (FARPROC)RegGetValueW_Hook);
+		if (g_origRegQueryValueExW) ChangeImportedAddress(m, (LPSTR)d, (FARPROC)g_origRegQueryValueExW, (FARPROC)RegQueryValueExW_Hook);
+		if (adv) {
+			FARPROC a1 = GetProcAddress(adv, "RegGetValueW"), a2 = GetProcAddress(adv, "RegQueryValueExW");
+			if (a1 && a1 != (FARPROC)g_origRegGetValueW) ChangeImportedAddress(m, (LPSTR)d, a1, (FARPROC)RegGetValueW_Hook);
+			if (a2 && a2 != (FARPROC)g_origRegQueryValueExW) ChangeImportedAddress(m, (LPSTR)d, a2, (FARPROC)RegQueryValueExW_Hook);
+		}
+	}
+	for (HMODULE& p : g_patched) if (!p) { p = m; break; }
+	LogLine(L"[ex7] %s %p registry imports patched", what, m);
+}
+
+struct PatchCtx { HMODULE m; const wchar_t* what; };
+void PatchModuleRegistryCtx(PatchCtx* c) { PatchModuleRegistry(c->m, c->what); }
+
+// Called for every module load (LdrLoadDll hook) and at SysTray creation.
+void PatchTrayModules()
+{
+	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) != 0) {
+		PatchCtx c = { GetModuleHandleW(L"stobject.dll"), L"Win32 flyout: stobject" };
+		if (c.m) { g_stobject = c.m; SafeInvokeCtx<PatchCtx>(L"patch stobject", PatchModuleRegistryCtx, &c); }
+	}
+	{
+		HMODULE st = GetModuleHandleW(L"stobject.dll");
+		if (st) ex7::net::OnStobjectLoaded(st); // SEH inside, idempotent
+	}
+	ex7::ClassicMenusFor(GetModuleHandleW(L"SndVolSSO.dll"), L"SndVolSSO");
+	ex7::ClassicMenusFor(GetModuleHandleW(L"pnidui.dll"), L"pnidui");
+	if (ReadAdvancedDword(L"ClassicVolumeFlyout", 1) != 0) {
+		PatchCtx c = { GetModuleHandleW(L"SndVolSSO.dll"), L"classic volume flyout: SndVolSSO" };
+		if (c.m) SafeInvokeCtx<PatchCtx>(L"patch SndVolSSO", PatchModuleRegistryCtx, &c);
+	}
+}
+
+void PatchStobjectRegistry() { PatchTrayModules(); }
+
+// ------------------------------------------------------------ network icon
+// The network icon lives in pnidui.dll, started as a shell service object
+// listed in HKLM\...\Explorer\ShellServiceObjects. The Win7 explorer only
+// knows ShellServiceObjectDelayLoad, so if nobody else starts it we do:
+// for each listed SSO whose server is pnidui.dll, CoCreate + Exec(open).
+const GUID kCGID_SSO = { 0x000214D2, 0, 0, { 0xC0, 0, 0, 0, 0, 0, 0, 0x46 } };
+IOleCommandTarget* g_netSso[4] = {};
+
+void StartSsoIfPnidui(const wchar_t* clsidStr)
+{
+	wchar_t key[160], dll[MAX_PATH] = L"";
+	wnsprintfW(key, ARRAYSIZE(key), L"CLSID\\%s\\InprocServer32", clsidStr);
+	DWORD cb = sizeof(dll) - sizeof(wchar_t);
+	RegGetValueW(HKEY_CLASSES_ROOT, key, nullptr, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, dll, &cb);
+	wchar_t exp[MAX_PATH] = L"";
+	ExpandEnvironmentStringsW(dll, exp, MAX_PATH);
+	bool pni = StrStrIW(exp, L"pnidui.dll") != nullptr;
+	bool exists = exp[0] && GetFileAttributesW(exp) != INVALID_FILE_ATTRIBUTES;
+	LogLine(L"[ex7] SSO %s -> %s (exists=%d)", clsidStr, exp[0] ? exp : L"?", exists);
+	if (!pni || !exists) return;
+	if (GetModuleHandleW(L"pnidui.dll")) { LogLine(L"[ex7] network SSO: pnidui already loaded"); return; }
+	CLSID clsid;
+	if (FAILED(CLSIDFromString(clsidStr, &clsid))) return;
+	IOleCommandTarget* ct = nullptr;
+	HRESULT hr = CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER, IID_IOleCommandTarget, (void**)&ct);
+	HRESULT hx = E_FAIL;
+	if (SUCCEEDED(hr) && ct) {
+		hx = ct->Exec(&kCGID_SSO, 2 /*SSOCMDID_OPEN*/, 0, nullptr, nullptr);
+		for (auto& p : g_netSso) if (!p) { p = ct; ct = nullptr; break; }
+		if (ct) ct->Release();
+	}
+	LogLine(L"[ex7] network SSO %s started: create 0x%08X exec 0x%08X", clsidStr, hr, hx);
+}
+
+void StartNetworkSso()
+{
+	if (ReadAdvancedDword(L"StartNetworkIcon", 1) == 0) { LogLine(L"[ex7] StartNetworkIcon=0"); return; }
+	wchar_t sys[MAX_PATH];
+	GetSystemDirectoryW(sys, MAX_PATH); lstrcatW(sys, L"\\pnidui.dll");
+	LogLine(L"[ex7] network icon: %s exists=%d loaded=%p", sys,
+		GetFileAttributesW(sys) != INVALID_FILE_ATTRIBUTES, GetModuleHandleW(L"pnidui.dll"));
+	HKEY k;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellServiceObjects", 0, KEY_READ, &k) != ERROR_SUCCESS) {
+		LogLine(L"[ex7] network icon: no ShellServiceObjects key"); return;
+	}
+	for (DWORD i = 0; i < 64; i++) {
+		wchar_t name[64]; DWORD cch = ARRAYSIZE(name);
+		if (RegEnumKeyExW(k, i, name, &cch, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) break;
+		struct C { const wchar_t* n; } c = { name };
+		SafeInvokeCtx<C>(L"StartSsoIfPnidui", [](C* x) { StartSsoIfPnidui(x->n); }, &c);
+	}
+	RegCloseKey(k);
+}
+
+UINT_PTR g_trayTimer = 0;
+int g_trayTicks = 0;
+void CALLBACK TrayTimerProc(HWND, UINT, UINT_PTR id, DWORD)
+{
+	__try {
+		++g_trayTicks;
+		PatchTrayModules();
+		if (g_trayTicks == 4) SafeInvoke(L"StartNetworkSso", StartNetworkSso); // ~8 s after SysTray
+		if (g_trayTicks == 5) ex7::uwp::StartupCheck(); // UWP host if TwinUI is not running
+		if (g_trayTicks >= 15) { KillTimer(nullptr, id); g_trayTimer = 0; }
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) { KillTimer(nullptr, id); }
+}
+
+// ------------------------------------------------------------ Connect To
+// The Win7 Start menu opens "Connect To" by invoking the regitem
+// ::{38A98528-...} directly (no ShellExecuteEx call was ever logged), and
+// that CLSID is not registered on Windows 10/11. Register a per-user
+// verb-only CLSID that opens Network Connections. Only if the system has none.
+void RegisterConnectTo()
+{
+	const wchar_t key[] = L"Software\\Classes\\CLSID\\{38A98528-6CBF-4CA9-8DC0-B1E1D10F7B1B}";
+	if (ReadAdvancedDword(L"FixConnectTo", 1) == 0) {
+		// Opt-out: remove the per-user key.
+		LSTATUS d = RegDeleteTreeW(HKEY_CURRENT_USER, key);
+		LogLine(L"[ex7] Connect To: disabled (FixConnectTo=0), per-user key removed=%d", d);
+		return;
+	}
+	HKEY h = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key, 0, KEY_READ, &h) == ERROR_SUCCESS) {
+		RegCloseKey(h); LogLine(L"[ex7] Connect To: system CLSID present, untouched"); return;
+	}
+	wchar_t cmdKey[200]; wnsprintfW(cmdKey, 200, L"%s\\shell\\open\\command", key);
+	wchar_t icoKey[200]; wnsprintfW(icoKey, 200, L"%s\\DefaultIcon", key);
+	const wchar_t cmd[] = L"%SystemRoot%\\explorer.exe shell:::{7007ACC7-3202-11D1-AAD2-00805FC1270E}";
+	const wchar_t ico[] = L"%SystemRoot%\\system32\\netshell.dll,0";
+	LSTATUS a = RegSetKeyValueW(HKEY_CURRENT_USER, cmdKey, nullptr, REG_EXPAND_SZ, cmd, sizeof(cmd));
+	LSTATUS b = RegSetKeyValueW(HKEY_CURRENT_USER, icoKey, nullptr, REG_EXPAND_SZ, ico, sizeof(ico));
+	LogLine(L"[ex7] Connect To: per-user CLSID verb -> Network Connections (%d,%d)", a, b);
+}
+
+// ------------------------------------------------------------ ms-settings / UWP
+DWORD OsBuild()
+{
+	DWORD b = 0, cb = sizeof(b);
+	wchar_t s[16] = {}; DWORD cs = sizeof(s);
+	if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", L"CurrentBuildNumber",
+		RRF_RT_REG_SZ, nullptr, s, &cs) == ERROR_SUCCESS) b = (DWORD)StrToIntW(s);
+	(void)cb; return b;
+}
+
+// Fallback when the protocol launch of an ms-settings: URI fails:
+// IApplicationActivationManager on the Settings AUMID (opens Settings; the
+// page is passed as argument, which Settings may ignore).
+const CLSID kCLSID_AppActivationManager = { 0x45BA127D, 0x10A8, 0x46EA, { 0x8A, 0xB7, 0x56, 0xEA, 0x90, 0x78, 0x94, 0x3C } };
+BOOL ActivateSettingsFallback(LPCWSTR uri)
+{
+	HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	bool uninit = SUCCEEDED(hr);
+	IApplicationActivationManager* aam = nullptr;
+	DWORD pid = 0;
+	hr = CoCreateInstance(kCLSID_AppActivationManager, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&aam));
+	if (SUCCEEDED(hr)) {
+		hr = aam->ActivateApplication(L"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel",
+			uri, AO_NONE, &pid);
+		aam->Release();
+	}
+	LogLine(L"[ex7] UWP activation uri=%s method=IApplicationActivationManager build=%u pid=%u hr=0x%08X",
+		uri, OsBuild(), pid, hr);
+	if (uninit) CoUninitialize();
+	return SUCCEEDED(hr);
+}
+
+bool IsMsSettings(LPCWSTR f)
+{
+	__try { return f && StrCmpNIW(f, L"ms-settings:", 12) == 0; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+
+// ------------------------------------------------------------ injection guard
+// Third-party DLLs injected into explorer (e.g. Windhawk mods written for the
+// Windows 11 explorer) can crash the Win7 shell before it shows anything.
+// test19: faults with a foreign frame on the stack are also recovered
+// (x64 unwind to the foreign frame, which returns 0). Opt-out InjectionSwallow=0.
+//  1) UnhandledExceptionFilter hook: when a crash is *really unhandled* and
+//     the faulting address lies in a foreign module (not in %SystemRoot%, not
+//     next to explorer/wrp64), its name is added to a quarantine list and
+//     the process dies as before (the shell is restarted);
+//  2) LdrLoadDll hook: quarantined modules are refused (STATUS_DLL_NOT_FOUND)
+//     at the next start, everything else loads normally.
+// Windhawk mod file names carry a per-compile suffix (name_ver_rand.dll), so
+// the key is the part before the first '_'. Opt-out: InjectionGuard=0.
+// List: Explorer\Advanced\InjectionQuarantine (REG_MULTI_SZ); delete to reset.
+typedef struct { USHORT Length, MaximumLength; PWSTR Buffer; } EX7_USTR;
+typedef LONG (NTAPI *LdrLoadDll_t)(PWSTR, PULONG, EX7_USTR*, PVOID*);
+typedef LONG (WINAPI *UEF_t)(EXCEPTION_POINTERS*);
+LdrLoadDll_t g_origLdrLoadDll = nullptr;
+UEF_t g_origUEF = nullptr;
+wchar_t g_quarantine[2048];   // MULTI_SZ
+DWORD g_quarantineCb = 0;
+wchar_t g_sysRoot[MAX_PATH], g_exeDir[MAX_PATH], g_selfDir[MAX_PATH];
+const wchar_t kQuarantine[] = L"InjectionQuarantine";
+
+void ModuleKey(const wchar_t* path, wchar_t* key, int cch)
+{
+	const wchar_t* f = PathFindFileNameW(path);
+	int i = 0;
+	bool windhawk = StrChrW(f, L'@') != nullptr || StrStrIW(path, L"\\Windhawk\\") != nullptr;
+	for (; f[i] && i < cch - 1; ++i) {
+		if (windhawk && f[i] == L'_') break;
+		key[i] = f[i];
+	}
+	key[i] = 0;
+}
+
+bool IsQuarantined(const wchar_t* key)
+{
+	for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1)
+		if (lstrcmpiW(q, key) == 0) return true;
+	return false;
+}
+
+void LoadQuarantine()
+{
+	g_quarantineCb = sizeof(g_quarantine) - 2 * sizeof(wchar_t);
+	ZeroMemory(g_quarantine, sizeof(g_quarantine));
+	if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+		kQuarantine, RRF_RT_REG_MULTI_SZ, nullptr, g_quarantine, &g_quarantineCb) != ERROR_SUCCESS) {
+		ZeroMemory(g_quarantine, sizeof(g_quarantine)); g_quarantineCb = 0;
+	}
+}
+
+bool IsForeignModule(const wchar_t* path)
+{
+	return StrCmpNIW(path, g_sysRoot, lstrlenW(g_sysRoot)) != 0 &&
+		StrCmpNIW(path, g_exeDir, lstrlenW(g_exeDir)) != 0 &&
+		StrCmpNIW(path, g_selfDir, lstrlenW(g_selfDir)) != 0;
+}
+
+// Windhawk mod policy for the Win7 shell process (test20):
+//  InjectionPolicy 0 = off, 1 = quarantine only, 2 = allow-list (default):
+//  a DLL under \Windhawk\Engine\Mods\ loads only if its key is listed in
+//  InjectionAllowlist (REG_MULTI_SZ, same key format as the quarantine).
+//  Safe mode: after 2 start-ups that never reached the taskbar, every
+//  Windhawk mod is refused (allow-list ignored) until one start succeeds.
+DWORD g_policy = 1; // test30: default = every mod loads, only crashers are quarantined
+bool g_safeMode = false;
+wchar_t g_allow[2048];
+
+bool IsWindhawkMod(const wchar_t* path) { return StrStrIW(path, L"\\Windhawk\\Engine\\Mods\\") != nullptr; }
+
+bool IsAllowed(const wchar_t* key)
+{
+	// Built-in allowlist: mods written for this shell's Win7 tray (the
+	// network flyout is the click target of our network icon).
+	static const wchar_t* builtin[] = { L"win7-network-flyout-recreation", L"win7-action-center-recreation" };
+	if (ReadAdvancedDword(L"InjectionBuiltinAllow", 1))
+		for (const wchar_t* b : builtin) if (lstrcmpiW(b, key) == 0) return true;
+	for (const wchar_t* q = g_allow; *q; q += lstrlenW(q) + 1)
+		if (lstrcmpiW(q, key) == 0) return true;
+	return false;
+}
+
+// 0 = load, else reason text
+const wchar_t* RefuseReason(const wchar_t* path, const wchar_t* key)
+{
+	if (g_policy == 0) return nullptr;
+	if (IsQuarantined(key)) return L"quarantined (crashed earlier)";
+	if (IsWindhawkMod(path)) {
+		// safe mode stays active with every policy: it only kicks in after
+		// two start-ups that never reached the taskbar.
+		if (g_safeMode && !IsAllowed(key)) return L"safe mode (previous start-ups did not reach the taskbar)";
+		if (g_policy >= 2 && !IsAllowed(key)) return L"not in InjectionAllowlist";
+	}
+	return nullptr;
+}
+
+LONG NTAPI LdrLoadDll_Hook(PWSTR sp, PULONG ch, EX7_USTR* name, PVOID* h)
+{
+	__try {
+		if (name && name->Buffer && name->Length) {
+			wchar_t path[MAX_PATH], key[128];
+			int n = (int)(name->Length / sizeof(wchar_t)); if (n > MAX_PATH - 1) n = MAX_PATH - 1;
+			CopyMemory(path, name->Buffer, n * sizeof(wchar_t)); path[n] = 0;
+			ModuleKey(path, key, ARRAYSIZE(key));
+			const wchar_t* why = RefuseReason(path, key);
+			if (why) {
+				LogLine(L"[ex7] injection guard: refused %s (key %s): %s", path, key, why);
+				if (h) *h = nullptr;
+				return (LONG)0xC0000135; // STATUS_DLL_NOT_FOUND
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	LONG st = g_origLdrLoadDll(sp, ch, name, h);
+	if (st >= 0) {
+		__try {
+			if (name && name->Buffer && (GetModuleHandleW(L"SndVolSSO.dll") || GetModuleHandleW(L"stobject.dll") || GetModuleHandleW(L"pnidui.dll")))
+				PatchTrayModules();
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {}
+	}
+	return st;
+}
+
+bool g_swallow = true;
+volatile LONG g_recovered = 0;
+const LONG kMaxRecoveries = 5000; // safety valve against a crash-per-iteration loop
+
+bool IsForeignAddress(DWORD64 pc)
+{
+	HMODULE m = nullptr; wchar_t path[MAX_PATH] = {};
+	return pc && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		(LPCWSTR)pc, &m) && GetModuleFileNameW(m, path, MAX_PATH) && IsForeignModule(path);
+}
+
+// One x64 unwind step. Leaf functions have no unwind info: return address at [rsp].
+bool UnwindOnce(CONTEXT* c)
+{
+	DWORD64 base = 0;
+	PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry(c->Rip, &base, nullptr);
+	if (rf) {
+		PVOID hd = nullptr; DWORD64 frame = 0;
+		RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, c->Rip, rf, c, &hd, &frame, nullptr);
+	} else {
+		c->Rip = *(DWORD64*)c->Rsp; c->Rsp += 8;
+	}
+	return c->Rip != 0;
+}
+
+// Makes the innermost foreign frame return 0 to its non-foreign caller.
+bool RecoverForeignFault(EXCEPTION_POINTERS* ep)
+{
+	DWORD code = ep->ExceptionRecord->ExceptionCode;
+	if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION &&
+		code != EXCEPTION_INT_DIVIDE_BY_ZERO)
+		return false;
+	if (ep->ExceptionRecord->ExceptionFlags & EXCEPTION_NONCONTINUABLE) return false;
+	if (InterlockedIncrement(&g_recovered) > kMaxRecoveries) return false;
+	CONTEXT cur = *ep->ContextRecord;
+	for (int depth = 0; depth < 48; ++depth) {
+		bool foreign = IsForeignAddress(cur.Rip);
+		CONTEXT next = cur;
+		if (!UnwindOnce(&next)) return false;
+		if (foreign && !IsForeignAddress(next.Rip)) {
+			next.Rax = 0;
+			next.Xmm0.Low = 0; next.Xmm0.High = 0;
+			*ep->ContextRecord = next;
+			return true;
+		}
+		cur = next;
+	}
+	return false;
+}
+
+LONG WINAPI UEF_Hook(EXCEPTION_POINTERS* ep)
+{
+	__try {
+		HMODULE m = nullptr; wchar_t path[MAX_PATH] = {};
+		PVOID addr = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionAddress : nullptr;
+		DWORD code = addr ? ep->ExceptionRecord->ExceptionCode : 0;
+		if (code == EXCEPTION_STACK_OVERFLOW || code == 0xC0000374 /* heap corruption */)
+			return g_origUEF(ep);
+		if (addr && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+				(LPCWSTR)addr, &m) && GetModuleFileNameW(m, path, MAX_PATH) && IsForeignModule(path)) {
+			wchar_t key[128]; ModuleKey(path, key, ARRAYSIZE(key));
+			LogLine(L"[ex7] injection guard: unhandled 0x%08X in foreign module %s -> quarantined for next start",
+				ep->ExceptionRecord->ExceptionCode, path);
+			if (!IsQuarantined(key)) {
+				DWORD used = 0;
+				for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1) used = (DWORD)(q - g_quarantine) + lstrlenW(q) + 1;
+				int kl = lstrlenW(key) + 1;
+				if (used + kl + 1 < ARRAYSIZE(g_quarantine)) {
+					lstrcpyW(g_quarantine + used, key);
+					g_quarantine[used + kl] = 0;
+					RegSetKeyValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+						kQuarantine, REG_MULTI_SZ, g_quarantine, (used + kl + 1) * sizeof(wchar_t));
+				}
+			}
+		} else if (addr) {
+			LogLine(L"[ex7] unhandled 0x%08X at %p module %s (not foreign, not quarantined)",
+				ep->ExceptionRecord->ExceptionCode, addr, path[0] ? path : L"?");
+		}
+		// Foreign code on the faulting stack (also a mod hook calling into a
+		// system DLL): the foreign frame returns 0 and the shell keeps going.
+		if (g_swallow && addr && RecoverForeignFault(ep)) {
+			if (g_recovered <= 20)
+				LogLine(L"[ex7] injection guard: fault 0x%08X swallowed (#%ld), foreign frame returned 0", code, g_recovered);
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return g_origUEF(ep);
+}
+
+// ---- start-up watchdog: reports where the shell hangs before the taskbar
+volatile LONG g_trayReached = 0;
+DWORD g_mainThread = 0;
+
+void DumpThreadStack(DWORD tid)
+{
+	HANDLE t = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+	if (!t) return;
+	DWORD64 pcs[12] = {}; int n = 0;
+	if (SuspendThread(t) != (DWORD)-1) {
+		// only raw addresses while suspended (the thread may own the loader lock)
+		CONTEXT c = {}; c.ContextFlags = CONTEXT_FULL;
+		if (GetThreadContext(t, &c)) {
+			__try {
+				for (; n < 12 && c.Rip; ) { pcs[n++] = c.Rip; if (!UnwindOnce(&c)) break; }
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER) {}
+		}
+		ResumeThread(t);
+	}
+	CloseHandle(t);
+	wchar_t line[900]; int pos = wnsprintfW(line, 200, L"[ex7] watchdog thread %u:", tid);
+	for (int d = 0; d < n && pos < 800; ++d) {
+		HMODULE m = nullptr; wchar_t mp[MAX_PATH] = L"?";
+		if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)pcs[d], &m))
+			GetModuleFileNameW(m, mp, MAX_PATH);
+		pos += wnsprintfW(line + pos, 900 - pos, L" %s+0x%X", PathFindFileNameW(mp), (DWORD)(pcs[d] - (DWORD64)m));
+	}
+	LogLine(L"%s", line);
+}
+
+DWORD WINAPI WatchdogThread(LPVOID)
+{
+	for (int i = 0; i < 25 && !g_trayReached; ++i) { Sleep(1000); if (i % 5 == 4) LogLine(L"[ex7] watchdog: alive %d s, tray reached=%d", i + 1, g_trayReached); }
+	if (g_trayReached) return 0;
+	LogLine(L"[ex7] watchdog: taskbar not created after 25 s - start-up hang, thread stacks follow");
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (snap == INVALID_HANDLE_VALUE) return 0;
+	THREADENTRY32 te = { sizeof(te) };
+	int n = 0;
+	for (BOOL ok = Thread32First(snap, &te); ok && n < 40; ok = Thread32Next(snap, &te))
+		if (te.th32OwnerProcessID == GetCurrentProcessId() && te.th32ThreadID != GetCurrentThreadId()) {
+			DumpThreadStack(te.th32ThreadID); ++n;
+		}
+	CloseHandle(snap);
+	return 0;
+}
+
+void LogLoadedForeignModules()
+{
+	HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
+	if (snap == INVALID_HANDLE_VALUE) return;
+	MODULEENTRY32W me = { sizeof(me) };
+	for (BOOL ok = Module32FirstW(snap, &me); ok; ok = Module32NextW(snap, &me))
+		if (IsForeignModule(me.szExePath))
+			LogLine(L"[ex7] injection guard: foreign module already loaded before guard: %s", me.szExePath);
+	CloseHandle(snap);
+}
+
+// ---- exit / exception tracing (test21): the shell dies silently within 25 s
+typedef VOID (NTAPI *RtlExitUserProcess_t)(LONG);
+typedef LONG (NTAPI *NtTerminateProcess_t)(HANDLE, LONG);
+RtlExitUserProcess_t g_origExit = nullptr;
+NtTerminateProcess_t g_origTerm = nullptr;
+volatile LONG g_vehCount = 0;
+
+void CallerName(void* ret, wchar_t* out, int cch)
+{
+	HMODULE m = nullptr; wchar_t mp[MAX_PATH] = L"?";
+	if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)ret, &m))
+		GetModuleFileNameW(m, mp, MAX_PATH);
+	wnsprintfW(out, cch, L"%s+0x%X", PathFindFileNameW(mp), (DWORD)((DWORD64)ret - (DWORD64)m));
+}
+
+void LogStackHere(const wchar_t* what)
+{
+	CONTEXT c = {}; RtlCaptureContext(&c);
+	DWORD64 pcs[24] = {}; int n = 0;
+	__try { for (; n < 24 && c.Rip; ) { pcs[n++] = c.Rip; if (!UnwindOnce(&c)) break; } }
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	for (int i = 0; i < n; ++i) {
+		wchar_t f[300]; CallerName((void*)pcs[i], f, 300);
+		LogLine(L"[ex7]   %s frame %d: %s", what, i, f);
+	}
+}
+
+VOID NTAPI Exit_Hook(LONG code)
+{
+	LogStackHere(L"exit");
+	wchar_t c[300]; CallerName(_ReturnAddress(), c, 300);
+	LogLine(L"[ex7] process exit requested: code=0x%08X caller=%s tray reached=%d", code, c, g_trayReached);
+	g_origExit(code);
+}
+
+LONG NTAPI Term_Hook(HANDLE h, LONG code)
+{
+	if (h == GetCurrentProcess() || h == nullptr || GetProcessId(h) == GetCurrentProcessId()) {
+		wchar_t c[300]; CallerName(_ReturnAddress(), c, 300);
+		LogLine(L"[ex7] process terminate: handle=%p code=0x%08X caller=%s tray reached=%d", h, code, c, g_trayReached);
+	}
+	return g_origTerm(h, code);
+}
+
+LONG CALLBACK TraceVeh(EXCEPTION_POINTERS* ep)
+{
+	DWORD code = ep->ExceptionRecord->ExceptionCode;
+	if ((code & 0xC0000000) == 0xC0000000 || code == 0xE06D7363 || code == 0x20474343) {
+		if (InterlockedIncrement(&g_vehCount) <= 40) {
+			wchar_t c[300]; CallerName(ep->ExceptionRecord->ExceptionAddress, c, 300);
+			LogLine(L"[ex7] exception (first chance) 0x%08X at %s thread %u", code, c, GetCurrentThreadId());
+		}
+	}
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+void InstallExitTracing()
+{
+	HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+	void* e = (void*)GetProcAddress(nt, "RtlExitUserProcess");
+	void* t = (void*)GetProcAddress(nt, "NtTerminateProcess");
+	if (e && MH_CreateHook(e, (void*)Exit_Hook, (void**)&g_origExit) == MH_OK) MH_EnableHook(e);
+	if (t && MH_CreateHook(t, (void*)Term_Hook, (void**)&g_origTerm) == MH_OK) MH_EnableHook(t);
+	AddVectoredExceptionHandler(0, TraceVeh);
+	DWORD pid = 0; HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+	if (tray) GetWindowThreadProcessId(tray, &pid);
+	wchar_t exe[MAX_PATH] = L"?";
+	if (pid) {
+		HANDLE hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		DWORD cch = MAX_PATH;
+		if (hp) { QueryFullProcessImageNameW(hp, 0, exe, &cch); CloseHandle(hp); }
+	}
+	LogLine(L"[ex7] start-up: existing Shell_TrayWnd=%p owner pid=%u %s (a running taskbar makes the Win7 explorer act as a folder window)", tray, pid, exe);
+	wchar_t shell[MAX_PATH] = L""; DWORD cb = sizeof(shell);
+	RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", L"Shell", RRF_RT_REG_SZ, nullptr, shell, &cb);
+	HWND sw = GetShellWindow(); DWORD swPid = 0; if (sw) GetWindowThreadProcessId(sw, &swPid);
+	HWND prog = FindWindowW(L"Progman", nullptr);
+	LogLine(L"[ex7] start-up: GetShellWindow=%p (pid %u) Progman=%p", sw, swPid, prog);
+	{
+		HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		PROCESSENTRY32W pe = { sizeof(pe) };
+		if (snap != INVALID_HANDLE_VALUE) {
+			for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe))
+				if (pe.th32ProcessID != GetCurrentProcessId() &&
+					(!lstrcmpiW(pe.szExeFile, L"explorer.exe") || !lstrcmpiW(pe.szExeFile, L"sihost.exe") ||
+					 !lstrcmpiW(pe.szExeFile, L"StartMenuExperienceHost.exe") || !lstrcmpiW(pe.szExeFile, L"userinit.exe")))
+					LogLine(L"[ex7] start-up: running %s pid %u parent %u", pe.szExeFile, pe.th32ProcessID, pe.th32ParentProcessID);
+			CloseHandle(snap);
+		}
+	}
+	LogLine(L"[ex7] start-up: cmdline=%s winlogon Shell=%s", GetCommandLineW(), shell);
+	HMODULE ep = GetModuleHandleW(L"dxgi.dll");
+	wchar_t dp[MAX_PATH] = L"-"; if (ep) GetModuleFileNameW(ep, dp, MAX_PATH);
+	LogLine(L"[ex7] start-up: dxgi.dll=%s (ExplorerPatcher uses C:\\Windows\\dxgi.dll)", dp);
+}
+
+// ---- ExplorerIsShell (test23)
+// Win7 explorer!ShouldStartDesktopAndTray -> ExplorerIsShell reads
+// GetPrivateProfileStringW("boot", "shell", ..., "system.ini"), which the
+// IniFileMapping redirects to Winlogon\Shell (HKCU first, then HKLM), and
+// compares its file name with its own ("explorer.exe"). When Shell names
+// another program (a launcher, a per-user override...), the Win7 explorer
+// runs as a folder window and exits with code 1: the black screen.
+// We answer with our own file name, so the decision is left to the other
+// check (no desktop window already present). Opt-out: ForceExplorerIsShell=0.
+typedef DWORD (WINAPI *GPPS_t)(LPCWSTR, LPCWSTR, LPCWSTR, LPWSTR, DWORD, LPCWSTR);
+GPPS_t g_origGPPS = nullptr;
+
+DWORD WINAPI GPPS_Hook(LPCWSTR app, LPCWSTR key, LPCWSTR def, LPWSTR out, DWORD cch, LPCWSTR file)
+{
+	DWORD r = g_origGPPS(app, key, def, out, cch, file);
+	__try {
+		if (app && key && file && out && cch > 1 && !lstrcmpiW(app, L"boot") && !lstrcmpiW(key, L"shell") &&
+			StrStrIW(file, L"system.ini")) {
+			wchar_t self[MAX_PATH]; GetModuleFileNameW(nullptr, self, MAX_PATH);
+			const wchar_t* name = PathFindFileNameW(self);
+			wchar_t cur[MAX_PATH]; lstrcpynW(cur, out, MAX_PATH);
+			PathRemoveArgsW(cur); PathRemoveBlanksW(cur);
+			if (StrCmpNIW(PathFindFileNameW(cur), name, lstrlenW(name)) != 0) {
+				LogLine(L"[ex7] ExplorerIsShell: Shell=\"%s\" is not %s -> answering %s (Win7 explorer would exit as folder window)", out, name, name);
+				lstrcpynW(out, name, cch);
+				r = lstrlenW(out);
+			} else {
+				LogLine(L"[ex7] ExplorerIsShell: Shell=\"%s\" ok", out);
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return r;
+}
+
+// ---- ForceShell (test24): the Win7 explorer must not decline to be the shell.
+// explorer.exe 6.1.7601.17514 (timestamp 0x4CE7A144, hash-pinned by the
+// installer): ShouldStartDesktopAndTray at RVA 0x2BC40 and
+// CreateDesktopAndTray at RVA 0x20BE4 (public PDB). Prologue bytes are
+// verified before hooking; any mismatch = no hook.
+typedef BOOL (*ShouldStart_t)();
+typedef BOOL (*CreateDT_t)(void*);
+ShouldStart_t g_origShouldStart = nullptr;
+CreateDT_t g_origCreateDT = nullptr;
+
+BOOL ShouldStart_Hook()
+{
+	BOOL r = g_origShouldStart();
+	LogLine(L"[ex7] ShouldStartDesktopAndTray returned %d%s", r, r ? L"" : L" -> forced to 1 (ForceShell)");
+	return TRUE;
+}
+
+BOOL CreateDT_Hook(void* p)
+{
+	LogLine(L"[ex7] CreateDesktopAndTray start");
+	BOOL r = g_origCreateDT(p);
+	LogLine(L"[ex7] CreateDesktopAndTray returned %d", r);
+	return r;
+}
+
+bool BytesAt(BYTE* p, const BYTE* want, size_t n)
+{
+	__try { return memcmp(p, want, n) == 0; }
+	__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+void InstallForceShell()
+{
+	if (ReadAdvancedDword(L"ForceShell", 1) == 0) { LogLine(L"[ex7] ForceShell=0"); return; }
+	BYTE* base = (BYTE*)GetModuleHandleW(nullptr);
+	IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)(base + ((IMAGE_DOS_HEADER*)base)->e_lfanew);
+	if (nt->FileHeader.TimeDateStamp != 0x4CE7A144) {
+		LogLine(L"[ex7] ForceShell: explorer timestamp 0x%08X is not 6.1.7601.17514, not hooked", nt->FileHeader.TimeDateStamp);
+		return;
+	}
+	static const BYTE ssPro[] = { 0x48,0x89,0x5C,0x24,0x08, 0x48,0x89,0x74,0x24,0x10, 0x57, 0x48,0x83,0xEC,0x60 };
+	static const BYTE cdPro[] = { 0x48,0x89,0x5C,0x24,0x08, 0x56, 0x48,0x83,0xEC,0x20 };
+	BYTE* ss = base + 0x2BC40; BYTE* cd = base + 0x20BE4;
+	MH_Initialize();
+	if (BytesAt(ss, ssPro, sizeof(ssPro))) {
+		MH_STATUS a = MH_CreateHook(ss, (void*)ShouldStart_Hook, (void**)&g_origShouldStart);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(ss) : a;
+		LogLine(L"[ex7] ForceShell: ShouldStartDesktopAndTray hook %d/%d", a, b);
+	} else LogLine(L"[ex7] ForceShell: ShouldStartDesktopAndTray prologue mismatch");
+	if (BytesAt(cd, cdPro, sizeof(cdPro))) {
+		MH_STATUS a = MH_CreateHook(cd, (void*)CreateDT_Hook, (void**)&g_origCreateDT);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(cd) : a;
+		LogLine(L"[ex7] ForceShell: CreateDesktopAndTray hook %d/%d", a, b);
+	} else LogLine(L"[ex7] ForceShell: CreateDesktopAndTray prologue mismatch");
+}
+
+// Emergency shortcut: start "7explorer-shell-switcher.exe --hotkey" (a tiny
+// resident process, independent of explorer, owning Ctrl+Alt+Shift+S) if the
+// switcher sits next to explorer.exe or wrp64.dll. Opt-out SwitcherHotkey=0.
+void StartSwitcherHotkey()
+{
+	if (ReadAdvancedDword(L"SwitcherHotkey", 1) == 0) return;
+	HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, L"Local\\7explorer.ShellSwitcher.Hotkey");
+	if (m) { CloseHandle(m); return; }
+	wchar_t d1[MAX_PATH] = L"", d2[MAX_PATH] = L"";
+	GetModuleFileNameW(nullptr, d1, MAX_PATH); PathRemoveFileSpecW(d1);
+	GetModuleFileNameW(g_self, d2, MAX_PATH); PathRemoveFileSpecW(d2);
+	const wchar_t* dirs[] = { d1, d2 };
+	for (const wchar_t* d : dirs) {
+		if (!d[0]) continue;
+		wchar_t exe[MAX_PATH], cmd[MAX_PATH + 32];
+		wnsprintfW(exe, MAX_PATH, L"%s\\7explorer-shell-switcher.exe", d);
+		if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES) continue;
+		wnsprintfW(cmd, ARRAYSIZE(cmd), L"\"%s\" --hotkey", exe);
+		STARTUPINFOW si = { sizeof(si) };
+		PROCESS_INFORMATION pi = {};
+		if (CreateProcessW(exe, cmd, nullptr, nullptr, FALSE, DETACHED_PROCESS, nullptr, d, &si, &pi)) {
+			CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+			LogLine(L"[ex7] switcher hotkey resident started (%s)", exe);
+		}
+		return;
+	}
+	LogLine(L"[ex7] 7explorer-shell-switcher.exe not found next to explorer/wrp64: no hotkey");
+}
+
+// Win+I: the Win7 explorer has no handler for it (it belongs to the modern
+// shell). Own the hotkey and open Settings through the same path used by the
+// remaps (ShellExecute + AAM fallbacks). Opt-out SettingsHotkey=0.
+// Fallback when Win+I is already owned (e.g. by the in-process TwinUI, which
+// then tries its own immersive launch that fails under this shell): a
+// low-level keyboard hook sees the keys before hotkey dispatch. Only Win+I is
+// swallowed; a dummy key (0xE8, unassigned) is injected so that releasing Win
+// does not open the Start menu.
+DWORD g_hotkeyTid = 0;
+bool g_iSwallowed = false;
+const UINT WM_EX7_SETTINGS = WM_APP + 0x71;
+
+LRESULT CALLBACK SettingsLLProc(int code, WPARAM w, LPARAM l)
+{
+	__try {
+		if (code == HC_ACTION) {
+			const KBDLLHOOKSTRUCT* k = (const KBDLLHOOKSTRUCT*)l;
+			if (k->vkCode == 'I' && !(k->flags & LLKHF_INJECTED)) {
+				bool down = w == WM_KEYDOWN || w == WM_SYSKEYDOWN;
+				bool win = ((GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000) != 0;
+				if (down && win) {
+					if (!g_iSwallowed) {
+						g_iSwallowed = true;
+						keybd_event(0xE8, 0, 0, 0); keybd_event(0xE8, 0, KEYEVENTF_KEYUP, 0);
+						PostThreadMessageW(g_hotkeyTid, WM_EX7_SETTINGS, 0, 0);
+					}
+					return 1;
+				}
+				if (!down && g_iSwallowed) { g_iSwallowed = false; return 1; }
+			}
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {}
+	return CallNextHookEx(nullptr, code, w, l);
+}
+
+DWORD WINAPI SettingsHotkeyThread(LPVOID)
+{
+	__try {
+		Sleep(3000); // let the tray/desktop register theirs first
+		g_hotkeyTid = GetCurrentThreadId();
+		MSG m;
+		PeekMessageW(&m, nullptr, WM_USER, WM_USER, PM_NOREMOVE); // create the queue
+		HHOOK ll = nullptr;
+		if (RegisterHotKey(nullptr, 0x7E71, MOD_WIN | 0x4000 /*MOD_NOREPEAT*/, 'I')) {
+			LogLine(L"[ex7] Win+I hotkey registered");
+		} else {
+			DWORD err = GetLastError();
+			ll = SetWindowsHookExW(WH_KEYBOARD_LL, SettingsLLProc, g_self, 0);
+			LogLine(L"[ex7] Win+I RegisterHotKey failed (err %u, 1409 = owned by another component): low-level hook %s",
+				err, ll ? L"installed" : L"FAILED");
+			if (!ll) return 0;
+		}
+		while (GetMessageW(&m, nullptr, 0, 0) > 0) {
+			if ((m.message == WM_HOTKEY && m.wParam == 0x7E71) || m.message == WM_EX7_SETTINGS) {
+				BOOL ok = LaunchSettingsUri(L"ms-settings:", nullptr);
+				LogLine(L"[ex7] Win+I -> Settings: %d", ok);
+			}
+		}
+		if (ll) UnhookWindowsHookEx(ll);
+	}
+	__except (SehFilter(L"SettingsHotkeyThread", GetExceptionInformation())) {}
+	return 0;
+}
+
+void StartSettingsHotkey()
+{
+	if (ReadAdvancedDword(L"SettingsHotkey", 1) == 0) return;
+	HANDLE t = CreateThread(nullptr, 0, SettingsHotkeyThread, nullptr, 0, nullptr);
+	if (t) CloseHandle(t);
+}
+
+void InstallExplorerIsShellFix()
+{
+	InstallForceShell();
+	if (ReadAdvancedDword(L"ForceExplorerIsShell", 1) == 0) return;
+	g_origGPPS = (GPPS_t)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetPrivateProfileStringW");
+	if (!g_origGPPS) return;
+	HMODULE exe = GetModuleHandleW(nullptr);
+	ChangeImportedAddress(exe, (LPSTR)"KERNEL32.dll", (FARPROC)g_origGPPS, (FARPROC)GPPS_Hook);
+	FARPROC kb = GetProcAddress(GetModuleHandleW(L"kernelbase.dll"), "GetPrivateProfileStringW");
+	if (kb && kb != (FARPROC)g_origGPPS) ChangeImportedAddress(exe, (LPSTR)"KERNEL32.dll", kb, (FARPROC)GPPS_Hook);
+	wchar_t hk[MAX_PATH] = L"-"; DWORD cb = sizeof(hk);
+	RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", L"Shell", RRF_RT_REG_SZ, nullptr, hk, &cb);
+	LogLine(L"[ex7] ExplorerIsShell fix installed (HKCU Winlogon Shell=%s)", hk);
+}
+
+void DirOf(wchar_t* p) { PathRemoveFileSpecW(p); lstrcatW(p, L"\\"); }
+
+void InstallInjectionGuard()
+{
+	if (ReadAdvancedDword(L"InjectionGuard", 1) == 0) { LogLine(L"[ex7] injection guard off"); return; }
+	GetWindowsDirectoryW(g_sysRoot, MAX_PATH); lstrcatW(g_sysRoot, L"\\");
+	GetModuleFileNameW(nullptr, g_exeDir, MAX_PATH); DirOf(g_exeDir);
+	GetModuleFileNameW(g_self, g_selfDir, MAX_PATH); DirOf(g_selfDir);
+	g_swallow = ReadAdvancedDword(L"InjectionSwallow", 1) != 0;
+	g_policy = ReadAdvancedDword(L"InjectionPolicy", 1);
+	DWORD fails = ReadAdvancedDword(L"StartupFailures", 0);
+	g_safeMode = fails >= 2;
+	WriteAdvancedDword(L"StartupFailures", fails + 1); // cleared when the taskbar is created
+	{
+		DWORD cb = sizeof(g_allow) - 2 * sizeof(wchar_t);
+		ZeroMemory(g_allow, sizeof(g_allow));
+		if (RegGetValueW(HKEY_CURRENT_USER, kAdvancedKey, L"InjectionAllowlist", RRF_RT_REG_MULTI_SZ, nullptr, g_allow, &cb) != ERROR_SUCCESS)
+			ZeroMemory(g_allow, sizeof(g_allow));
+	}
+	LogLine(L"[ex7] injection guard: policy=%u safeMode=%d (failed start-ups=%u)", g_policy, g_safeMode, fails);
+	for (const wchar_t* q = g_allow; *q; q += lstrlenW(q) + 1)
+		LogLine(L"[ex7] injection guard: allowed %s", q);
+	LogLoadedForeignModules();
+	InstallExitTracing();
+	HANDLE wd = CreateThread(nullptr, 0, WatchdogThread, nullptr, 0, nullptr);
+	if (wd) CloseHandle(wd);
+	LoadQuarantine();
+	for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1)
+		LogLine(L"[ex7] injection guard: quarantined %s", q);
+	MH_Initialize(); // MH_ERROR_ALREADY_INITIALIZED is fine
+	HMODULE nt = GetModuleHandleW(L"ntdll.dll"), kb = GetModuleHandleW(L"kernelbase.dll");
+	void* ldr = nt ? (void*)GetProcAddress(nt, "LdrLoadDll") : nullptr;
+	void* uef = kb ? (void*)GetProcAddress(kb, "UnhandledExceptionFilter") : nullptr;
+	if (ldr) {
+		MH_STATUS a = MH_CreateHook(ldr, (void*)LdrLoadDll_Hook, (void**)&g_origLdrLoadDll);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(ldr) : a;
+		LogLine(L"[ex7] injection guard LdrLoadDll hook %d/%d (0 = OK)", a, b);
+	}
+	if (uef) {
+		MH_STATUS a = MH_CreateHook(uef, (void*)UEF_Hook, (void**)&g_origUEF);
+		MH_STATUS b = a == MH_OK ? MH_EnableHook(uef) : a;
+		LogLine(L"[ex7] injection guard UnhandledExceptionFilter hook %d/%d (0 = OK)", a, b);
+	}
+}
+
+} // namespace
+
+// ------------------------------------------------------------ public
+void InstallShellFixes(HMODULE hSelf)
+{
+	g_self = hSelf;
+	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test36), pid %u ----", GetCurrentProcessId());
+	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
+	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
+	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
+	SafeInvoke(L"UWP host early", ex7::uwp::EarlyStart);
+	SafeInvoke(L"InstallTrayMenus", ex7::InstallTrayMenus);             // Win32 tray menus + volume actions
+	SafeInvoke(L"OpenControlPanel hook", ex7::InstallControlPanelOpenHook); // "Customize..." -> built-in dialog
+	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare);
+	SafeInvoke(L"pnidui prepare", ex7::net::StartBackgroundPrepare); // network icon on 24H2+
+	SafeInvoke(L"settings hotkey", StartSettingsHotkey); // Win+I
+	SafeInvoke(L"switcher hotkey", StartSwitcherHotkey); // Ctrl+Alt+Shift+S -> shell switcher
+	ex7::InstallFlyoutFrames(); // Aero borders on legacy flyouts (credits: aubymori)
+	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
+	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
+	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
+	SafeInvoke(L"EnsureTransparencyEffects", EnsureTransparencyEffects);
+	LogLine(L"[ex7] shell fixes done");
+}
+
+// Sentinel: ImmersiveInitFailures counts start-ups that began UWP init but
+// never reported success (crash/hang). After 2 in a row UWP stays off until
+// the value is deleted or reset to 0.
+bool ImmersiveStartupAllowed()
+{
+	DWORD failures = ReadAdvancedDword(L"ImmersiveInitFailures", 0);
+	LogLine(L"[ex7] UWP sentinel ImmersiveInitFailures=%u", failures);
+	if (failures >= 2) {
+		LogLine(L"[ex7] UWP disabled for this session: %u failed start-ups "
+			L"(reset HKCU\\...\\Explorer\\Advanced\\ImmersiveInitFailures to 0)", failures);
+		return false;
+	}
+	return true;
+}
+
+void ImmersiveStartupBegin()
+{
+	WriteAdvancedDword(L"ImmersiveInitFailures", ReadAdvancedDword(L"ImmersiveInitFailures", 0) + 1);
+}
+
+void ImmersiveStartupSucceeded()
+{
+	WriteAdvancedDword(L"ImmersiveInitFailures", 0);
+}
+
+static void CreateTwinUIThunk() { CreateTwinUI_UWP(); }
+
+void SafeCreateTwinUI_UWP()
+{
+	static LONG s_done = 0;
+	if (InterlockedCompareExchange(&s_done, 1, 0) != 0) return; // once per process
+	ImmersiveStartupBegin(); // raised now, cleared only if start-up returns
+	if (SafeInvoke(L"CreateTwinUI_UWP", CreateTwinUIThunk))
+		ImmersiveStartupSucceeded();
+	else
+		LogLine(L"[ex7] TwinUI start-up faulted; failure counter left raised");
+}
+
+} // namespace ex7
+
+namespace ex7 {
+void LogText(const wchar_t* text) { LogLine(L"%s", text); }
+DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def) { return ReadAdvancedDword(name, def); }
+// dllmain: system CLSID_SysTray instance created (8.1 path not taken).
+void OnSysTrayCreateBegin()
+{
+	LogLine(L"[ex7] SysTray: CoCreateInstance start");
+	SafeInvoke(L"RetryDeferredTwinUI", RetryDeferredTwinUI); // UWP: TwinUI on a thread with COM
+	if (InterlockedExchange(&g_trayReached, 1) == 0) {
+		WriteAdvancedDword(L"StartupFailures", 0);
+		// UWP sentinel: the shell came up fine, so give the immersive stack
+		// one more try next start (a stale counter left UWP off for good and
+		// new UWP apps could not open). A real crash raises it back to 2.
+		DWORD f = ReadAdvancedDword(L"ImmersiveInitFailures", 0);
+		if (f >= 2) { WriteAdvancedDword(L"ImmersiveInitFailures", 1); LogLine(L"[ex7] UWP sentinel %u -> 1: immersive stack retried next start", f); }
+	}
+}
+void OnSystemSysTrayCreated()
+{
+	LogLine(L"[ex7] SysTray: system stobject in use (8.1 active=%d)", ex7::w81::IsActive());
+	SafeInvoke(L"PatchStobjectRegistry", PatchStobjectRegistry);
+	if (!g_trayTimer) g_trayTimer = SetTimer(nullptr, 0, 2000, TrayTimerProc);
+	ex7::net::StartFallbackTrayIcon(); // own network icon if pnidui does not start
+	LogLine(L"[ex7] tray timer %p", (void*)g_trayTimer);
+}
+} // namespace ex7

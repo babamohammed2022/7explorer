@@ -1,0 +1,318 @@
+#pragma warning(disable:4302) // type conversions used by Windows 8.1 immersive code
+#pragma warning(disable:4311) // type conversions used by Windows 8.1 immersive code
+#pragma warning(disable:4312) // type conversions used by Windows 8.1 immersive code
+
+#include "SafeGuards.h"
+#include "ImmersiveShell.h"
+#include "dbgprint.h"
+namespace ex7 { void LogText(const wchar_t* text); namespace uwp { void SetTwinUiStarted(bool ok); } }
+
+typedef HWND(WINAPI* GetTaskmanWindow)();
+typedef BOOL(WINAPI* SetTaskmanWindow)(HWND handle);
+typedef HRESULT(CALLBACK* SetShellWindow)(HWND hwnd);
+
+GetTaskmanWindow GetTaskmanWindowFunc = NULL;
+SetTaskmanWindow SetTaskmanWindowFunc = NULL;
+
+UINT shellhook = 0;
+IImmersiveShellHookService* ShellHookService;
+
+static bool successfullySetShellWindow = false;
+
+DWORD WINAPI TwinThread( LPVOID lpParameter )
+{
+	CoInitializeEx(NULL,COINIT_APARTMENTTHREADED);
+	IImmersiveBehavior* behavior;
+	HRESULT ret = CoUnmarshalInterface((IStream*)lpParameter, IID_ImmersiveBehavior, (PVOID*)&behavior);
+	dbgprintf(L"IImmersiveBehavior %p %p",ret,behavior);
+	UINT count;	
+	behavior->GetMaximumComponentCount(&count);
+	UINT i;
+	for (i=0;i<count;i++)
+	{
+		dbgprintf(L"creating TwinUI component %d",i);
+		IUnknown* component;
+		HRESULT ret = behavior->CreateComponent(i,&component);
+		dbgprintf(L"created TwinUI component %p %p",ret,component);
+	}
+	return 0;
+}
+
+
+LRESULT TaskmanWndProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
+{
+	if (msg == WM_CREATE)
+	{
+		shellhook = RegisterWindowMessageW(L"SHELLHOOK");
+		if (!shellhook)
+		{
+			dbgprintf(L"failed to register shellhook\n");
+		}
+		if (!SetTaskmanWindowFunc(hwnd))
+		{
+			dbgprintf(L"failed to register taskman window\n");
+		}
+		if (!RegisterShellHookWindow(hwnd))
+		{
+			dbgprintf(L"register shellhook window failed\n");
+		}
+
+	}
+	else if (msg == WM_DESTROY)
+	{
+		if (GetTaskmanWindowFunc() == hwnd)
+		{
+			SetTaskmanWindowFunc(NULL);
+		}
+		DeregisterShellHookWindow(hwnd);
+	}
+	else
+	{
+		if (msg == shellhook && msg != WM_HOTKEY)
+		{
+			if (ShellHookService)
+			{
+				BOOL handle = TRUE;
+				if ((UINT)w == 12)
+				{
+					ShellHookService->SetTargetWindowForSerialization((HWND)l);
+				}
+				else if ((UINT)w == 0x32)
+				{
+					handle = FALSE;
+				}
+				if (handle)
+				{
+					ShellHookService->PostShellHookMessage(w, l);
+				}
+				return 0;
+			}
+
+			GUID guidImmersiveShell;
+			CLSIDFromString(L"{c2f03a33-21f5-47fa-b4bb-156362a2f239}", &guidImmersiveShell);
+
+			GUID SID_ImmersiveShellHookService;
+			CLSIDFromString(L"{4624bd39-5fc3-44a8-a809-163a836e9031}", &SID_ImmersiveShellHookService);
+
+			GUID SID_Unknown;
+			CLSIDFromString(L"{914d9b3a-5e53-4e14-bbba-46062acb35a4}", &SID_Unknown);
+
+			IServiceProvider* ImmersiveShell;
+			if (CoCreateInstance(guidImmersiveShell, 0, 0x404u, IID_IServiceProvider, (LPVOID*)&ImmersiveShell) >= 0)
+			{
+				ImmersiveShell->QueryService(SID_ImmersiveShellHookService, SID_Unknown, (void**)&ShellHookService);
+			}
+		}
+	}
+	return DefWindowProc(hwnd, msg, w, l);
+}
+
+void CreateTaskManWindow()
+{
+	// create taskman class (handles taskbar buttons)
+	WNDCLASSEX taskmanclass = {};
+
+	taskmanclass.cbClsExtra = 0;
+	taskmanclass.hIcon = 0;
+	taskmanclass.lpszMenuName = 0;
+	taskmanclass.hIconSm = 0;
+	taskmanclass.cbSize = sizeof(WNDCLASSEXW);
+	taskmanclass.style = 8;
+	taskmanclass.lpfnWndProc = (WNDPROC)TaskmanWndProc;
+	taskmanclass.cbWndExtra = 8;
+	taskmanclass.hInstance = GetModuleHandle(NULL);
+	taskmanclass.hCursor = LoadCursor(NULL, IDC_ARROW);
+	taskmanclass.hbrBackground = (HBRUSH)2;
+	taskmanclass.lpszClassName = TEXT("TaskmanWndClass");
+
+	if (!RegisterClassExW(&taskmanclass))
+	{
+		return;
+	}
+	auto Taskman = CreateWindowExW(0, L"TaskmanWndClass", NULL, 0x82000000, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+void CreateTwinUI()
+{
+	PVOID pv;
+	if (SUCCEEDED(CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, 1, IID_ImmersiveShellBuilder, &pv)))
+	{
+		dbgprintf(L"TwinUI factory created!");
+		IImmersiveShellCreator* ImmersiveShellCreator = (IImmersiveShellCreator*)pv;
+		IImmersiveShellController* controller;
+		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
+		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
+		{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI CreateShell hr=0x%08X", (DWORD)ret); ex7::LogText(l); }
+		if (SUCCEEDED(ret))
+		{
+			//HRESULT ret = controller->Start();
+			IStream* someinterface = (IStream*)*(DWORD*)((DWORD)controller + 0x34);
+			IImmersiveBehavior* behavior;
+			CoUnmarshalInterface((IStream*)someinterface, IID_ImmersiveBehavior, (PVOID*)&behavior);
+			controller->SetCreationBehavior(new CImmersiveBehaviorWrapper(behavior));
+			controller->Start();
+			/*CreateThread(NULL,0,TwinThread,(PVOID)someinterface,0,NULL);*/
+		}
+		/*ret = CoCreateInstance(CLSID_ImmersiveShell,NULL,0x404,IID_ImmersiveShell,&pv);
+		dbgprintf(L"Immersive Shell created: %p",ret);*/
+	}
+}
+
+volatile LONG g_twinDeferred = 0;
+HRESULT g_twinStartHr = E_PENDING;
+
+void CreateTwinUI_UWP()
+{
+	auto user32 = LoadLibrary(TEXT("user32.dll"));
+	GetTaskmanWindowFunc = (GetTaskmanWindow)GetProcAddress(user32, "GetTaskmanWindow");
+	SetTaskmanWindowFunc = (SetTaskmanWindow)GetProcAddress(user32, "SetTaskmanWindow");
+
+	CreateTaskManWindow();
+
+	// 7explorer fork: the builder is released automatically (RAII); the
+	// controller is intentionally kept alive for the lifetime of the shell.
+	ex7::ComPtr<IImmersiveShellCreator> ImmersiveShellCreator;
+	HRESULT hrB = CoCreateInstance(CLSID_ImmersiveShellBuilder, NULL, CLSCTX_INPROC_SERVER, IID_ImmersiveShellBuilder, ImmersiveShellCreator.PutVoid());
+	if (hrB == CO_E_NOTINITIALIZED) {
+		// test34: this call comes from explorer's main thread before COM is
+		// up. test32 joined an STA here and CreateShell worked, but Start()
+		// failed with RPC_E_WRONG_THREAD (0x8001010E). Defer instead: the
+		// shell is started from the tray thread (COM ready, as upstream
+		// explorer7 does), see RetryDeferredTwinUI().
+		g_twinDeferred = 1;
+		ex7::LogText(L"[ex7] TwinUI: COM not initialised on this thread, start deferred to the tray thread");
+		return;
+	}
+	{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI ImmersiveShellBuilder hr=0x%08X", (DWORD)hrB); ex7::LogText(l); }
+	if (SUCCEEDED(hrB))
+	{
+		dbgprintf(L"TwinUI factory created!");
+
+		static IImmersiveShellController* controller = nullptr;
+		HRESULT ret = ImmersiveShellCreator->CreateShell(&controller);
+		dbgprintf(L"TwinUI instance created %p %p", ret, controller);
+		{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI CreateShell hr=0x%08X", (DWORD)ret); ex7::LogText(l); }
+		if (SUCCEEDED(ret))
+		{
+			HRESULT hr = controller->Start();
+
+			dbgprintf(L"Immersive Shell Controller Result: %x", hr);
+			{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI controller Start hr=0x%08X", (DWORD)hr); ex7::LogText(l); }
+			g_twinStartHr = hr;
+			if (hr != RPC_E_WRONG_THREAD) ex7::uwp::SetTwinUiStarted(SUCCEEDED(hr));
+		}
+	}
+}
+
+// Ittr: Below has to exist for non-UWP mode to work
+
+CImmersiveBehaviorWrapper::CImmersiveBehaviorWrapper(IImmersiveBehavior* behavior)
+{
+	m_cRef = 1;
+	m_behavior = behavior;
+	m_behavior->AddRef();
+}
+
+CImmersiveBehaviorWrapper::~CImmersiveBehaviorWrapper()
+{
+	dbgprintf(L"CImmersiveBehaviorWrapper::~CImmersiveBehaviorWrapper()");
+	m_behavior->Release();
+}
+
+HRESULT STDMETHODCALLTYPE CImmersiveBehaviorWrapper::QueryInterface(REFIID riid, void** ppvObject)
+{
+	WCHAR iid[100];
+	StringFromGUID2(riid, iid, 100);
+	dbgprintf(L"CImmersiveBehaviorWrapper::QueryInterface %s", iid);
+	if (riid == IID_ImmersiveBehavior)
+	{
+		*ppvObject = static_cast<IImmersiveBehavior*>(this);
+		return S_OK;
+	}
+	return m_behavior->QueryInterface(riid, ppvObject);
+}
+
+ULONG STDMETHODCALLTYPE CImmersiveBehaviorWrapper::AddRef(void)
+{
+	return InterlockedIncrement(&m_cRef);
+}
+
+ULONG STDMETHODCALLTYPE CImmersiveBehaviorWrapper::Release(void)
+{
+	dbgprintf(L"CImmersiveBehaviorWrapper::release()");
+	if (InterlockedDecrement(&m_cRef) == 0)
+	{
+		delete this;
+		return 0;
+	}
+	return m_cRef;
+}
+
+HRESULT STDMETHODCALLTYPE CImmersiveBehaviorWrapper::OnImmersiveThreadStart(void)
+{
+	dbgprintf(L"CImmersiveBehaviorWrapper::OnImmersiveThreadStart");
+	return m_behavior->OnImmersiveThreadStart();
+}
+
+HRESULT STDMETHODCALLTYPE CImmersiveBehaviorWrapper::OnImmersiveThreadStop(void)
+{
+	dbgprintf(L"CImmersiveBehaviorWrapper::OnImmersiveThreadStop");
+	return m_behavior->OnImmersiveThreadStart();
+}
+
+HRESULT STDMETHODCALLTYPE CImmersiveBehaviorWrapper::GetMaximumComponentCount(unsigned int* count)
+{
+	dbgprintf(L"CImmersiveBehaviorWrapper::GetMaximumComponentCount %p", count);
+	return m_behavior->GetMaximumComponentCount(count);
+}
+
+HRESULT STDMETHODCALLTYPE CImmersiveBehaviorWrapper::CreateComponent(unsigned int number, IUnknown** component)
+{
+	//if (number == 1) DebugBreak();
+	HRESULT ret = m_behavior->CreateComponent(number, component);
+	dbgprintf(L"CImmersiveBehaviorWrapper::CreateComponent %d = %p", number, ret);
+	/*IUnknown* wtf = *component;
+	HRESULT ret2 = wtf->QueryInterface(IID_ImmersiveShell,(PVOID*)&wtf);
+	dbgprintf(L"CImmersiveBehaviorWrapper::GetInterfaceList %p",ret2);*/
+	return ret;
+}
+
+HRESULT STDMETHODCALLTYPE CImmersiveBehaviorWrapper::ShouldCreateComponent(unsigned int number, int* allowed)
+{
+	dbgprintf(L"CImmersiveBehaviorWrapper::ShouldCreateComponent %d %p", number, allowed);
+	if (number == 9)
+	{
+		*allowed = 0;
+		return S_OK;
+	}
+	return m_behavior->ShouldCreateComponent(number, allowed);
+}
+// ---------------------------------------------------------------- test34
+static DWORD WINAPI TwinMtaThread(LPVOID)
+{
+	// Last attempt: a dedicated MTA thread that stays alive for the process
+	// (the controller lives in this apartment).
+	HRESULT hi = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	__try { CreateTwinUI_UWP(); }
+	__except (EXCEPTION_EXECUTE_HANDLER) { ex7::LogText(L"[ex7] TwinUI MTA attempt faulted"); }
+	{ wchar_t l[128]; wnsprintfW(l, 128, L"[ex7] TwinUI MTA thread: CoInit=0x%08X Start=0x%08X", (DWORD)hi, (DWORD)g_twinStartHr); ex7::LogText(l); }
+	if (FAILED(g_twinStartHr)) ex7::uwp::SetTwinUiStarted(false);
+	if (SUCCEEDED(g_twinStartHr)) { for (;;) Sleep(INFINITE); }
+	return 0;
+}
+
+namespace ex7 {
+// Tray thread (COM initialised by explorer): run the deferred start.
+void RetryDeferredTwinUI()
+{
+	if (!InterlockedExchange(&g_twinDeferred, 0)) return;
+	LogText(L"[ex7] TwinUI: deferred start on the tray thread");
+	__try { CreateTwinUI_UWP(); }
+	__except (EXCEPTION_EXECUTE_HANDLER) { LogText(L"[ex7] TwinUI deferred start faulted"); g_twinStartHr = E_FAIL; }
+	if (g_twinStartHr == RPC_E_WRONG_THREAD || g_twinStartHr == E_PENDING || g_twinDeferred) {
+		g_twinDeferred = 0;
+		HANDLE t = CreateThread(NULL, 0, TwinMtaThread, NULL, 0, NULL);
+		if (t) CloseHandle(t);
+	}
+}
+}

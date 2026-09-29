@@ -1,0 +1,31 @@
+; ============================================================
+; 7explorer - esempio di configurazione tema
+; Copia questo file come "config.ini" accanto a explorer.exe
+; (es. C:\ex7test\config.ini).
+;
+; 7explorer NON modifica mai file di sistema (uxtheme.dll,
+; themeui.dll, themes di Windows ...): tutto avviene nella
+; propria directory/processo.
+; ============================================================
+
+[Theme]
+; Mode puo' essere:
+;   Auto      (default) usa <exedir>\theme\<Nome>.msstyles se il file
+;             esiste (come da test precedenti), altrimenti il tema
+;             Win7-like embedded in wrp64.dll (auto-estratto in
+;             %LocalAppData%\7explorer\theme\aero.msstyles)
+;   Fallback  usa sempre il tema embedded (ignora i file esterni)
+;   Custom    prova sempre <exedir>\theme\<Nome>.msstyles; in caso di
+;             errori torna al tema embedded
+;   Windows7  alias di Custom (per fornire un aero.msstyles di Win7)
+;   Windows81 alias di Custom (per fornire un aero.msstyles di Win8.1)
+;
+; In TUTTI i casi, se il caricamento scelto fallisce, 7explorer
+; ripiega sul tema embedded e, se anche quello fallisce, resta il
+; look classico: mai un avvio impedito.
+Mode=Auto
+
+; Nome del file msstyles (senza estensione) in <exedir>\theme\
+; Esempi: aero, aero7, aerolite, ...
+; Se omesso viene letto il valore registry "Theme"; default "aero".
+Name=aero
