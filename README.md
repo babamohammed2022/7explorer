@@ -215,6 +215,9 @@ msbuild installer\ex7selfcontained\ex7selfcontained.vcxproj /p:Configuration=Rel
 
 ## Licenza e crediti
 
+> Note: this fork is independent from the original project. The original
+> is GPL-3.0 licensed and this one is too.
+
 Codice licenziato **GPLv3** ([LICENSE](LICENSE)). Questo progetto è un
 fork di **explorer7** del [World Windows Federation]
 (https://github.com/world-windows-federation/explorer7): senza il loro
