@@ -1,0 +1,37 @@
+# Diagnostic only: does the 22621 pnidui.dll load on the runner's Windows?
+name: diag-pnidui
+on:
+  push:
+    branches: ["arena/**"]
+    paths: [".github/workflows/diag-pnidui.yml", "tools/pnidui_probe.py"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Probe
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force ci-logs | Out-Null
+          pip install pefile | Out-Null
+          [System.Environment]::OSVersion.Version | Out-String | Add-Content ci-logs\pnidui.txt
+          curl.exe -sS -L -w "HTTP %{http_code}`n" -o pnidui.dll "https://msdl.microsoft.com/download/symbols/pnidui.dll/C506D2E820b000/pnidui.dll" *>> ci-logs\pnidui.txt
+          python tools\pnidui_probe.py pnidui.dll *>> ci-logs\pnidui.txt
+          reg query "HKCR\CLSID\{C2796011-81BA-4148-8FCA-C6643245113F}" /s *>> ci-logs\pnidui.txt
+          Get-AuthenticodeSignature pnidui.dll | Format-List * | Out-String | Add-Content ci-logs\pnidui.txt
+      - name: Commit report
+        if: always()
+        shell: pwsh
+        run: |
+          git config user.email "ci@localhost"; git config user.name "ci-log-bot"
+          $br = "ci-logs/pnidui-" + $env:GITHUB_RUN_ID
+          git checkout -b $br
+          git add -f ci-logs
+          git commit -m "pnidui diag $env:GITHUB_RUN_ID"
+          git push -f origin $br
