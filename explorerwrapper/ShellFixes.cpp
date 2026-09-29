@@ -30,6 +30,8 @@
 #include "LegacyBatteryFlyout.h"
 #include "NetworkIcon.h"
 #include "FlyoutFrames.h"
+#include "ImmersiveMenus.h"
+#include "NotifyIconsDialog.h"
 #include <shobjidl.h>
 #include "dbgprint.h"
 #include <shlwapi.h>
@@ -179,6 +181,15 @@ BOOL LaunchSettingsUri(const wchar_t* uri, HWND hwnd)
 
 BOOL LaunchRemap(const Remap* r, HWND hwnd, int nShow)
 {
+	// "Customize..." (taskbar properties + overflow): hardcoded built-in
+	// window driving explorer's own ITrayNotify. NotifyIconsUseSettings:
+	// 0 = built-in (default), 1 = Settings, 2 = system page (old behaviour).
+	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid) &&
+		ReadAdvancedDword(L"NotifyIconsUseSettings", 0) == 0) {
+		bool ok = ShowNotifyIconsDialog();
+		LogLine(L"[ex7][notifyicons] built-in dialog started=%d", ok ? 1 : 0);
+		if (ok) return TRUE;
+	}
 	// Windows 11 24H2 removed the Notification Area Icons page: explorer
 	// "succeeds" but nothing appears. Go straight to Settings there.
 	if (r->explorerArgs && StrStrIW(r->explorerArgs, kNotifyIconsClsid) &&
@@ -244,6 +255,54 @@ bool ExtractAumid(const wchar_t* s, wchar_t* out, size_t cch)
 	return true;
 }
 
+// Settings pages that have a classic Win32 equivalent are opened as such:
+// the immersive Settings app does not come up under the Win7 shell on some
+// builds (volume menu "Open Volume mixer"/"Open Sound settings" did nothing).
+// Opt-out SettingsWin32Remap=0.
+struct Win32Page { const wchar_t* prefix; const wchar_t* file; const wchar_t* params; };
+const Win32Page kWin32Pages[] = {
+	{ L"ms-settings:apps-volume",    L"SndVol.exe",  nullptr },
+	{ L"ms-settings:sound",          L"control.exe", L"mmsys.cpl" },
+	{ L"ms-settings:network",        L"control.exe", L"/name Microsoft.NetworkAndSharingCenter" },
+	{ L"ms-settings:datausage",      L"control.exe", L"ncpa.cpl" },
+	{ L"ms-settings:dateandtime",    L"control.exe", L"timedate.cpl" },
+	{ L"ms-settings:display",        L"control.exe", L"desk.cpl" },
+	{ L"ms-settings:personalization",L"control.exe", L"/name Microsoft.Personalization" },
+	{ L"ms-settings:powersleep",     L"control.exe", L"powercfg.cpl" },
+	{ L"ms-settings:batterysaver",   L"control.exe", L"powercfg.cpl" },
+	{ L"ms-settings:mousetouchpad",  L"control.exe", L"main.cpl" },
+	{ L"ms-settings:regionlanguage", L"control.exe", L"intl.cpl" },
+	{ L"ms-settings:appsfeatures",   L"control.exe", L"appwiz.cpl" },
+	{ L"ms-settings:about",          L"control.exe", L"/name Microsoft.System" },
+	{ L"ms-settings:bluetooth",      L"control.exe", L"bthprops.cpl" },
+	{ L"ms-settings:printers",       L"control.exe", L"printers" },
+};
+
+bool TryWin32Settings(SHELLEXECUTEINFOW* sei, ExecCtx* c)
+{
+	const wchar_t* f = sei->lpFile;
+	if (!f || StrCmpNIW(f, L"ms-settings:", 12) != 0) return false;
+	if (ReadAdvancedDword(L"SettingsWin32Remap", 1) == 0) return false;
+	for (const Win32Page& p : kWin32Pages) {
+		int n = lstrlenW(p.prefix);
+		if (StrCmpNIW(f, p.prefix, n) != 0) continue;
+		wchar_t sys[MAX_PATH], exe[MAX_PATH];
+		GetSystemDirectoryW(sys, MAX_PATH);
+		wnsprintfW(exe, MAX_PATH, L"%s\\%s", sys, p.file);
+		SHELLEXECUTEINFOW x = { sizeof(x) };
+		x.fMask = SEE_MASK_FLAG_NO_UI | (sei->fMask & SEE_MASK_NOCLOSEPROCESS);
+		x.hwnd = sei->hwnd; x.lpFile = exe; x.lpParameters = p.params; x.nShow = SW_SHOWNORMAL;
+		BOOL ok = g_origShellExecuteExW(&x);
+		LogLine(L"[ex7] %s -> %s %s: %d", f, exe, p.params ? p.params : L"", ok);
+		if (!ok) return false;
+		c->handled = TRUE; c->result = TRUE;
+		sei->hInstApp = (HINSTANCE)(INT_PTR)33;
+		if (sei->fMask & SEE_MASK_NOCLOSEPROCESS) sei->hProcess = x.hProcess;
+		return true;
+	}
+	return false;
+}
+
 bool TryActivateAumid(const wchar_t* target, SHELLEXECUTEINFOW* sei, ExecCtx* c)
 {
 	wchar_t aumid[256];
@@ -284,6 +343,7 @@ void TryRemapExec(ExecCtx* c)
 		sei->lpFile ? sei->lpFile : L"", sei->lpParameters ? sei->lpParameters : L"",
 		(target == pidlName) ? pidlName : L"");
 
+	if (TryWin32Settings(sei, c)) return;
 	if (TryActivateAumid(target, sei, c) ||
 		(target != pidlName && sei->lpIDList && IdListName((PCIDLIST_ABSOLUTE)sei->lpIDList, pidlName, ARRAYSIZE(pidlName)) &&
 		 TryActivateAumid(pidlName, sei, c)))
@@ -705,6 +765,8 @@ void PatchTrayModules()
 		HMODULE st = GetModuleHandleW(L"stobject.dll");
 		if (st) ex7::net::OnStobjectLoaded(st); // SEH inside, idempotent
 	}
+	ex7::ClassicMenusFor(GetModuleHandleW(L"SndVolSSO.dll"), L"SndVolSSO");
+	ex7::ClassicMenusFor(GetModuleHandleW(L"pnidui.dll"), L"pnidui");
 	if (ReadAdvancedDword(L"ClassicVolumeFlyout", 1) != 0) {
 		PatchCtx c = { GetModuleHandleW(L"SndVolSSO.dll"), L"classic volume flyout: SndVolSSO" };
 		if (c.m) SafeInvokeCtx<PatchCtx>(L"patch SndVolSSO", PatchModuleRegistryCtx, &c);
@@ -920,6 +982,11 @@ bool IsWindhawkMod(const wchar_t* path) { return StrStrIW(path, L"\\Windhawk\\En
 
 bool IsAllowed(const wchar_t* key)
 {
+	// Built-in allowlist: mods written for this shell's Win7 tray (the
+	// network flyout is the click target of our network icon).
+	static const wchar_t* builtin[] = { L"win7-network-flyout-recreation", L"win7-action-center-recreation" };
+	if (ReadAdvancedDword(L"InjectionBuiltinAllow", 1))
+		for (const wchar_t* b : builtin) if (lstrcmpiW(b, key) == 0) return true;
 	for (const wchar_t* q = g_allow; *q; q += lstrlenW(q) + 1)
 		if (lstrcmpiW(q, key) == 0) return true;
 	return false;
@@ -957,7 +1024,7 @@ LONG NTAPI LdrLoadDll_Hook(PWSTR sp, PULONG ch, EX7_USTR* name, PVOID* h)
 	LONG st = g_origLdrLoadDll(sp, ch, name, h);
 	if (st >= 0) {
 		__try {
-			if (name && name->Buffer && (GetModuleHandleW(L"SndVolSSO.dll") || GetModuleHandleW(L"stobject.dll")))
+			if (name && name->Buffer && (GetModuleHandleW(L"SndVolSSO.dll") || GetModuleHandleW(L"stobject.dll") || GetModuleHandleW(L"pnidui.dll")))
 				PatchTrayModules();
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {}
@@ -1330,6 +1397,37 @@ void StartSwitcherHotkey()
 	LogLine(L"[ex7] 7explorer-shell-switcher.exe not found next to explorer/wrp64: no hotkey");
 }
 
+// Win+I: the Win7 explorer has no handler for it (it belongs to the modern
+// shell). Own the hotkey and open Settings through the same path used by the
+// remaps (ShellExecute + AAM fallbacks). Opt-out SettingsHotkey=0.
+DWORD WINAPI SettingsHotkeyThread(LPVOID)
+{
+	__try {
+		Sleep(3000); // let the tray/desktop register theirs first
+		if (!RegisterHotKey(nullptr, 0x7E71, MOD_WIN | 0x4000 /*MOD_NOREPEAT*/, 'I')) {
+			LogLine(L"[ex7] Win+I hotkey not registered (err %u)", GetLastError());
+			return 0;
+		}
+		LogLine(L"[ex7] Win+I hotkey registered");
+		MSG m;
+		while (GetMessageW(&m, nullptr, 0, 0) > 0) {
+			if (m.message == WM_HOTKEY && m.wParam == 0x7E71) {
+				BOOL ok = LaunchSettingsUri(L"ms-settings:", nullptr);
+				LogLine(L"[ex7] Win+I -> Settings: %d", ok);
+			}
+		}
+	}
+	__except (SehFilter(L"SettingsHotkeyThread", GetExceptionInformation())) {}
+	return 0;
+}
+
+void StartSettingsHotkey()
+{
+	if (ReadAdvancedDword(L"SettingsHotkey", 1) == 0) return;
+	HANDLE t = CreateThread(nullptr, 0, SettingsHotkeyThread, nullptr, 0, nullptr);
+	if (t) CloseHandle(t);
+}
+
 void InstallExplorerIsShellFix()
 {
 	InstallForceShell();
@@ -1397,12 +1495,13 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test27), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test28), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare);
 	SafeInvoke(L"pnidui prepare", ex7::net::StartBackgroundPrepare); // network icon on 24H2+
+	SafeInvoke(L"settings hotkey", StartSettingsHotkey); // Win+I
 	SafeInvoke(L"switcher hotkey", StartSwitcherHotkey); // Ctrl+Alt+Shift+S -> shell switcher
 	ex7::InstallFlyoutFrames(); // Aero borders on legacy flyouts (credits: aubymori)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable

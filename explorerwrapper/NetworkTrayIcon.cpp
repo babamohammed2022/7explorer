@@ -236,12 +236,23 @@ void Launch(const wchar_t* file, const wchar_t* params)
 	Log(L"launch %s %s -> %d (%u)", file, params ? params : L"", ok, ok ? 0 : GetLastError());
 }
 
+DWORD Build()
+{
+	typedef LONG(WINAPI* RtlGetVersion_t)(OSVERSIONINFOW*);
+	OSVERSIONINFOW v = { sizeof(v) };
+	auto p = (RtlGetVersion_t)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+	return (p && p(&v) == 0) ? v.dwBuildNumber : 0;
+}
+
+// Reached only when no flyout mod swallowed the click.
 void OnLeftClick()
 {
-	// Win10/11 network list flyout; Settings page as fallback.
-	SHELLEXECUTEINFOW sei = { sizeof(sei) };
-	sei.fMask = SEE_MASK_FLAG_NO_UI; sei.lpFile = L"ms-availablenetworks:"; sei.nShow = SW_SHOWNORMAL;
-	if (!ShellExecuteExW(&sei)) Launch(L"ms-settings:network", nullptr);
+	if (Build() < 22000) { // Windows 10: the VAN flyout still exists
+		SHELLEXECUTEINFOW sei = { sizeof(sei) };
+		sei.fMask = SEE_MASK_FLAG_NO_UI; sei.lpFile = L"ms-availablenetworks:"; sei.nShow = SW_SHOWNORMAL;
+		if (ShellExecuteExW(&sei)) return;
+	}
+	Launch(L"control.exe", L"/name Microsoft.NetworkAndSharingCenter");
 }
 
 void OnMenu(HWND h)
@@ -271,7 +282,7 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 		switch (msg) {
 		case WM_TIMER:
 			if (w == kTimer) {
-				if (GetModuleHandleW(L"pnidui.dll")) { // the real icon started after all
+				if (NetworkSsoCreated()) { // the real icon started after all
 					NOTIFYICONDATAW nid = { sizeof(nid) }; nid.hWnd = h; nid.uID = 1;
 					Shell_NotifyIconW(NIM_DELETE, &nid); g_added = false;
 					KillTimer(h, kTimer); Log(L"pnidui is running: fallback icon removed");
@@ -295,14 +306,25 @@ LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l)
 DWORD WINAPI IconThread(LPVOID)
 {
 	Sleep(15000); // give the stobject-hosted pnidui time to start
-	if (GetModuleHandleW(L"pnidui.dll")) { Log(L"pnidui running: no fallback needed"); return 0; }
+	if (NetworkSsoCreated()) { Log(L"pnidui running: no fallback needed"); return 0; }
 	wchar_t dll[MAX_PATH];
 	if (!CachedDllPath(dll)) { Log(L"pnidui not cached: no icons for the fallback yet"); return 0; }
-	g_res = LoadLibraryExW(dll, nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+	// Loaded as a real module (DllMain only; no SSO object is created): the
+	// Win7 network flyout mod (win7-network-flyout-recreation) recognises the
+	// network icon by its callback window class "ATL:<address inside
+	// pnidui.dll>", so our window uses such a class name and the mod's own
+	// flyout opens on click (the mod is the source of truth for the UI).
+	g_res = GetModuleHandleW(L"pnidui.dll");
+	if (!g_res) g_res = LoadLibraryExW(dll, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+	if (!g_res) g_res = LoadLibraryExW(dll, nullptr, LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
 	if (!g_res) { Log(L"cannot map %s (%u)", dll, GetLastError()); return 0; }
 	HRESULT hrCo = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 	WNDCLASSW wc = {};
-	wc.lpfnWndProc = WndProc; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = L"Ex7NetworkTrayIcon";
+	wchar_t cls[40] = L"Ex7NetworkTrayIcon";
+	if (((ULONG_PTR)g_res & 3) == 0) // real module (datafile handles have low bits set)
+		wnsprintfW(cls, ARRAYSIZE(cls), L"ATL:%p", (void*)((BYTE*)g_res + 0x1000));
+	wc.lpfnWndProc = WndProc; wc.hInstance = GetModuleHandleW(nullptr); wc.lpszClassName = cls;
+	Log(L"callback window class %s", cls);
 	RegisterClassW(&wc);
 	g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 	g_wnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, wc.hInstance, nullptr);

@@ -84,6 +84,7 @@ const GUID kClsidWindowsToGoSSO = { 0x4DC9C264, 0x730E, 0x4CF6, { 0x83, 0x74, 0x
 wchar_t g_dir[MAX_PATH];
 volatile LONG g_dllVerified = 0;   // cached dll hash checked in this process
 volatile LONG g_stobjectPatched = 0;
+volatile LONG g_ssoCreated = 0;
 HMODULE g_pnidui = nullptr;
 
 typedef HRESULT(WINAPI* CoCreateInstance_t)(REFCLSID, LPUNKNOWN, DWORD, REFIID, LPVOID*);
@@ -233,7 +234,11 @@ void CreateUnsafe(CreateCtx* c)
 			InterlockedExchange(&g_dllVerified, 1);
 		}
 		HMODULE other = GetModuleHandleW(L"pnidui.dll");
-		if (other) { Log(L"another pnidui.dll is already loaded (%p): not loading ours", other); return; }
+		if (other) {
+			wchar_t p[MAX_PATH] = L"";
+			GetModuleFileNameW(other, p, MAX_PATH);
+			if (lstrcmpiW(p, dll) != 0) { Log(L"another pnidui.dll is already loaded (%s): not loading ours", p); return; }
+		}
 		g_pnidui = LoadLibraryExW(dll, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
 		if (!g_pnidui) { Log(L"LoadLibraryEx(%s) failed (%u)", dll, GetLastError()); return; }
 		PatchPnidui(g_pnidui);
@@ -247,6 +252,7 @@ void CreateUnsafe(CreateCtx* c)
 		cf->Release();
 	}
 	c->hr = hr;
+	if (SUCCEEDED(hr)) InterlockedExchange(&g_ssoCreated, 1);
 	Log(L"network SSO created from cache: hr=0x%08X", (DWORD)hr);
 }
 
@@ -326,6 +332,7 @@ bool CachedDllPath(wchar_t* out)
 }
 
 bool NetworkIconWanted() { return Enabled(); }
+bool NetworkSsoCreated() { return g_ssoCreated != 0; }
 
 void OnStobjectLoaded(HMODULE st)
 {
