@@ -132,34 +132,35 @@ HRESULT STDMETHODCALLTYPE CAutoPlayWrapper::SetChkDskCompleted(void)
 // header). HKCU-only, missing values untouched, FixAutoPlay = 0 opts out.
 void EnsureAutoPlayDefaults()
 {
-	try {
-		if (ReadAdvancedDwordLocal(L"FixAutoPlay", 1) == 0) {
-			dbgprintf(L"EnsureAutoPlayDefaults: disabled (FixAutoPlay=0)\n");
-			return;
-		}
-		AutoPlayRegKey pol;
-		LSTATUS o = RegOpenKeyExW(HKEY_CURRENT_USER,
-			L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
-			0, KEY_QUERY_VALUE | KEY_SET_VALUE, pol.Put());
-		if (o != ERROR_SUCCESS) {
-			dbgprintf(L"EnsureAutoPlayDefaults: no per-user Policies\\Explorer key, nothing to repair\n");
-			return; // key absent: nothing to repair, and we do not create it
-		}
-		DWORD v = 0, cb = sizeof(v), type = 0;
-		if (RegQueryValueExW(pol.Get(), L"NoDriveTypeAutoRun", nullptr, &type, (BYTE*)&v, &cb) == ERROR_SUCCESS &&
-			type == REG_DWORD && v == 0xFF) {
-			v = 0x91; // Wine/Win7 default: unknown + remote + reserved disabled
-			if (RegSetValueExW(pol.Get(), L"NoDriveTypeAutoRun", 0, REG_DWORD, (const BYTE*)&v, sizeof(v)) == ERROR_SUCCESS)
-				dbgprintf(L"EnsureAutoPlayDefaults: NoDriveTypeAutoRun 0xFF -> 0x91\n");
-		}
-		v = 0; cb = sizeof(v); type = 0;
-		if (RegQueryValueExW(pol.Get(), L"NoAutoplayfornonVolume", nullptr, &type, (BYTE*)&v, &cb) == ERROR_SUCCESS &&
-			type == REG_DWORD && v != 0) {
-			v = 0;
-			if (RegSetValueExW(pol.Get(), L"NoAutoplayfornonVolume", 0, REG_DWORD, (const BYTE*)&v, sizeof(v)) == ERROR_SUCCESS)
-				dbgprintf(L"EnsureAutoPlayDefaults: NoAutoplayfornonVolume -> 0\n");
-		}
-	} catch (...) {
-		dbgprintf(L"EnsureAutoPlayDefaults: exception, policies untouched\n");
+	// NOTE: no C++ try/catch here on purpose - the wrapper builds with C++
+	// exceptions disabled (<ExceptionHandling>false</ExceptionHandling>), so a
+	// catch would not even link (__CxxFrameHandler4). Faults are caught by
+	// SafeInvoke (SEH __try/__except) at the call site in InstallShellFixes,
+	// the same pattern as every other init step; RAII still owns the key.
+	if (ReadAdvancedDwordLocal(L"FixAutoPlay", 1) == 0) {
+		dbgprintf(L"EnsureAutoPlayDefaults: disabled (FixAutoPlay=0)\n");
+		return;
+	}
+	AutoPlayRegKey pol;
+	LSTATUS o = RegOpenKeyExW(HKEY_CURRENT_USER,
+		L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+		0, KEY_QUERY_VALUE | KEY_SET_VALUE, pol.Put());
+	if (o != ERROR_SUCCESS) {
+		dbgprintf(L"EnsureAutoPlayDefaults: no per-user Policies\\Explorer key, nothing to repair\n");
+		return; // key absent: nothing to repair, and we do not create it
+	}
+	DWORD v = 0, cb = sizeof(v), type = 0;
+	if (RegQueryValueExW(pol.Get(), L"NoDriveTypeAutoRun", nullptr, &type, (BYTE*)&v, &cb) == ERROR_SUCCESS &&
+		type == REG_DWORD && v == 0xFF) {
+		v = 0x91; // Wine/Win7 default: unknown + remote + reserved disabled
+		if (RegSetValueExW(pol.Get(), L"NoDriveTypeAutoRun", 0, REG_DWORD, (const BYTE*)&v, sizeof(v)) == ERROR_SUCCESS)
+			dbgprintf(L"EnsureAutoPlayDefaults: NoDriveTypeAutoRun 0xFF -> 0x91\n");
+	}
+	v = 0; cb = sizeof(v); type = 0;
+	if (RegQueryValueExW(pol.Get(), L"NoAutoplayfornonVolume", nullptr, &type, (BYTE*)&v, &cb) == ERROR_SUCCESS &&
+		type == REG_DWORD && v != 0) {
+		v = 0;
+		if (RegSetValueExW(pol.Get(), L"NoAutoplayfornonVolume", 0, REG_DWORD, (const BYTE*)&v, sizeof(v)) == ERROR_SUCCESS)
+			dbgprintf(L"EnsureAutoPlayDefaults: NoAutoplayfornonVolume -> 0\n");
 	}
 }
