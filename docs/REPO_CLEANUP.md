@@ -105,6 +105,15 @@ Tag nominativo `v0.3-test37`: `0.3` = maturazione della serie `0.0.x`
 (self-contained + switcher + fix logon), `test37` = prosecuzione diretta
 della numerazione `testNN` della storia di main (ultimo in main: test36).
 
+### Aggiornamento test38 (policy release, vale per ogni release)
+
+- Le note sono GENERICHE e in inglese, schema fisso in
+  `docs/RELEASE_NOTES_test.md` (stesso schema della `0.0.3-alpha`): mai
+  cosa è migliorato, risolto o resta incompleto.
+- Unico asset scaricabile: `Win7ExplorerRestorer-test-bundle.zip`
+  (imposto dal job `prerelease` in
+  `.github/workflows/selfcontained-ci.yml`).
+
 ## Stato finale
 
 - branch: `main` + `arena/01a0edc7-7explorer` (lavoro attivo, motivo nel

@@ -6,7 +6,9 @@ name: selfcontained-ci
 #    Win7ExplorerRestorer.exe;
 #  - verifica SUL FILE REALE scaricato dai server Microsoft: hash, header,
 #    patch Python vs C++ byte-per-byte, import risultanti verso wrp64.dll;
-#  - su tag "v*-test*": pre-release con gli eseguibili compilati QUI.
+#  - su tag "v*-test*": pre-release GENERICA (note in inglese, schema fisso
+#    in docs/RELEASE_NOTES_test.md, mai cosa è migliorato/peggiorato) con
+#    UNICO asset Win7ExplorerRestorer-test-bundle.zip compilato QUI.
 #  Nessun binario Microsoft viene caricato negli artifact o nella release.
 on:
   push:
@@ -232,6 +234,10 @@ jobs:
         with:
           name: Win7ExplorerRestorer-binaries
       - name: Publish pre-release with CI-built binaries
+        # POLICY: la release resta GENERICA (note = docs/RELEASE_NOTES_test.md,
+        # in inglese, schema fisso, mai miglioramenti citati) e pubblica UNICO
+        # asset: Win7ExplorerRestorer-test-bundle.zip. Niente binari singoli,
+        # niente SHA256SUMS, niente sorgenti windhawk separati (sono nel bundle).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
@@ -241,13 +247,6 @@ jobs:
           gh release create "$env:TAG" --prerelease `
             --title "7explorer $env:TAG (reference test build)" `
             --notes-file docs/RELEASE_NOTES_test.md `
-            "Release/wrp64.dll#wrp64.dll" `
-            "installer/Win7ExplorerRestorer/bin/Win7ExplorerRestorer.exe#Win7ExplorerRestorer.exe" `
-            "switcher/bin/7explorer-shell-switcher.exe#7explorer-shell-switcher.exe" `
-            "Win7ExplorerRestorer-test-bundle.zip#Win7ExplorerRestorer-test-bundle.zip" `
-            "windhawk/win7explorerestorer-userinit-shell.cpp#win7explorerestorer-userinit-shell.wh.cpp" `
-            "windhawk/win7explorerestorer-fake-explorer-path.cpp#win7explorerestorer-fake-explorer-path.wh.cpp" `
-            "windhawk/README.md#windhawk-POC-README.md" `
-            "SHA256SUMS.txt"
+            "Win7ExplorerRestorer-test-bundle.zip#Win7ExplorerRestorer-test-bundle.zip"
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
           gh release view "$env:TAG"
