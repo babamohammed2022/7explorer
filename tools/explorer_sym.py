@@ -20,7 +20,7 @@ class SI(ctypes.Structure):
                 ("Scope", W.ULONG), ("Tag", W.ULONG), ("NameLen", W.ULONG), ("MaxNameLen", W.ULONG),
                 ("Name", ctypes.c_wchar * 512)]
 def sym(addr):
-    s = SI(); s.SizeOfStruct = ctypes.sizeof(SI) - 512 * 2 + 2; s.MaxNameLen = 511
+    s = SI(); s.SizeOfStruct = 88; s.MaxNameLen = 511
     d = ctypes.c_uint64(0)
     if dh.SymFromAddrW(proc, ctypes.c_uint64(addr), ctypes.byref(d), ctypes.byref(s)):
         return s.Name, d.value, s.Address, s.Size
@@ -33,7 +33,7 @@ for r in rvas:
     n, d, a, sz = sym(BASE + r)
     print("RVA 0x%X -> %s+0x%X" % (r, n, d))
 def disasm_func(name_or_rva, maxlen=0x1800):
-    s = SI(); s.SizeOfStruct = ctypes.sizeof(SI) - 512 * 2 + 2; s.MaxNameLen = 511
+    s = SI(); s.SizeOfStruct = 88; s.MaxNameLen = 511
     if isinstance(name_or_rva, str):
         if not dh.SymFromNameW(proc, ctypes.c_wchar_p(name_or_rva), ctypes.byref(s)):
             print("no symbol", name_or_rva); return
@@ -61,5 +61,5 @@ def disasm_func(name_or_rva, maxlen=0x1800):
                     n, d, a, z = sym(tgt)
                     if n and not (ins.mnemonic.startswith("j") and a == addr): note = "%s+0x%X" % (n, d)
         print("  %X: %-8s %-40s %s" % (ins.address - BASE, ins.mnemonic, ins.op_str, note))
-for f in ["wWinMain", "WinMain", "ExplorerWinMain", "_wWinMainCRTStartup"]:
+for f in ["wWinMain"] + [x for x in sys.argv[4:] if not all(c in "0123456789abcdefABCDEF" for c in x)]:
     disasm_func(f)
