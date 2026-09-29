@@ -4,6 +4,8 @@
 #include "NetworkIcon.h"
 #include "SafeGuards.h"
 #include <shellapi.h>
+#include <winsock2.h>
+#include <ws2ipdef.h>
 #include <iphlpapi.h>
 #include <wlanapi.h>
 
