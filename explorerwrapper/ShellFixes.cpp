@@ -644,7 +644,8 @@ bool IsMsSettings(LPCWSTR f)
 // ------------------------------------------------------------ injection guard
 // Third-party DLLs injected into explorer (e.g. Windhawk mods written for the
 // Windows 11 explorer) can crash the Win7 shell before it shows anything.
-// We cannot safely resume a thread that faulted inside foreign code, so:
+// test19: faults with a foreign frame on the stack are also recovered
+// (x64 unwind to the foreign frame, which returns 0). Opt-out InjectionSwallow=0.
 //  1) UnhandledExceptionFilter hook: when a crash is *really unhandled* and
 //     the faulting address lies in a foreign module (not in %SystemRoot%, not
 //     next to explorer/wrp64), its name is added to a quarantine list and
@@ -668,7 +669,7 @@ void ModuleKey(const wchar_t* path, wchar_t* key, int cch)
 {
 	const wchar_t* f = PathFindFileNameW(path);
 	int i = 0;
-	bool windhawk = StrChrW(f, L'@') != nullptr;
+	bool windhawk = StrChrW(f, L'@') != nullptr || StrStrIW(path, L"\\Windhawk\\") != nullptr;
 	for (; f[i] && i < cch - 1; ++i) {
 		if (windhawk && f[i] == L'_') break;
 		key[i] = f[i];
@@ -719,11 +720,64 @@ LONG NTAPI LdrLoadDll_Hook(PWSTR sp, PULONG ch, EX7_USTR* name, PVOID* h)
 	return g_origLdrLoadDll(sp, ch, name, h);
 }
 
+bool g_swallow = true;
+volatile LONG g_recovered = 0;
+const LONG kMaxRecoveries = 5000; // safety valve against a crash-per-iteration loop
+
+bool IsForeignAddress(DWORD64 pc)
+{
+	HMODULE m = nullptr; wchar_t path[MAX_PATH] = {};
+	return pc && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		(LPCWSTR)pc, &m) && GetModuleFileNameW(m, path, MAX_PATH) && IsForeignModule(path);
+}
+
+// One x64 unwind step. Leaf functions have no unwind info: return address at [rsp].
+bool UnwindOnce(CONTEXT* c)
+{
+	DWORD64 base = 0;
+	PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry(c->Rip, &base, nullptr);
+	if (rf) {
+		PVOID hd = nullptr; DWORD64 frame = 0;
+		RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, c->Rip, rf, c, &hd, &frame, nullptr);
+	} else {
+		c->Rip = *(DWORD64*)c->Rsp; c->Rsp += 8;
+	}
+	return c->Rip != 0;
+}
+
+// Makes the innermost foreign frame return 0 to its non-foreign caller.
+bool RecoverForeignFault(EXCEPTION_POINTERS* ep)
+{
+	DWORD code = ep->ExceptionRecord->ExceptionCode;
+	if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION &&
+		code != EXCEPTION_INT_DIVIDE_BY_ZERO)
+		return false;
+	if (ep->ExceptionRecord->ExceptionFlags & EXCEPTION_NONCONTINUABLE) return false;
+	if (InterlockedIncrement(&g_recovered) > kMaxRecoveries) return false;
+	CONTEXT cur = *ep->ContextRecord;
+	for (int depth = 0; depth < 48; ++depth) {
+		bool foreign = IsForeignAddress(cur.Rip);
+		CONTEXT next = cur;
+		if (!UnwindOnce(&next)) return false;
+		if (foreign && !IsForeignAddress(next.Rip)) {
+			next.Rax = 0;
+			next.Xmm0.Low = 0; next.Xmm0.High = 0;
+			*ep->ContextRecord = next;
+			return true;
+		}
+		cur = next;
+	}
+	return false;
+}
+
 LONG WINAPI UEF_Hook(EXCEPTION_POINTERS* ep)
 {
 	__try {
 		HMODULE m = nullptr; wchar_t path[MAX_PATH] = {};
 		PVOID addr = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionAddress : nullptr;
+		DWORD code = addr ? ep->ExceptionRecord->ExceptionCode : 0;
+		if (code == EXCEPTION_STACK_OVERFLOW || code == 0xC0000374 /* heap corruption */)
+			return g_origUEF(ep);
 		if (addr && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 				(LPCWSTR)addr, &m) && GetModuleFileNameW(m, path, MAX_PATH) && IsForeignModule(path)) {
 			wchar_t key[128]; ModuleKey(path, key, ARRAYSIZE(key));
@@ -744,6 +798,13 @@ LONG WINAPI UEF_Hook(EXCEPTION_POINTERS* ep)
 			LogLine(L"[ex7] unhandled 0x%08X at %p module %s (not foreign, not quarantined)",
 				ep->ExceptionRecord->ExceptionCode, addr, path[0] ? path : L"?");
 		}
+		// Foreign code on the faulting stack (also a mod hook calling into a
+		// system DLL): the foreign frame returns 0 and the shell keeps going.
+		if (g_swallow && addr && RecoverForeignFault(ep)) {
+			if (g_recovered <= 20)
+				LogLine(L"[ex7] injection guard: fault 0x%08X swallowed (#%ld), foreign frame returned 0", code, g_recovered);
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {}
 	return g_origUEF(ep);
@@ -757,6 +818,7 @@ void InstallInjectionGuard()
 	GetWindowsDirectoryW(g_sysRoot, MAX_PATH); lstrcatW(g_sysRoot, L"\\");
 	GetModuleFileNameW(nullptr, g_exeDir, MAX_PATH); DirOf(g_exeDir);
 	GetModuleFileNameW(g_self, g_selfDir, MAX_PATH); DirOf(g_selfDir);
+	g_swallow = ReadAdvancedDword(L"InjectionSwallow", 1) != 0;
 	LoadQuarantine();
 	for (const wchar_t* q = g_quarantine; *q; q += lstrlenW(q) + 1)
 		LogLine(L"[ex7] injection guard: quarantined %s", q);
@@ -783,7 +845,7 @@ void InstallShellFixes(HMODULE hSelf)
 {
 	g_self = hSelf;
 	g_logEnabled = ReadAdvancedDword(L"ShellFixLog", 1) != 0;
-	LogLine(L"[ex7] ---- 7explorer shell fixes (test18), pid %u ----", GetCurrentProcessId());
+	LogLine(L"[ex7] ---- 7explorer shell fixes (test19), pid %u ----", GetCurrentProcessId());
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
 	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
