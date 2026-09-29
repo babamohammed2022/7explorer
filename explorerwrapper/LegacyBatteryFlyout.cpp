@@ -770,5 +770,7 @@ bool IsActive() { return g_active != 0; }
 
 bool WrapSysTray() { return ReadDword(L"W81SysTrayWrapper", 1) != 0; }
 
+bool Sha256OfFile(const wchar_t* path, char hex[65]) { return Sha256File(path, hex); }
+
 } // namespace w81
 } // namespace ex7

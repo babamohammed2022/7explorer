@@ -28,6 +28,7 @@
 #include <commctrl.h>
 #include "MinHook.h"
 #include "LegacyBatteryFlyout.h"
+#include "NetworkIcon.h"
 #include <shobjidl.h>
 #include "dbgprint.h"
 #include <shlwapi.h>
@@ -609,6 +610,10 @@ void PatchTrayModules()
 	if (ReadAdvancedDword(L"Win32BatteryFlyout", 1) != 0) {
 		PatchCtx c = { GetModuleHandleW(L"stobject.dll"), L"Win32 flyout: stobject" };
 		if (c.m) { g_stobject = c.m; SafeInvokeCtx<PatchCtx>(L"patch stobject", PatchModuleRegistryCtx, &c); }
+	}
+	{
+		HMODULE st = GetModuleHandleW(L"stobject.dll");
+		if (st) ex7::net::OnStobjectLoaded(st); // SEH inside, idempotent
 	}
 	if (ReadAdvancedDword(L"ClassicVolumeFlyout", 1) != 0) {
 		PatchCtx c = { GetModuleHandleW(L"SndVolSSO.dll"), L"classic volume flyout: SndVolSSO" };
@@ -1277,7 +1282,8 @@ void InstallShellFixes(HMODULE hSelf)
 	SafeInvoke(L"InstallExplorerIsShellFix", InstallExplorerIsShellFix);
 	SafeInvoke(L"InstallInjectionGuard", InstallInjectionGuard); // first: coexist with injected DLLs
 	SafeInvoke(L"InstallExecHooks", InstallExecHooks);
-	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare); // real 8.1 flyout (cache/download)
+	SafeInvoke(L"w81 flyout prepare", ex7::w81::StartBackgroundPrepare);
+	SafeInvoke(L"pnidui prepare", ex7::net::StartBackgroundPrepare); // network icon on 24H2+ // real 8.1 flyout (cache/download)
 	SafeInvoke(L"InstallBatteryFix", InstallBatteryFix);                 // fallback while 8.1 is unavailable
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
 	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
@@ -1325,6 +1331,8 @@ void SafeCreateTwinUI_UWP()
 } // namespace ex7
 
 namespace ex7 {
+void LogText(const wchar_t* text) { LogLine(L"%s", text); }
+DWORD ReadAdvancedDwordPublic(const wchar_t* name, DWORD def) { return ReadAdvancedDword(name, def); }
 // dllmain: system CLSID_SysTray instance created (8.1 path not taken).
 void OnSysTrayCreateBegin()
 {
