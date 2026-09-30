@@ -22,17 +22,17 @@ The project runs a private copy of the original Windows 7 SP1 `explorer.exe` tog
 
 It is intended to function on both Windows 10 and Windows 11, although not every feature of the original Windows 7 shell can be guaranteed on every version.
 
-## Personalizzazione pulsante Start (orb)
+## Start Button (Orb) Customization
 
-Windows 7 Explorer Restorer permette di personalizzare l'immagine del pulsante Start (orb) della taskbar tramite il registro di sistema (`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`, con fallback su `HKLM`):
+Windows 7 Explorer Restorer lets you customize the taskbar's Start button (orb) image through the registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`, with an `HKLM` fallback):
 
-1. **`OrbFile`** (REG_SZ): percorso di un file `.bmp` o `.png` (con canale alfa) personalizzato locale (assoluto, ad esempio `C:\orbs\start.png` o `C:\orbs\start.bmp`, oppure relativo alla cartella di `explorer.exe`).
-2. **`OrbDirectory`** (REG_SZ): nome di una cartella di preset in `<exedir>\orbs\<nome>\` contenente immagini (`.bmp` o `.png`) dedicate per DPI e posizione della taskbar (`6801` .. `6812`).
-3. **Immagine integrata**: fallback finale incorporato in `explorer.exe`, utilizzato se `OrbFile` o `OrbDirectory` non sono configurati, non esistono o contengono file non validi.
+1. **`OrbFile`** (REG_SZ): path to a local custom `.bmp` or `.png` file (with an alpha channel), either absolute (for example, `C:\orbs\start.png` or `C:\orbs\start.bmp`) or relative to the `explorer.exe` folder.
+2. **`OrbDirectory`** (REG_SZ): name of a preset folder under `<exedir>\orbs\<name>\` containing `.bmp` or `.png` images for specific DPI settings and taskbar positions (`6801`–`6812`).
+3. **Built-in image**: final fallback embedded in `explorer.exe`, used if `OrbFile` or `OrbDirectory` is not configured, does not exist, or contains invalid files.
 
-L'ordine di precedenza applicato è **`OrbFile` > `OrbDirectory` > immagine integrata**. I file PNG vengono decodificati tramite il componente di sistema WIC (Windows Imaging Component) e convertiti in DIB section a 32 bit con canale alfa premoltiplicato (`32bppPBGRA`). L'immagine viene gestita secondo la classica struttura a 3 stati di Open-Shell/Windows 7: frame 0 per stato idle (normale), frame 1 per hover (mouse over) e frame 2 per premuto (menu Start aperto); se viene fornita un'immagine a frame singolo, questa viene normalizzata automaticamente replicando i 3 stati. In caso di errore durante la lettura, la decodifica o l'allocazione, il wrapper ricorre in modo sicuro tramite guardie SEH e RAII al livello successivo senza causare blocchi o crash all'avvio di Explorer.
+The precedence order is **`OrbFile` > `OrbDirectory` > built-in image**. PNG files are decoded using the system Windows Imaging Component (WIC) and converted to a 32-bit DIB section with premultiplied alpha (`32bppPBGRA`). The image uses the classic three-state Open-Shell/Windows 7 layout: frame 0 for idle (normal), frame 1 for hover, and frame 2 for pressed (Start menu open). A single-frame image is normalized automatically by duplicating it for all three states. If reading, decoding, or allocation fails, the wrapper safely falls back to the next option using SEH guards and RAII, without hanging or crashing Explorer at startup.
 
-*Ispirato a Open-Shell (MIT), che ha reso popolare la sostituzione del pulsante Start con immagini scelte dall'utente (inclusi PNG a 32 bit). Nessun codice di Open-Shell è incluso.*
+*Inspired by Open-Shell (MIT), which popularized replacing the Start button with user-selected images (including 32-bit PNGs). No Open-Shell code is included.*
 
 ## Emergency Shell Switcher
 
@@ -164,15 +164,13 @@ Future Windows updates may introduce compatibility problems by changing shell co
 
 ## Documentation
 
-Additional documentation is available in the `docs` directory.
+Additional documentation is available in the `docs` directory:
 
-Documentation includes:
-
-* Installation
-* Startup at logon
-* Shell switching
-* Troubleshooting
-* Compatibility information
+* [Installation](docs/installazione.md)
+* [Automatic startup at logon](docs/avvio-al-login.md)
+* [Configuration options](docs/opzioni.md)
+* [Troubleshooting and known issues](docs/troubleshooting.md)
+* [Switcher details](switcher/README.md)
 
 ## Repository Components
 

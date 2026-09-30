@@ -1,89 +1,56 @@
-# windhawk/ — PoC shell Windows 7 Explorer Restorer (mod OPZIONALI)
+# windhawk/ — Windows 7 Explorer Restorer shell PoC (OPTIONAL mods)
 
-> **Stato attuale (test37)**: entrambe le funzioni dei mod sono ora
-> coperte dal progetto stesso e i mod sono **opzionali/supplementari**:
+> **Current status (test37)**: both mod features are now provided by the project itself, so these mods are **optional/supplementary**:
 >
-> - `win7explorerestorer-fake-explorer-path` (spoof di `GetModuleFileNameW`) è **integrato
->   in `wrp64.dll`** fin da test4 — il mod è **ridondante**;
-> - `win7explorerestorer-userinit-shell` (redirect della query `Shell` di userinit) è
->   **soppiantato** dall'avvio al logon dello switcher (test37: valore
->   `Shell` per-utente in HKCU + fallback + recovery automatico, vedi
->   `docs/avvio-al-login.md`), che non richiede Windhawk.
+> - `win7explorerestorer-fake-explorer-path` (spoofs `GetModuleFileNameW`) has been **built into `wrp64.dll`** since test4; the mod is **redundant**.
+> - `win7explorerestorer-userinit-shell` (redirects the `Shell` query from Userinit) has been **superseded** by the switcher's automatic logon startup (test37: per-user `Shell` value in HKCU + fallback + automatic recovery; see `docs/avvio-al-login.md`), which does not require Windhawk.
 >
-> Questi sorgenti restano per trasparenza/ispezione e per chi preferisce
-> gestire il logon tramite Windhawk.
+> The source files remain available for transparency/inspection and for anyone who prefers to manage logon through Windhawk.
 
+These are two **source-only** Windhawk mods (Windhawk compiles them locally when enabled) that make the private Windows 7 Explorer Restorer copy the **active shell**, using the same techniques as Anixx's reference mods:
 
-Due mod Windhawk **sorgente** (Windhawk compila localmente quando li abiliti)
-che rendono l'explorer privato di Windows 7 Explorer Restorer la **shell attiva**, usando le
-stesse tecniche dei mod di riferimento di Anixx:
-
-| File | Target | Hook | Cosa fa |
+| File | Target | Hook | Behavior |
 |---|---|---|---|
-| `win7explorerestorer-userinit-shell.cpp` | `userinit.exe` | `RegQueryValueExW` | alla query `Shell` risponde con il path dell'explorer privato (default `C:\Win7ExplorerRestorerTest\explorer.exe`) — niente viene scritto in Winlogon/registry; se il file manca → fallback all'API originale (shell normale) |
-| `win7explorerestorer-fake-explorer-path.cpp` | `explorer.exe` | `GetModuleFileNameW` | per `hModule==NULL` risponde `%SystemRoot%\explorer.exe` (il file su disco non viene toccato) |
+| `win7explorerestorer-userinit-shell.cpp` | `userinit.exe` | `RegQueryValueExW` | When `Shell` is queried, returns the private Explorer path (default `C:\Win7ExplorerRestorerTest\explorer.exe`); nothing is written to Winlogon/the registry. If the file is missing, it falls back to the original API (normal shell). |
+| `win7explorerestorer-fake-explorer-path.cpp` | `explorer.exe` | `GetModuleFileNameW` | For `hModule==NULL`, returns `%SystemRoot%\explorer.exe` (the file on disk is not modified). |
 
-**Non** modificano `C:\Windows\explorer.exe`, **non** richiedono editing
-manuale del registry, **non** sono permanenti: disabilitarli riporta tutto
-com'era al prossimo logon.
+These mods **do not** modify `C:\Windows\explorer.exe`, **do not** require manual registry editing, and **are not permanent**: disabling them restores the previous behavior at the next logon.
 
-## Prerequisiti
+## Prerequisites
 
-1. `Win7ExplorerRestorer.exe` eseguito con successo (produce
-   `C:\Win7ExplorerRestorerTest\explorer.exe` + `C:\Win7ExplorerRestorerTest\wrp64.dll`) — vedi
-   `installer/Win7ExplorerRestorer/README.md`. Se hai usato `--app-dir ALTRO`,
-   imposta `ExplorerPath` di conseguenza nelle impostazioni del mod.
-2. Windhawk installato (installer standard da ramensoftware.com; dopo
-   l'installazione non serve la rete).
+1. Run `Win7ExplorerRestorer.exe` successfully (it creates `C:\Win7ExplorerRestorerTest\explorer.exe` and `C:\Win7ExplorerRestorerTest\wrp64.dll`); see `installer/Win7ExplorerRestorer/README.md`. If you used `--app-dir OTHER`, set `ExplorerPath` accordingly in the mod settings.
+2. Install Windhawk (standard installer from ramensoftware.com; no network access is needed after installation).
 
-## Test rapido (5 minuti)
+## Quick test (5 minutes)
 
-1. Abilita in Windhawk il mod **`Win7ExplorerRestorer shell launcher`**
-   (impostazione `ExplorerPath` = `C:\Win7ExplorerRestorerTest\explorer.exe`, già il default);
-2. abilita **`Win7ExplorerRestorer fake path`**;
-   - per caricare i mod locali: Windhawk → angolo in basso a destra **"Mod
-     settings"** → attiva **"Developer mode"** → scheda **"Home" → "Mod
-     development" → "New mod"** → incolla il sorgente (o usa *Load mod from
-     disk* puntando a questa cartella) → **Compile** → abilita;
-3. **Disconnetti** la sessione (Start → account → Disconnetti);
-4. riconnetti: `userinit.exe` parte, la sua query `Shell` viene risposta con
-   il path privato → **deve apparire la taskbar di Windows 7** al posto di
-   quella di Windows 11.
+1. Enable the **`Win7ExplorerRestorer shell launcher`** mod in Windhawk (`ExplorerPath` = `C:\Win7ExplorerRestorerTest\explorer.exe`, which is already the default).
+2. Enable **`Win7ExplorerRestorer fake path`**.
+   - To load local mods: in Windhawk, open **Mod settings** in the lower-right corner → enable **Developer mode** → **Home** → **Mod development** → **New mod** → paste the source (or choose *Load mod from disk* and point to this folder) → **Compile** → enable the mod.
+3. **Sign out** of the session (Start → account → **Sign out**).
+4. Sign back in. `userinit.exe` starts, and its `Shell` query receives the private path → **the Windows 7 taskbar should appear** in place of the Windows 11 taskbar.
 
-### Risultato atteso
+### Expected result
 
 ```
-login Windows 11
+Windows 11 logon
    → userinit.exe
-   → Shell = C:\Win7ExplorerRestorerTest\explorer.exe          (risposta del mod, non dal registry)
-   → Windows 7 Explorer Restorer parte (pensa di essere C:\Windows\explorer.exe per l'altro mod)
-   → compare la taskbar Windows 7
-   → la taskbar Windows 11 non è più attiva
+   → Shell = C:\Win7ExplorerRestorerTest\explorer.exe          (mod response, not registry value)
+   → Windows 7 Explorer Restorer starts (the other mod makes it think it is C:\Windows\explorer.exe)
+   → the Windows 7 taskbar appears
+   → the Windows 11 taskbar is no longer active
 ```
 
-Log dei mod (Windhawk → mod → scheda log / enable logging): cerca righe
-`win7explorerestorer-userinit-shell: Shell query intercepted` / `target ... exists ->` /
-`target MISSING ... fallback` e `win7explorerestorer-fake-explorer-path: path spoof enabled`.
+Mod logs (Windhawk → mod → **Log** tab / **Enable logging**): look for lines such as `win7explorerestorer-userinit-shell: Shell query intercepted` / `target ... exists ->` / `target MISSING ... fallback` and `win7explorerestorer-fake-explorer-path: path spoof enabled`.
 
-## Ripristino (reversibilità)
+## Reverting (reversible)
 
-- **Caso normale**: disabilita `Win7ExplorerRestorer shell launcher` in Windhawk →
-  disconnetti/riaccendi → torna la shell Windows normale.
-- **Se Windows 7 Explorer Restorer crasha** e resta schermo nero col cursore:
-  `Ctrl+Shift+Esc` → Task Manager → *File → Esegui nuova attività* → `cmd`
-  → apri Windhawk da lì, disabilita il mod → disconnetti.
-- **Worst case**: avvia in **Modalità provvisoria** (Windhawk non parte in
-  safe mode) e disabilita il mod.
-- Il valore `Shell` nel registry **non viene mai modificato**: anche a mod
-  rotto, Windows riparte sempre con la shell ufficiale.
+- **Normal case**: disable `Win7ExplorerRestorer shell launcher` in Windhawk → sign out and back in → the normal Windows shell returns.
+- **If Windows 7 Explorer Restorer crashes** and leaves a black screen with a cursor: press `Ctrl+Shift+Esc` → Task Manager → *File → Run new task* → `cmd` → open Windhawk from there, disable the mod, then sign out.
+- **Worst case**: boot into **Safe Mode** (Windhawk does not start in Safe Mode) and disable the mod.
+- The registry `Shell` value is **never modified**: even if the mod breaks, Windows always restarts with the official shell.
 
-## Note tecniche
+## Technical notes
 
-- Semantica registry fedele: query "size-only" (lpData==NULL) →
-  `*lpcbData` richiesto + `REG_SZ`; buffer troppo piccolo →
-  `ERROR_MORE_DATA` con dimensione richiesta; dimensione sempre in byte
-  incl. NUL finale.
-- Controllo esistenza del target **ad ogni intercettazione** (se sposti il
-  file, il fallback scatta subito, senza rebuild).
-- `compat/` contiene solo uno stub per il compile-check in CI; il vero
-  `windhawk_api.h` è quello di Windhawk sul PC di test.
+- Faithful registry semantics: a "size-only" query (`lpData==NULL`) returns the required `*lpcbData` and `REG_SZ`; a buffer that is too small returns `ERROR_MORE_DATA` with the required size; size is always in bytes, including the trailing NUL.
+- The target's existence is checked **on every interception**. If you move the file, fallback happens immediately, without rebuilding.
+- `compat/` contains only a stub used for the CI compile check; the actual `windhawk_api.h` is provided by Windhawk on the test PC.

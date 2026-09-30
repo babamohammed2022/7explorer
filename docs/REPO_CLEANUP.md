@@ -1,40 +1,28 @@
-# Pulizia del repository (2026-09-29)
+# Repository cleanup (2026-09-29)
 
-Questo documento descrive la riorganizzazione del repository eseguita con
-il chore commit `chore(repo): cleanup` (branch `arena/01a0edc7-7explorer`,
-PR verso `main`). Lo stato finale è: **`main` + un solo branch di lavoro
-attivo**, nessun artefatto di build nel repository, **una sola release di
-riferimento**.
+This document describes the repository reorganization performed in the chore commit `chore(repo): cleanup` (branch `arena/01a0edc7-7explorer`, PR targeting `main`). The resulting state was: **`main` plus one active working branch**, no build artifacts in the repository, and **one reference release**.
 
-## Branch
+## Branches
 
-### Situazione di partenza
+### Starting point
 
-405 branch su `origin` al momento della pulizia:
+There were 405 branches on `origin` at the time of cleanup:
 
-| categoria | numero | contenuto |
-|---|---|---|
-| `ci-logs/*` (`sc-`, `locpipe-`, `rel-`, `theme-`, `updres-`, `w81-`, `diag`, `diagloc`, `exit-`, `pnidui-`, `tray-`) | 401 | solo output di CI: log di build, `release.txt`, `pipe-upload/`, dump diagnostici. 1–2 commit ciascuno, zero sorgente (verificato con `git log main..<branch>` e `git diff --stat` su un campione significativo) |
-| `arena/01a0e6b6-7explorer` | 1 | sessione agente — **già mergiata** in main via PR #1 (0 commit non in main) |
-| `arena/01a0e9d8-7explorer` | 1 | sessione agente — **già mergiata** in main via PR #2 (0 commit non in main) |
-| `arena/01a0edc7-7explorer` | 1 | sessione agente attiva (PR #3) |
-| `main` | 1 | storia del progetto |
+| Category | Count | Contents |
+|---|---:|---|
+| `ci-logs/*` (`sc-`, `locpipe-`, `rel-`, `theme-`, `updres-`, `w81-`, `diag`, `diagloc`, `exit-`, `pnidui-`, `tray-`) | 401 | CI output only: build logs, `release.txt`, `pipe-upload/`, diagnostic dumps. 1–2 commits each, no source code (verified with `git log main..<branch>` and `git diff --stat` on a significant sample). |
+| `arena/01a0e6b6-7explorer` | 1 | Agent session—**already merged** into main through PR #1 (0 commits not in main). |
+| `arena/01a0e9d8-7explorer` | 1 | Agent session—**already merged** into main through PR #2 (0 commits not in main). |
+| `arena/01a0edc7-7explorer` | 1 | Active agent session (PR #3). |
+| `main` | 1 | Project history. |
 
-### Cosa è stato fatto
+### What was done
 
-- **401 branch `ci-logs/*` eliminati**: contenevano solo log di build, non
-  sorgente. La CI ora pubblica i log come **artifact** della run (vedi
-  sotto), quindi i branch non servono più. Nessun lavoro utile perso: per
-  ognuno è stato verificato con `git rev-list --count main..<branch>` che i
-  commit aggiuntivi fossero solo i log (file `.txt`/.log). Nota: al primo
-  censimento erano 397; le ultime run CI precedenti al fix del workflow
-  ne avevano creati altri 4, tutti comunque di soli log.
-- **2 branch `arena/*` già mergiati eliminati** (PR #1 e PR #2: la loro
-  storia resta in `main` tramite i merge commit).
-- **Rimane**: `main` + `arena/01a0edc7-7explorer` (branch di lavoro attivo
-  di questa sessione, da cui parte il PR; eliminabile dopo il merge).
+- **Deleted 401 `ci-logs/*` branches**: they contained build logs only, not source code. CI now publishes logs as run **artifacts** (see below), so the branches are no longer needed. No useful work was lost: for every branch, `git rev-list --count main..<branch>` was checked to confirm that the additional commits contained only logs (`.txt`/`.log` files). The initial count was 397; the last four CI runs before the workflow fix created four more, also containing logs only.
+- **Deleted 2 already-merged `arena/*` branches** (PR #1 and PR #2; their history remains in `main` through the merge commits).
+- **Remaining**: `main` plus `arena/01a0edc7-7explorer` (the active working branch for that session and source of the PR; it can be deleted after merge).
 
-Metodo usato per la verifica, ripetibile:
+The verification method, which can be repeated:
 
 ```
 git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
@@ -43,82 +31,53 @@ for b in $(git branch -r | sed 's| *origin/||' | grep -v '^HEAD$'); do
 done | sort -rn
 ```
 
-Nessun force-push su `main`. Nessun branch con lavoro sorgente unico è stato
-eliminato.
+No force-push to `main` was performed. No branch with unique source work was deleted.
 
-## Log di CI: da branch ad artifact
+## CI logs: from branches to artifacts
 
-Prima: i workflow `selfcontained-ci`, `localization-pipeline` e i sette
-`diag-*` committavano i log di build su branch `ci-logs/<prefisso>-<run id>`
-(~400 branch accumulati). Ora:
+Previously, the `selfcontained-ci`, `localization-pipeline`, and seven `diag-*` workflows committed build logs to `ci-logs/<prefix>-<run id>` branches (about 400 accumulated branches). Now:
 
-- tutti i log di run vengono caricati come **artifact** della run stessa
-  (`actions/upload-artifact@v4`), sempre disponibili anche in caso di
-  fallimento, con retention a 30 giorni;
-- gli step "Commit build/release/logs" sono stati rimossi da tutti i
-  workflow;
-- `permissions` ridotte a `contents: read` per tutti i workflow che non
-  pubblicano release (`selfcontained-ci` mantiene `contents: write` solo
-  per il job prerelease sui tag);
-- la cartella `ci-logs/` è stata rimossa dal repository (conteneva solo un
-  `.gitkeep`) e le directory di lavoro della CI (`ci-logs/`, `logs/`,
-  `ci-run/`, `collect-logs/`, `exp/`, `work/`, …) sono ora in `.gitignore`.
+- all run logs are uploaded as **artifacts** of the run itself (`actions/upload-artifact@v4`) and remain available even after failures, with 30-day retention;
+- the "Commit build/release/logs" steps were removed from all workflows;
+- `permissions` were reduced to `contents: read` for workflows that do not publish releases (`selfcontained-ci` retains `contents: write` only for the tag prerelease job);
+- the `ci-logs/` directory was removed from the repository (it contained only a `.gitkeep`), and CI working directories (`ci-logs/`, `logs/`, `ci-run/`, `collect-logs/`, `exp/`, `work/`, etc.) are now in `.gitignore`.
 
-## Artefatti rimossi dal repository
+## Artifacts removed from the repository
 
-| file | motivo |
+| File | Reason |
 |---|---|
-| `ci-logs/` (dir, solo `.gitkeep`) | segnaposto per log di build: non è sorgente |
-| `explorerwrapper/explorerwrapper.vcxproj.user` | file `.user` di Visual Studio (impostazioni locali sviluppatore) |
-| `explorerwrapper/libMinHook.x64.lib` (520 KB) | output di build di MinHook (libreria statica di terze parti). La CI clona e compila MinHook a ogni run (`msbuild.yml`, `selfcontained-ci.yml`); per build locali vedi il README ("Minhook"). Aggiunto a `.gitignore` |
-| `localization/explorer.exe.mui` (22 KB) | binario Microsoft (`.mui` di explorer.exe Win7) usato solo come riferimento dai test. I test usano già il fallback by-design `tests/fixtures/win7_explorer_structure.json` (struttura senza testo Microsoft, stesso `source_sha256`); verificato: `python tests/run_tests.py` → 51 test OK anche senza il file. Chi vuole il confronto col file reale può passare `WIN7EXPLORERRESTORER_REF_MUI=<percorso>` |
+| `ci-logs/` (directory, `.gitkeep` only) | Placeholder for build logs; not source code. |
+| `explorerwrapper/explorerwrapper.vcxproj.user` | Visual Studio `.user` file (local developer settings). |
+| `explorerwrapper/libMinHook.x64.lib` (520 KB) | MinHook build output (third-party static library). CI clones and builds MinHook on each run (`msbuild.yml`, `selfcontained-ci.yml`); for local builds, see the README (**MinHook**). Added to `.gitignore`. |
+| `localization/explorer.exe.mui` (22 KB) | Microsoft binary (Win7 `explorer.exe` `.mui` file), used only as a test reference. Tests already use the by-design fallback `tests/fixtures/win7_explorer_structure.json` (structure without Microsoft text, same `source_sha256`). Verified: `python tests/run_tests.py` → 51 tests pass even without this file. To compare with the real file, set `WIN7EXPLORERRESTORER_REF_MUI=<path>`. |
 
-Verifica post-rimozione: suite Python completa OK (51 test), workflow YAML
-validati.
+Post-removal verification: the full Python suite passed (51 tests), and workflow YAML files were validated.
 
-## Release
+## Releases
 
-### Situazione di partenza
+### Starting point
 
-39 release (tutte pre-release): `v0.0.1-test1` … `v0.0.3-test36`, una per
-ogni iterazione di test, più la nuova `v0.3-test37`. Ogni release conteneva
-gli stessi asset (wrp64.dll, Win7ExplorerRestorer.exe,
-shell-switcher.exe, Win7ExplorerRestorer-test-bundle.zip, sorgenti windhawk,
-SHA256SUMS.txt). A 38 vecchi tag corrispondevano 38 vecchie release
-(verificato con `git ls-remote --tags` e l'API `/releases`: nessun tag
-orfano).
+There were 39 releases (all prereleases): `v0.0.1-test1` … `v0.0.3-test36`, one for each test iteration, plus the new `v0.3-test37`. Each release contained the same assets (`wrp64.dll`, `Win7ExplorerRestorer.exe`, `shell-switcher.exe`, `Win7ExplorerRestorer-test-bundle.zip`, Windhawk sources, and `SHA256SUMS.txt`). The 38 old tags had 38 matching old releases (verified with `git ls-remote --tags` and the `/releases` API; no orphan tags).
 
-### Cosa è stato fatto
+### What was done
 
-- **Nuova release di riferimento: `v0.3-test37`** (tag sul merge del PR in
-  `main`, costruita dalla CI dal tag esatto):
-  - corpo = `docs/RELEASE_NOTES_test.md`: cosa funziona, problemi noti,
-    download, tabella dei file scaricati a runtime con URL + SHA-256;
-  - asset: `Win7ExplorerRestorer-test-bundle.zip` (bundle completo corrispondente al tag) +
-    binari singoli + `SHA256SUMS.txt`.
-- **Le 38 release precedenti sono state eliminate** insieme ai rispettivi
-  tag: erano istantanee di test sovrapposte, nessuna indicizzata da
-  documentazione. La sorgente di ogni release resta nella storia git.
-- Dei 39 tag complessivi ne resta **uno**: `v0.3-test37`.
+- **New reference release: `v0.3-test37`** (tagged on the PR merge to `main`, built by CI from the exact tag):
+  - body = `docs/RELEASE_NOTES_test.md`: what works, known issues, downloads, and a table of files downloaded at runtime with their URLs and SHA-256 hashes;
+  - assets: `Win7ExplorerRestorer-test-bundle.zip` (complete bundle corresponding to the tag), individual binaries, and `SHA256SUMS.txt`.
+- **The 38 previous releases were deleted**, along with their tags: they were overlapping test snapshots and were not linked from documentation. The source for every release remains in Git history.
+- Of the 39 total tags, **one remains**: `v0.3-test37`.
 
-Tag nominativo `v0.3-test37`: `0.3` = maturazione della serie `0.0.x`
-(self-contained + switcher + fix logon), `test37` = prosecuzione diretta
-della numerazione `testNN` della storia di main (ultimo in main: test36).
+Tag name `v0.3-test37`: `0.3` represents maturation of the `0.0.x` series (self-contained installation + switcher + logon fix); `test37` continues the `testNN` numbering in `main` (the latest on main was test36).
 
-### Aggiornamento test38 (policy release, vale per ogni release)
+### Test38 update (release policy for every release)
 
-- Le note sono GENERICHE e in inglese, schema fisso in
-  `docs/RELEASE_NOTES_test.md` (stesso schema della `0.0.3-alpha`): mai
-  cosa è migliorato, risolto o resta incompleto.
-- Unico asset scaricabile: `Win7ExplorerRestorer-test-bundle.zip`
-  (imposto dal job `prerelease` in
-  `.github/workflows/selfcontained-ci.yml`).
+- Release notes must be GENERIC and in English, using the fixed schema in `docs/RELEASE_NOTES_test.md` (the same schema as `0.0.3-alpha`): never say what was improved, fixed, or remains incomplete.
+- The only downloadable asset is `Win7ExplorerRestorer-test-bundle.zip` (enforced by the `prerelease` job in `.github/workflows/selfcontained-ci.yml`).
 
-## Stato finale
+## Final state
 
-- branch: `main` + `arena/01a0edc7-7explorer` (lavoro attivo, motivo nel
-  nome: sessione Arena)
-- tag: `v0.3-test37`
-- release: 1 (di riferimento, pre-release)
-- niente binari né artefatti di build nel repository
-- CI: log come artifact, permessi minimi, workflow verdi
+- Branches: `main` + `arena/01a0edc7-7explorer` (active work; the name indicates the Arena session)
+- Tag: `v0.3-test37`
+- Releases: 1 (reference prerelease)
+- No binaries or build artifacts in the repository
+- CI: logs stored as artifacts, minimum permissions, green workflows

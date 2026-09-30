@@ -1,153 +1,136 @@
-# Opzioni di configurazione
+# Configuration options
 
-Tutte le opzioni della shell (wrp64.dll) sono valori di registro sotto:
+All shell (`wrp64.dll`) options are registry values under:
 
 ```
 HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
 ```
 
-sono **per-utente** (HKCU), si applicano all'avvio successivo della shell
-privata e nessuna richiede elevazione. La colonna "default" è il valore
-usato quando l'opzione non esiste (verificata nel codice con
-`ReadAdvancedDword`/`ReadAdvancedDwordPublic` in `explorerwrapper/`).
+They are **per-user** (HKCU), take effect the next time the private shell starts, and never require elevation. The "default" column shows the value used when an option is absent (verified in `ReadAdvancedDword`/`ReadAdvancedDwordPublic` in `explorerwrapper/`).
 
-Indice: [shell e avvio](#shell-e-avvio) · [scorciatoie e log](#scorciatoie-e-log)
-· [UWP / app moderne](#uwp--app-moderne) · [tray, menu e flyout](#tray-menu-e-flyout)
-· [rete](#rete) · [batteria](#batteria) · [guardia anti-iniezione windhawk](#guardia-anti-iniezione-windhawk)
-· [tema e aspetto upstream](#tema-e-aspetto-upstream) · [configini](#configini-theme)
-· [valori di stato scritti-dal-codice](#valori-di-stato-scritti-dal-codice)
+Contents: [shell and startup](#shell-and-startup) · [shortcuts and logging](#shortcuts-and-logging) · [UWP / modern apps](#uwp--modern-apps) · [notification area, menus, and flyouts](#notification-area-menus-and-flyouts) · [network](#network) · [battery](#battery) · [Windhawk injection guard](#windhawk-injection-guard) · [upstream theme and appearance](#upstream-theme-and-appearance) · [`config.ini` theme](#configini-theme) · [code-written state values](#code-written-state-values)
 
 ---
 
-## Shell e avvio
+## Shell and startup
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `ForceShell` | DWORD | 1 | Hook di `ShouldStartDesktopAndTray` (explorer Win7 6.1.7601.17514, verificato a byte prima dell'hook): la risposta è sempre TRUE, così l'explorer non può rifiutarsi di creare desktop e taskbar. Logga anche `CreateDesktopAndTray`. **Disattivando**: l'explorer può decidere da solo di non creare il desktop (comportamento originale) — ad es. se un altro desktop è già presente. |
-| `ForceExplorerIsShell` | DWORD | 1 | Hook di `GetPrivateProfileStringW("boot","shell",...,system.ini)`: quando il valore `Shell` (HKCU prima, poi HKLM) nomina un altro programma, l'explorer Win7 uscirebbe come "finestra cartella" (test23). L'hook risponde con il nome del proprio eseguibile e lascia decidere agli altri controlli. **Disattivando**: con l'avvio al logon attivo (valore `Shell` per-utente) l'explorer esce con codice 1 → schermo nero. Non disattivarlo insieme all'avvio automatico. |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `ForceShell` | DWORD | 1 | Hook for `ShouldStartDesktopAndTray` (Win7 Explorer 6.1.7601.17514; bytes verified before the hook): always returns TRUE so Explorer cannot refuse to create the desktop and taskbar. Also logs `CreateDesktopAndTray`. **When disabled**: Explorer decides whether to create the desktop itself (original behavior), for example if another desktop already exists. |
+| `ForceExplorerIsShell` | DWORD | 1 | Hook for `GetPrivateProfileStringW("boot","shell",...,system.ini)`: when the `Shell` value (HKCU first, then HKLM) names another program, Win7 Explorer would exit as a "folder window" (test23). The hook returns the name of its own executable and lets the other checks decide. **When disabled**: with automatic logon startup enabled (per-user `Shell` value), Explorer exits with code 1 and leaves a black screen. Do not disable this while automatic startup is enabled. |
 
-## Scorciatoie e log
+## Shortcuts and logging
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `SwitcherHotkey` | DWORD | 1 | Quando la shell privata parte, `wrp64.dll` avvia `shell-switcher.exe --hotkey` (istanza resident che possiede **Ctrl+Alt+Shift+S**), se lo trova accanto a `explorer.exe` o `wrp64.dll`. **Disattivando**: dopo il logon la scorciatoia non è attiva finché non apri la GUI dello switcher. |
-| `SettingsHotkey` | DWORD | 1 | Possiede **Win+I** (con fallback a hook tastiera a basso livello) e apre Impostazioni con lo stesso percorso dei remap (`ms-settings:` → shell Win32). **Disattivando**: Win+I non fa nulla nella shell Win7. |
-| `ShellFixLog` | DWORD | 1 | Logging della shell su `%TEMP%\7explorer-shellfix.log` (cap 256 KB) + `OutputDebugString`. **Disattivando**: nessun log file (OutputDebugString resta). |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `SwitcherHotkey` | DWORD | 1 | When the private shell starts, `wrp64.dll` launches `shell-switcher.exe --hotkey` (a resident instance that owns **Ctrl+Alt+Shift+S**) if it finds it next to `explorer.exe` or `wrp64.dll`. **When disabled**: after logon, the shortcut is inactive until you open the switcher GUI. |
+| `SettingsHotkey` | DWORD | 1 | Owns **Win+I** (with a low-level keyboard-hook fallback) and opens Settings through the same remapping path (`ms-settings:` → Win32 shell). **When disabled**: Win+I does nothing in the Win7 shell. |
+| `ShellFixLog` | DWORD | 1 | Shell logging to `%TEMP%\7explorer-shellfix.log` (256 KB limit) plus `OutputDebugString`. **When disabled**: no log file is written (`OutputDebugString` remains active). |
 
-## UWP / app moderne
+## UWP / modern apps
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `EnableImmersive` | DWORD | 0 | Opzione upstream: abilita lo stack immersive/UWP nella shell Win7 (app dello Store nel menu Start/taskbar, flyout DComp). `StoreAppsInStart`, `StoreAppsOnTaskbar` e `UseDCompFlyouts` hanno effetto solo se questa è 1. **Disattivando**: le app UWP non si avviano dalla shell Win7 (comportamento pre-Win8). |
-| `UwpHostRuntime` | DWORD | 1 | Host `ShellAppRuntime.exe` per l'attivazione UWP: **1** = automatico (l'host parte solo se il TwinUI in-process non è in esecuzione); **2** = host sempre avviato all'avvio della shell; **3** = host avviato **prima** del desktop Win7 (ordine segnalato come funzionante sui forum, ma può rubare le icone tray — test34 non lo usa in automatico); **0** = mai. |
-| `UwpActivationShim` | DWORD | 1 | Attivazione delle app UWP via `IApplicationActivationManager` con shim (permessi foreground ecc.). **Disattivando**: l'attivazione torna al percorso originale (spesso fallisce senza la shell moderna). |
-| `UwpJumpLists` | DWORD | 1 | Jump list delle app UWP: quando il resolver Win8+ non trova un `.lnk` (app dello Store), viene fornito in fallback l'elemento `shell:AppsFolder\<AUMID>` (test36). **Disattivando**: niente jump list per le app UWP (comportamento pre-test36). Nota: **Impostazioni non ha jump list per design** (nel codice il resolver non viene nemmeno interrogato per `ms-settings`). |
-| `UwpEarlyHost` | DWORD | 2 | **Legacy/ignorato**: un tempo impostato automaticamente quando l'host tardivo non bastava (avvio anticipato al logon successivo). Da test34 il valore è ancora letto ma non più usato né scritto in automatico; per l'avvio anticipato manuale usare `UwpHostRuntime=3`. |
-| `SettingsWin32Remap` | DWORD | 1 | Rimappa gli URL `ms-settings:` verso le finestre/classici Win32 equivalenti (Taskbar → proprietà taskbar Win7, ecc.). **Disattivando**: `ms-settings:` passa al percorso moderno (che senza shell Win11 fallisce). |
-| `ImmersiveInitFailures` | DWORD | 0 *(stato)* | Sentinella scritta dal codice: conta gli avvii in cui l'init UWP è iniziato ma non è mai riuscito. Dopo **2** di fila UWP resta disattivato finché il valore non viene azzerato o eliminato. |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `EnableImmersive` | DWORD | 0 | Upstream option: enables the immersive/UWP stack in the Win7 shell (Store apps in the Start menu/taskbar, DComp flyouts). `StoreAppsInStart`, `StoreAppsOnTaskbar`, and `UseDCompFlyouts` take effect only when this is 1. **When disabled**: UWP apps do not launch from the Win7 shell (pre-Windows 8 behavior). |
+| `UwpHostRuntime` | DWORD | 1 | `ShellAppRuntime.exe` host for UWP activation: **1** = automatic (start the host only if in-process TwinUI is not running); **2** = always start the host when the shell starts; **3** = start the host **before** the Win7 desktop (reported as working in forum posts, but may take over notification-area icons; test34 does not enable it automatically); **0** = never. |
+| `UwpActivationShim` | DWORD | 1 | Activates UWP apps through `IApplicationActivationManager` with a shim (foreground permissions, etc.). **When disabled**: activation falls back to the original path, which often fails without the modern shell. |
+| `UwpJumpLists` | DWORD | 1 | UWP app jump lists: when the Win8+ resolver cannot find a `.lnk` (for a Store app), `shell:AppsFolder\<AUMID>` is supplied as a fallback item (test36). **When disabled**: no jump lists for UWP apps (pre-test36 behavior). Note: **Settings has no jump list by design**; the resolver is not queried for `ms-settings`. |
+| `UwpEarlyHost` | DWORD | 2 | **Legacy/ignored**: once set automatically when starting the host later was insufficient (early startup at the next logon). Since test34, the value is still read but is no longer used or written automatically. To start the host early manually, use `UwpHostRuntime=3`. |
+| `SettingsWin32Remap` | DWORD | 1 | Remaps `ms-settings:` URLs to equivalent classic Win32 windows/properties (Taskbar → Win7 taskbar properties, etc.). **When disabled**: `ms-settings:` uses the modern path, which fails without the Windows 11 shell. |
+| `ImmersiveInitFailures` | DWORD | 0 *(state)* | Sentinel written by the code: counts startups where UWP initialization began but never succeeded. After **2** consecutive failures, UWP remains disabled until the value is reset or deleted. |
 
-## Tray, menu e flyout
+## Notification area, menus, and flyouts
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `ClassicTrayMenus` | DWORD | 1 | Menu tray classici disegnati dal proprietario (tecnica ExplorerPatcher) per i moduli tray caricati (volume, rete). **Disattivando**: i menu tornano a quelli del modulo (stile moderno quando presente). |
-| `ClassicVolumeFlyout` | DWORD | 1 | Flyout volume classico: imposta `EnableMTCUVC=0` per SndVolSSO così il flyout Win7-style viene usato (test25). **Disattivando**: flyout volume moderno di Windows 11. |
-| `VolumeMenuActions` | DWORD | 1 | Voci di azione hardcoded nel menu volume (Apri mixer, Riproduzione dispositivi…), perché le azioni originali non risolvono su 24H2. **Disattivando**: menu volume senza azioni. |
-| `AeroFlyoutFrames` | DWORD | 1 | Bordi/lati Aero sui flyout legacy (credit: **aubymori**, "Aero Flyout Fix"). **Disattivando**: flyout senza il frame Aero. |
-| `OpaqueThumbnails` | DWORD | 0 | Anteprime taskbar opache con gradiente (comportamento upstream) invece di translucide. **Attivando**: thumbnail opachi. |
-| `NotifyIconsUseSettings` | DWORD | 0 | Dove apre "Personalizza icone notifica": **0** = automatico (la pagina di sistema `::{05D7B0F4-…}` "Icone area di notifica" se il suo CLSID è registrato — esiste ancora su 24H2/25H2 ma su 24H2 si apre **vuota** — altrimenti la finestra integrata); **1** = app Impostazioni (`ms-settings:taskbar`); **2** = sempre la pagina di sistema; **3** = sempre la **finestra integrata** (ricreata dal progetto, raccomandata su 24H2). |
-| `FixHelpAndSupportName` | DWORD | 1 | Fix del nome visualizzato "Guida e supporto" (Win7 it-IT legge il nome dal .mui che qui non esiste). **Disattivando**: possibile nome/etichetta errata nel menu Start. |
-| `FixConnectTo` | DWORD | 1 | Registra il CLSID "Connetti a" (`{38A98528-…}`, verb + TreatAs) solo se il sistema non ne ha uno; apre la sezione Video (`shell:::{18989B1D-…}`). **Disattivando**: "Connetti a" può non funzionare. |
-| `FixAutoPlay` | DWORD | 1 | Ripara i criteri AutoPlay per-utente che lo disabilitano del tutto (HKCU-only): `NoDriveTypeAutoRun=0xFF` → `0x91` e `NoAutoplayfornonVolume≠0` → `0`; valori mancanti lasciati stare, HKLM mai toccato. **Disattivando**: nessuna riparazione. Da sola non ripristina la finestra classica AutoPlay. |
-| `AutoPlayDeviceNotifications` | DWORD | 1 | Supporto parziale **best effort**: ascolta l'arrivo di volumi (chiavette USB, dischi USB fissi e CD/DVD) e chiede alla shell Windows di eseguire il verbo `autoplay` registrato; non garantisce la finestra AutoPlay classica. Dipende dalla build, dalle impostazioni e dagli handler. Per la finestra classica Windows 7 si raccomanda il mod Windhawk separato [Windows 7 Classic AutoPlay Dialog Restorer](https://windhawk.net/mods/win7-classic-autoplay-restorer). **0** = non avviare il listener. |
-| `KeepSystemTransparency` | DWORD | 0 | Per default la shell privata forza la trasparenza DWM attiva (per l'Aero della taskbar). **Attivando**: la shell rispetta l'impostazione di trasparenza di sistema (taskbar opaca se il sistema ha effetti trasparenza off). |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `ClassicTrayMenus` | DWORD | 1 | Owner-drawn classic notification-area menus (ExplorerPatcher technique) for loaded notification-area modules (volume, network). **When disabled**: menus revert to those provided by the module (modern style where available). |
+| `ClassicVolumeFlyout` | DWORD | 1 | Classic volume flyout: sets `EnableMTCUVC=0` for SndVolSSO so the Win7-style flyout is used (test25). **When disabled**: Windows 11's modern volume flyout. |
+| `VolumeMenuActions` | DWORD | 1 | Hard-coded actions in the volume menu (Open Volume Mixer, Playback devices, etc.), because the original actions do not resolve on 24H2. **When disabled**: the volume menu has no actions. |
+| `AeroFlyoutFrames` | DWORD | 1 | Aero borders/frames on legacy flyouts (credit: **aubymori**, "Aero Flyout Fix"). **When disabled**: flyouts have no Aero frame. |
+| `OpaqueThumbnails` | DWORD | 0 | Opaque taskbar thumbnails with a gradient (upstream behavior) instead of translucent thumbnails. **When enabled**: thumbnails are opaque. |
+| `NotifyIconsUseSettings` | DWORD | 0 | Where **Customize notification icons** opens: **0** = automatic (the system **Notification Area Icons** page, `::{05D7B0F4-…}`, if its CLSID is registered—it still exists on 24H2/25H2 but opens **blank** on 24H2—or the built-in window otherwise); **1** = Settings (`ms-settings:taskbar`); **2** = always the system page; **3** = always the **built-in window** (recreated by this project; recommended on 24H2). |
+| `FixHelpAndSupportName` | DWORD | 1 | Fixes the displayed **Help and Support** name (Win7 it-IT reads the name from a missing `.mui` file). **When disabled**: the name/label in the Start menu may be incorrect. |
+| `FixConnectTo` | DWORD | 1 | Registers the **Connect to** CLSID (`{38A98528-…}`, verb + TreatAs) only if the system does not already have one; opens the Video section (`shell:::{18989B1D-…}`). **When disabled**: **Connect to** may not work. |
+| `FixAutoPlay` | DWORD | 1 | Repairs per-user AutoPlay policies that disable AutoPlay entirely (HKCU only): `NoDriveTypeAutoRun=0xFF` → `0x91` and `NoAutoplayfornonVolume≠0` → `0`; leaves missing values untouched and never modifies HKLM. **When disabled**: no policy repair. This option alone does not restore the classic AutoPlay dialog. |
+| `AutoPlayDeviceNotifications` | DWORD | 1 | Partial **best-effort** support: listens for volume-arrival events (USB flash drives, USB drives exposed as fixed disks, and CD/DVDs) and asks the Windows shell to invoke the registered `autoplay` verb. It does not guarantee the classic AutoPlay dialog and depends on the Windows build, settings, and handlers. For the classic Windows 7 dialog, the separate Windhawk mod [Windows 7 Classic AutoPlay Dialog Restorer](https://windhawk.net/mods/win7-classic-autoplay-restorer) is recommended. **0** = do not start the listener. |
+| `KeepSystemTransparency` | DWORD | 0 | By default, the private shell forces DWM transparency on (for the taskbar's Aero appearance). **When enabled**: the shell respects the system transparency setting (the taskbar is opaque if system transparency effects are off). |
 
-## Rete
+## Network
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `NetworkIconEngine` | DWORD | 1 | Motore dell'icona di rete (test32): **1** = icona propria guidata dal Network List Manager (`NetworkTrayIcon.cpp`), perché su 24H2 il motore di stato del pnidui 22621 resta congelato; **0** = comportamento precedente (SSO pnidui ospitato da stobject). |
-| `LegacyNetworkIcon` | DWORD | 1 | Icona di rete "legacy" via pnidui 22621 scaricato: **1** = automatico (usa il pnidui legacy solo se il sistema non ne ha uno); **2** = forza l'uso di quello legacy anche se presente nel sistema; **0** = disattivata. |
-| `NetworkIconSystemGuid` | DWORD | 1 | L'icona di rete è registrata con il GUID dell'**icona di sistema** di rete di Win7 (sempre visibile, anche con "nascondi icone"), invece del GUID SSO (test35). **Disattivando**: l'icona usa il GUID SSO (può risultare nascosta/assente). |
-| `StartNetworkIcon` | DWORD | 1 | Preparazione in background dell'icona di rete all'avvio della shell (download + verifica pnidui). **Disattivando**: nessuna icona di rete preparata. |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `NetworkIconEngine` | DWORD | 1 | Network-icon engine (test32): **1** = project-owned icon driven by Network List Manager (`NetworkTrayIcon.cpp`), because the status engine in pnidui 22621 remains frozen on 24H2; **0** = previous behavior (pnidui SSO hosted by stobject). |
+| `LegacyNetworkIcon` | DWORD | 1 | Downloaded legacy network icon via pnidui 22621: **1** = automatic (use the legacy pnidui only if the system does not have one); **2** = force the legacy version even if a system version exists; **0** = disabled. |
+| `NetworkIconSystemGuid` | DWORD | 1 | Registers the network icon with the Win7 **system network icon** GUID (always visible, even when icons are hidden), rather than the SSO GUID (test35). **When disabled**: the icon uses the SSO GUID and may be hidden/missing. |
+| `StartNetworkIcon` | DWORD | 1 | Prepares the network icon in the background when the shell starts (download + pnidui verification). **When disabled**: no network icon is prepared. |
 
-Nota pratica: al **primo** avvio il componente viene scaricato in
-background; l'icona compare dal **secondo** avvio (vedi
-[troubleshooting](troubleshooting.md#icona-di-rete-assente-al-primo-avvio)).
+Practical note: the component is downloaded in the background on the **first** startup; the icon appears on the **second** startup (see [troubleshooting](troubleshooting.md#network-icon-missing-on-first-startup)).
 
-## Batteria
+## Battery
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `Win32BatteryFlyout` | DWORD | 1 | Flyout batteria: carica stobject/batmeter 8.1 (download verificato dal symbol server, cache in `%LocalAppData%\7explorer\w81flyout`) con patch IAT `CreateWindowInBand`. **Disattivando**: flyout batteria del sistema. |
-| `W81SysTrayWrapper` | DWORD | 1 | L'oggetto 8.1 viene wrappato in `CSysTrayWrapper` (gestione sicura del ciclo di vita). **Disattivando**: l'oggetto viene usato raw. |
-| `BatteryFlyoutFallback` | DWORD | 0 | Fallback quando il flyout 8.1 non è disponibile (senza batteria rilevata, build non supportata, download fallito): tooltip con la percentuale. **Attivando**: tooltip percentuale sempre disponibile come rete di sicurezza. |
-| `W81FlyoutForce` | DWORD | 0 | 1 = ignora la tabella dei build supportati e prova comunque a caricare i file 8.1. |
-| `W81StobjectId`, `W81StobjectSha256`, `W81BatmeterId`, `W81BatmeterSha256` | SZ | — | Override REG_SZ per un build 8.1 alternativo (l'id è `TimeDateStamp %08X` + `SizeOfImage %x`, come nell'URL del symbol server). Servono entrambi (id e sha256) per valore. |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `Win32BatteryFlyout` | DWORD | 1 | Battery flyout: loads Windows 8.1 stobject/batmeter (download verified from the symbol server, cached in `%LocalAppData%\7explorer\w81flyout`) with an IAT patch for `CreateWindowInBand`. **When disabled**: use the system battery flyout. |
+| `W81SysTrayWrapper` | DWORD | 1 | Wraps the Windows 8.1 object in `CSysTrayWrapper` (safe lifecycle management). **When disabled**: the object is used directly. |
+| `BatteryFlyoutFallback` | DWORD | 0 | Fallback when the Windows 8.1 flyout is unavailable (no battery detected, unsupported build, or download failure): show the percentage in the tooltip. **When enabled**: the percentage tooltip is always available as a fallback. |
+| `W81FlyoutForce` | DWORD | 0 | 1 = ignore the supported-build table and try to load the Windows 8.1 files anyway. |
+| `W81StobjectId`, `W81StobjectSha256`, `W81BatmeterId`, `W81BatmeterSha256` | SZ | — | REG_SZ overrides for an alternate Windows 8.1 build (`id` is `TimeDateStamp %08X` + `SizeOfImage %x`, as in the symbol-server URL). Both the ID and SHA-256 are required for each file. |
 
-## Guardia anti-iniezione (Windhawk)
+## Windhawk injection guard
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `InjectionGuard` | DWORD | 1 | Hook `LdrLoadDll` + `UnhandledExceptionFilter`: tutto ciò che si inietta nell'explorer privato è classificato e (se necessario) bloccato, sotto SEH. **Disattivando**: qualsiasi DLL può iniettarsi (rischio crash della shell). |
-| `InjectionPolicy` | DWORD | 1 | **0** = nessun blocco (solo log); **1** = default: ogni mod carica, solo quelli che hanno **crashato** vengono messi in quarantena; **≥2** = allow-list stretta: i mod Windhawk non in lista vengono bloccati subito. |
-| `InjectionSwallow` | DWORD | 1 | I moduli bloccati vengono "inghiottiti": `LoadLibrary` fallisce senza crash del chiamante. **Disattivando**: il modulo si carica davvero (solo se non in quarantena). |
-| `InjectionAllowlist` | MULTI_SZ | — | Elenco dei mod Windhawk ammessi (percorso o chiave), uno per stringa. Usata dalla policy ≥2 e dalla safe mode. |
-| `InjectionBuiltinAllow` | DWORD | 1 | Allow-list integrata: `win7-network-flyout-recreation` e `win7-action-center-recreation` (scritti per il tray Win7 di questa shell). **Disattivando**: anche questi mod vanno in `InjectionAllowlist`. |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `InjectionGuard` | DWORD | 1 | `LdrLoadDll` + `UnhandledExceptionFilter` hooks: everything injected into the private Explorer is classified and, if needed, blocked under SEH. **When disabled**: any DLL can be injected (risk of a shell crash). |
+| `InjectionPolicy` | DWORD | 1 | **0** = do not block (log only); **1** = default: every mod is allowed to load, and only mods that **crashed** are quarantined; **≥2** = strict allow-list: unlisted Windhawk mods are blocked immediately. |
+| `InjectionSwallow` | DWORD | 1 | Swallows blocked modules: `LoadLibrary` fails without crashing the caller. **When disabled**: the module is actually loaded (only if it is not quarantined). |
+| `InjectionAllowlist` | MULTI_SZ | — | List of allowed Windhawk mods (path or key), one per string. Used by policy ≥2 and safe mode. |
+| `InjectionBuiltinAllow` | DWORD | 1 | Built-in allow-list: `win7-network-flyout-recreation` and `win7-action-center-recreation` (written for this shell's Win7 notification area). **When disabled**: add these mods to `InjectionAllowlist` as well. |
 
-## Tema e aspetto (upstream)
+## Upstream theme and appearance
 
-Opzioni ereditate da explorer7, lette da
-`explorerwrapper/OptionConfig.cpp`/`RegistryManager.cpp`:
+Options inherited from explorer7, read by `explorerwrapper/OptionConfig.cpp`/`RegistryManager.cpp`:
 
-| nome | tipo | default | significato |
-|---|---|---|---|
-| `Theme` | SZ | `aero` | Nome del tema in `<exedir>\theme\` (relativo; es. `aero` → `theme\aero.msstyles`, `Aero\aero` → `theme\Aero\aero.msstyles`). |
-| `OrbDirectory` | SZ | *(interno)* | Directory delle immagini orb in `<exedir>\orbs\` (solo `.bmp`, vedi il README). |
-| `OrbFile` | SZ | *(nessuno)* | Immagine personalizzata del pulsante Start: file `.bmp` o `.png` (con canale alfa) locale (percorso assoluto o relativo a `<exedir>`). Struttura a 3 stati Open-Shell/Win7: idle (0), hover (1), premuto (2), con normalizzazione automatica dei frame singoli. Ha la precedenza su `OrbDirectory`. Se manca, non è valido (UNC, estensione non supportata, dimensioni >1024 px o file >4 MB) o il caricamento fallisce, si usa il preset e poi l'immagine integrata. Ispirato a Open-Shell (MIT). |
-| `DisableComposition` | DWORD | 0 | 1 = la shell si comporta come se DWM non fosse attivo. |
-| `ClassicTheme` | DWORD | 0 | 1 = tema Windows Classico. |
-| `ColorizationOptions` | DWORD | 1 | Comportamento colorizzazione shell (1–4, compatibilità variabile). |
-| `AcrylicColorization` | DWORD | 0 | Colorizzazione acrilica (0–2 colori immersive, 3 = colorizzazione normale). |
-| `OverrideAlpha` | DWORD | 0 | 1 = sovrascrive l'alfa della colorizzazione DWM su taskbar/menu/anteprime. |
-| `AlphaValue` | DWORD | 0x6B | Valore alfa (2 cifre esadecimali) da usare con `OverrideAlpha=1`. |
-| `UseTaskbarPinning` | DWORD | 1 | 0 = niente pin nella taskbar (né caricati né modificabili dalle jump list). Il wrapper tenta di usare le interfacce native e, da Windows 11 24H2, anche un percorso interno Win32 della taskbar; questi tentativi sono sperimentali e, nel test effettuato, il pinning dalla taskbar **non funziona ancora su Windows 11**. Il valore predefinito 1 abilita il tentativo, non garantisce il pinning né costituisce una correzione. |
-| `StoreAppsInStart` | DWORD | 1 | 0 = app immersive nascoste dall'elenco "Tutti i programmi" (solo con `EnableImmersive=1`). |
-| `StoreAppsOnTaskbar` | DWORD | =`EnableImmersive` | 0 = icone app immersive non applicate/nascoste nei pin (solo con `EnableImmersive=1`). |
-| `UseDCompFlyouts` | DWORD | =`EnableImmersive` | Flyout DComp (solo con `EnableImmersive=1`). |
+| Name | Type | Default | Description |
+|---|---|---:|---|
+| `Theme` | SZ | `aero` | Theme name under `<exedir>\theme\` (relative; e.g. `aero` → `theme\aero.msstyles`, `Aero\aero` → `theme\Aero\aero.msstyles`). |
+| `OrbDirectory` | SZ | *(internal)* | Directory containing orb images under `<exedir>\orbs\` (`.bmp` only; see the README). |
+| `OrbFile` | SZ | *(none)* | Custom Start button image: a local `.bmp` or `.png` file (with alpha channel; absolute path or relative to `<exedir>`). Uses the three-state Open-Shell/Win7 layout: idle (0), hover (1), pressed (2); single-frame images are normalized automatically. Takes precedence over `OrbDirectory`. If missing, invalid (UNC path, unsupported extension, dimensions >1024 px, or file >4 MB), or unreadable, the preset is used, followed by the built-in image. Inspired by Open-Shell (MIT). |
+| `DisableComposition` | DWORD | 0 | 1 = the shell behaves as if DWM were not active. |
+| `ClassicTheme` | DWORD | 0 | 1 = Windows Classic theme. |
+| `ColorizationOptions` | DWORD | 1 | Shell colorization behavior (1–4; compatibility varies). |
+| `AcrylicColorization` | DWORD | 0 | Acrylic colorization (0–2 = immersive colors; 3 = regular colorization). |
+| `OverrideAlpha` | DWORD | 0 | 1 = override the DWM colorization alpha for the taskbar, menus, and thumbnails. |
+| `AlphaValue` | DWORD | 0x6B | Two-digit hexadecimal alpha value used with `OverrideAlpha=1`. |
+| `UseTaskbarPinning` | DWORD | 1 | 0 = no taskbar pins (neither loaded nor editable from jump lists). The wrapper tries the native interfaces and, starting with Windows 11 24H2, an internal Win32 taskbar path as well. These attempts are experimental and, in the reported test, taskbar pinning **still does not work on Windows 11**. The default value 1 enables the attempt; it does not guarantee pinning or constitute a fix. |
+| `StoreAppsInStart` | DWORD | 1 | 0 = hide immersive apps from **All Programs** (only when `EnableImmersive=1`). |
+| `StoreAppsOnTaskbar` | DWORD | =`EnableImmersive` | 0 = do not apply/show immersive-app icons on the taskbar pins (only when `EnableImmersive=1`). |
+| `UseDCompFlyouts` | DWORD | =`EnableImmersive` | Use DComp flyouts (only when `EnableImmersive=1`). |
 
-## config.ini [Theme]
+## `config.ini` [Theme]
 
-Accanto a `explorer.exe` si può mettere un file `config.ini` con la sezione
-`[Theme]` (esempio commentato: [docs/config.ini.example](config.ini.example));
-selettori gestiti da `explorerwrapper/ThemeManager.cpp`:
+A `config.ini` file with a `[Theme]` section can be placed next to `explorer.exe` (see the commented [docs/config.ini.example](config.ini.example)). Selectors are handled by `explorerwrapper/ThemeManager.cpp`:
 
-| chiave | valori | significato |
+| Key | Values | Description |
 |---|---|---|
-| `Mode` | `Auto` *(default)* | tema utente da `<exedir>\theme\` se presente, altrimenti tema embedded (auto-estratto in `%LocalAppData%\7explorer\theme\aero.msstyles`). |
-| | `Fallback` | sempre il tema embedded, ignora i file esterni. |
-| | `Custom` | prova sempre `<exedir>\theme\<Nome>.msstyles`; in caso di errore torna all'embedded. |
-| | `Windows7` | alias di `Custom` (per fornire il proprio `aero.msstyles` di Windows 7). |
-| | `Windows81` | alias di `Custom` (per fornire un `aero.msstyles` di Windows 8.1). |
-| `Name` | nome file *(default `aero`, oppure il valore registry `Theme`)* | nome base del `.msstyles` in `theme\` (senza estensione). |
+| `Mode` | `Auto` *(default)* | Use a user theme from `<exedir>\theme\` if present; otherwise use the embedded theme (automatically extracted to `%LocalAppData%\7explorer\theme\aero.msstyles`). |
+| | `Fallback` | Always use the embedded theme; ignore external files. |
+| | `Custom` | Always try `<exedir>\theme\<Name>.msstyles`; fall back to the embedded theme if loading fails. |
+| | `Windows7` | Alias for `Custom` (for supplying your own Windows 7 `aero.msstyles`). |
+| | `Windows81` | Alias for `Custom` (for supplying your own Windows 8.1 `aero.msstyles`). |
+| `Name` | Filename *(default `aero`, or the registry `Theme` value)* | Base name of the `.msstyles` file in `theme\` (without the extension). |
 
-In tutti i modi, se il caricamento scelto fallisce si ripiega
-sull'embedded e, in ultima istanza, sul look classico: l'avvio non è mai
-impedito. Diagnostica: `%LocalAppData%\7explorer\theme.log`.
+In every mode, a failed theme load falls back to the embedded theme and, ultimately, the classic look; startup is never blocked. Diagnostics: `%LocalAppData%\7explorer\theme.log`.
 
-## Valori di stato (scritti dal codice)
+## Code-written state values
 
-Questi valori vengono **scritti** dalla shell per ricordare stati fra un
-avvio e l'altro; in genere non vanno impostati a mano:
+These values are **written** by the shell to remember state between startups; in general, do not set them manually:
 
-| nome | significato |
+| Name | Description |
 |---|---|
-| `StartupFailures` | avvii della shell che non hanno raggiunto la taskbar; a **2** scatta la *safe mode* (mod non in allow-list bloccati). Azzerato a ogni avvio riuscito. Eliminarlo per uscire dalla safe mode. |
-| `ImmersiveInitFailures` | vedi tabella UWP. |
-| `InjectionQuarantine` | REG_MULTI_SZ: moduli che hanno crashato l'avvio, bloccati ai riavvii successivi. Eliminarlo per riprovare i moduli messi in quarantena. |
+| `StartupFailures` | Shell startups that did not reach the taskbar. At **2**, *safe mode* is triggered (mods not on the allow-list are blocked). Reset on each successful startup. Delete the value to exit safe mode. |
+| `ImmersiveInitFailures` | See the UWP table above. |
+| `InjectionQuarantine` | REG_MULTI_SZ: modules that crashed during startup and are blocked on subsequent restarts. Delete the value to retry quarantined modules. |
 
 ---
 
-Le opzioni dello **switcher** (avvio al logon, link, task di recovery) non
-stanno qui: usano `HKCU\…\Winlogon\Shell` e la cartella Esecuzione
-automatica — vedi [avvio-al-login.md](avvio-al-login.md).
+The switcher's options (logon startup, shortcut, recovery task) are not listed here: they use `HKCU\…\Winlogon\Shell` and the Startup folder. See [avvio-al-login.md](avvio-al-login.md).

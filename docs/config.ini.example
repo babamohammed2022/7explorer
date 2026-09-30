@@ -1,31 +1,31 @@
 ; ============================================================
-; 7explorer - esempio di configurazione tema
-; Copia questo file come "config.ini" accanto a explorer.exe
-; (es. C:\Win7ExplorerRestorerTest\config.ini).
+; 7explorer - theme configuration example
+; Copy this file to "config.ini" next to explorer.exe
+; (e.g. C:\Win7ExplorerRestorerTest\config.ini).
 ;
-; 7explorer NON modifica mai file di sistema (uxtheme.dll,
-; themeui.dll, themes di Windows ...): tutto avviene nella
-; propria directory/processo.
+; 7explorer NEVER modifies system files (uxtheme.dll,
+; themeui.dll, Windows themes, etc.): everything happens in
+; its own directory/process.
 ; ============================================================
 
 [Theme]
-; Mode puo' essere:
-;   Auto      (default) usa <exedir>\theme\<Nome>.msstyles se il file
-;             esiste (come da test precedenti), altrimenti il tema
-;             Win7-like embedded in wrp64.dll (auto-estratto in
-;             %LocalAppData%\7explorer\theme\aero.msstyles)
-;   Fallback  usa sempre il tema embedded (ignora i file esterni)
-;   Custom    prova sempre <exedir>\theme\<Nome>.msstyles; in caso di
-;             errori torna al tema embedded
-;   Windows7  alias di Custom (per fornire un aero.msstyles di Win7)
-;   Windows81 alias di Custom (per fornire un aero.msstyles di Win8.1)
+; Mode can be:
+;   Auto      (default) use <exedir>\theme\<Name>.msstyles if the file
+;             exists (as in previous tests); otherwise use the
+;             Win7-like theme embedded in wrp64.dll (automatically
+;             extracted to %LocalAppData%\7explorer\theme\aero.msstyles)
+;   Fallback  always use the embedded theme (ignore external files)
+;   Custom    always try <exedir>\theme\<Name>.msstyles; if it fails,
+;             fall back to the embedded theme
+;   Windows7  alias for Custom (to provide a Windows 7 aero.msstyles)
+;   Windows81 alias for Custom (to provide a Windows 8.1 aero.msstyles)
 ;
-; In TUTTI i casi, se il caricamento scelto fallisce, 7explorer
-; ripiega sul tema embedded e, se anche quello fallisce, resta il
-; look classico: mai un avvio impedito.
+; In ALL cases, if the selected theme fails to load, 7explorer
+; falls back to the embedded theme, and if that also fails, uses
+; the classic look: startup is never blocked.
 Mode=Auto
 
-; Nome del file msstyles (senza estensione) in <exedir>\theme\
-; Esempi: aero, aero7, aerolite, ...
-; Se omesso viene letto il valore registry "Theme"; default "aero".
+; Name of the msstyles file (without the extension) under <exedir>\theme\
+; Examples: aero, aero7, aerolite, ...
+; If omitted, the registry "Theme" value is used; default is "aero".
 Name=aero

@@ -1,45 +1,32 @@
-# Piano: installazione completamente self-contained di Windows 7 Explorer Restorer
+# Plan: Fully self-contained installation of Windows 7 Explorer Restorer
 
-> Nota: documento **storico/tecnico** (2026-09-28) — è il piano di
-> progettazione dell'installer, mantenuto per riferimento; lo stato
-> attuale dell'installazione utente è in [installazione.md](installazione.md).
+> Note: **historical/technical document** (2026-09-28)—this is the installer design plan, kept for reference. The current user installation status is documented in [installazione.md](installazione.md).
 
-Data analisi: 2026-09-28. Legenda stato di ogni affermazione:
+Analysis date: 2026-09-28. Status legend for each claim:
 
-- ✅ **VERIFICATO NEL SORGENTE** — letto direttamente nel codice di questo
-  repo (citazione file:riga).
-- 🧪 **VERIFICATO NEL SANDBOX** — provato con test eseguiti dall'agente
-  (24/24 verdi al momento della scrittura: `python3 tests/run_tests.py`).
-- 🌐 **FONTE ESTERNA NOTA** — non ricontrollabile dal sandbox.
-- ⚠️ **DA VERIFICARE SULLA MACCHINA UTENTE** — il sandbox non ha accesso a
-  `msdl.microsoft.com` (TLS reset; GitHub sì). Comandi pronti riportati sotto.
+- ✅ **VERIFIED IN SOURCE** — read directly in this repository's code (file:line citation).
+- 🧪 **VERIFIED IN SANDBOX** — tested by the agent (24/24 passing when this was written: `python3 tests/run_tests.py`).
+- 🌐 **KNOWN EXTERNAL SOURCE** — cannot be rechecked from the sandbox.
+- ⚠️ **MUST BE VERIFIED ON THE USER'S MACHINE** — the sandbox cannot access `msdl.microsoft.com` (TLS reset; GitHub is reachable). Ready-to-run commands are included below.
 
 ---
 
-## 1. Download e verifica di explorer.exe
+## 1. Downloading and verifying explorer.exe
 
-I valori forniti dall'utente:
+Values supplied by the user:
 
-| Valore | Costante | Stato |
-| --- | --- | --- |
-| TimeDateStamp `0x4CE7A144` | `cfg::kTimeDateStamp` | ✅ **CONFERMATO** utente (Win10 19044) e CI (dump headers sul file reale) |
-| SizeOfImage `0x2C0000` | `cfg::kSizeOfImage` | ✅ **CONFERMATO** utente e CI |
-| dimensione 2.872.320 byte | `cfg::kExpectedFileBytes` | ✅ **CONFERMATO** utente e CI (controllo esatto) |
-| SHA-256 `5769…e21b` | `cfg::kAcceptedSha256[0]` | ✅ osservato dall'utente 2026-09-28 (certutil) |
-| SHA-256 `6a671b…7576a` | `cfg::kAcceptedSha256[1]` | ✅ osservato dal CI 2026-09-28 (Azure, 2 run, 3 UA) |
-| URL `…/explorer.exe/4CE7A1442C0000/explorer.exe` | template | ✅ da utente e CI |
+| Value | Constant | Status |
+|---|---|---|
+| TimeDateStamp `0x4CE7A144` | `cfg::kTimeDateStamp` | ✅ **CONFIRMED** by user (Win10 19044) and CI (header dump of the actual file) |
+| SizeOfImage `0x2C0000` | `cfg::kSizeOfImage` | ✅ **CONFIRMED** by user and CI |
+| File size 2,872,320 bytes | `cfg::kExpectedFileBytes` | ✅ **CONFIRMED** by user and CI (exact check) |
+| SHA-256 `5769…e21b` | `cfg::kAcceptedSha256[0]` | ✅ observed by user on 2026-09-28 (`certutil`) |
+| SHA-256 `6a671b…7576a` | `cfg::kAcceptedSha256[1]` | ✅ observed by CI on 2026-09-28 (Azure, 2 runs, 3 user agents) |
+| URL `…/explorer.exe/4CE7A1442C0000/explorer.exe` | template | ✅ supplied by user and CI |
 
-**Trovata variante dello stesso binario**: il symbol server serve (almeno)
-due copie **strutturalmente identiche** della stessa build (stessi
-machine/TimeDateStamp/SizeOfImage/size/lista import — verificati sul file
-reale nel CI) con **SHA-256 diverso**: quasi certamente ri-firma/ritimestamp
-del medesimo contenuto (la differenza non tocca codice né header). Modello di
-verifica aggiornato: **struttura esatta + SHA-256 in allow-list documentata
-+ Authenticode obbligatorio di default**. Mai accettare nulla fuori lista;
-estenderla solo con osservazione documentata come le due sopra.
+**A variant of the same binary was found**: the symbol server serves at least two **structurally identical** copies of the same build (same machine/TimeDateStamp/SizeOfImage/size/import list—verified against the actual file in CI) with **different SHA-256 hashes**. The likely explanation is re-signing/retimestamping of the same contents (the difference does not affect code or headers). The verification model was updated to require **exact structure + documented SHA-256 allow-list + Authenticode by default**. Never accept files outside the list; extend it only after documented observation, as above.
 
-**Comandi di verifica da eseguire sulla tua macchina (prima del rilascio),**
-e output atteso da incollare/verificare:
+**Verification commands to run on your machine before release**, with the expected output to paste/check:
 
 ```bat
 curl.exe -L -o %TEMP%\explorer-ref.exe "https://msdl.microsoft.com/download/symbols/explorer.exe/4CE7A1442C0000/explorer.exe"
@@ -47,224 +34,107 @@ certutil -hashfile %TEMP%\explorer-ref.exe SHA256
 python tools\analyze_mui.py %TEMP%\explorer-ref.exe --dump-headers
 ```
 
-`certutil` deve stampare esattamente l'hash atteso; `--dump-headers` stampa
-TimeDateStamp/SizeOfImage/macchina, la presenza della risorsa `MUI` e la
-lista degli import — conferma così anche quali di `SHLWAPI.DLL`,
-`OLE32.DLL`, `EXPLORERFRAME.DLL` esistono davvero (EXPLORERFRAME è
-condizionale, vedi task 2).
+`certutil` must print the expected hash exactly. `--dump-headers` prints TimeDateStamp/SizeOfImage/machine, whether the `MUI` resource exists, and the import list. This also confirms which of `SHLWAPI.DLL`, `OLE32.DLL`, and `EXPLORERFRAME.DLL` are actually present (`EXPLORERFRAME` is conditional; see task 2).
 
-Implementato: `installer/Win7ExplorerRestorer/downloader.cpp` (WinInet con
-timeout per fase, deadline complessiva 120 s, cancellazione immediata a
-logoff/shutdown via `SetConsoleCtrlHandler`, 3 tentativi con backoff, cap
-16 MB, file temporaneo → hash → `MoveFileEx`), `winhash.cpp` (SHA-256 CNG
-sull'handle già aperto con `FILE_SHARE_READ|FILE_SHARE_DELETE`; controllo
-identità PE: AMD64, PE32+, TimeDateStamp, SizeOfImage; `WinVerifyTrust`
-come controllo secondario NON bloccante sul file *pristine* — la firma è
-inevitabilmente invalidata da qualunque patch, ✅ conseguenza logica).
-L'hash del file **originale è sempre verificato PRIMA della patch**; l'hash
-della **copia patchata è memorizzato in `state\install.json`** a ogni
-installazione (rilevamento di copie locali corrotte ai riavvii: la cache
-`.pris` è riverificata a ogni run — ✅ logica implementata in
-`EnsurePristineExplorer`).
-Rifiuto totale di qualunque file non identico: nessun fallback "prova
-comunque", log esplicito `HASH MISMATCH` e cancellazione del file.
+Implemented in `installer/Win7ExplorerRestorer/downloader.cpp` (WinInet with per-phase timeouts, 120-second overall deadline, immediate cancellation at logoff/shutdown via `SetConsoleCtrlHandler`, 3 retries with backoff, 16 MB cap, temporary file → hash check → `MoveFileEx`) and `winhash.cpp` (CNG SHA-256 using the already-open handle with `FILE_SHARE_READ|FILE_SHARE_DELETE`; PE identity check: AMD64, PE32+, TimeDateStamp, SizeOfImage; `WinVerifyTrust` as a non-blocking secondary check on the *pristine* file—the signature is inevitably invalidated by any patch, ✅ a logical consequence).
 
-## 2. Patch degli import (addio CFF Explorer)
+The **original file's hash is always checked BEFORE patching**. The hash of the **patched copy is stored in `state\install.json`** on every install (to detect corrupted local copies on restart: the `.pris` cache is re-verified on every run—✅ logic implemented in `EnsurePristineExplorer`).
 
-✅ **VERIFICATO NEL SORGENTE** (`README.md`, "Step 2 - Patching
-explorer.exe"): oggi l'utente deve sostituire a mano gli import
-`SHLWAPI.DLL`, `OLE32.DLL` e (se presente) `EXPLORERFRAME.DLL`.
+Any file that is not an exact match is rejected: there is no "try anyway" fallback, the log explicitly reports `HASH MISMATCH`, and the file is deleted.
 
-Implementazione: `tools/patch_imports.py` (riferimento multipiattaforma) e
-porting 1:1 `installer/Win7ExplorerRestorer/importpatch.cpp`.
+## 2. Patching imports (no more CFF Explorer)
 
-**È deterministica? Sì 🧪** — e lo dimostro così:
+✅ **VERIFIED IN SOURCE** (`README.md`, "Step 2 - Patching explorer.exe"): users currently have to replace the `SHLWAPI.DLL`, `OLE32.DLL`, and (if present) `EXPLORERFRAME.DLL` imports manually.
 
-- `tests/test_patch_imports.py` (10 test) costruisce PE32+ sintetici con
-  import table e verifica: stessi byte in uscita a ogni esecuzione;
-  **idempotenza** (ri-patch di un file già patchato = zero modifiche, log
-  azioni vuoto); solo i 3 slot dei nomi DLL bersaglio più il campo
-  CheckSum cambiano (test di diff per-offset); i nomi più lunghi
-  (`EXPLORERFRAME.DLL` 17+1 B, `SHLWAPI.DLL` 11+1 B) sono paddati a zero
-  fino alla lunghezza originale ⇒ **dimensione file invariata**;
-  confronto nome **case-insensitive** (come il loader Windows);
-  directory dei *bound import* azzerata (i loro nomi vivono in una tabella
-  separata: azzerare la directory è la via documentata e sicura);
-  campo **CheckSum** ricalcolato con l'algoritmo standard della famiglia
-  MapFileAndCheckSum (test che il checksum memorizzato coincide col
-  ricalcolo);
-  rifiuto di input non-PE/non-AMD64.
+Implementation: `tools/patch_imports.py` (cross-platform reference) and its 1:1 port, `installer/Win7ExplorerRestorer/importpatch.cpp`.
 
-Come testarla sulla macchina:
+**Is it deterministic? Yes 🧪**, demonstrated as follows:
+
+- `tests/test_patch_imports.py` (10 tests) builds synthetic PE32+ files with an import table and verifies: identical output bytes on every run; **idempotency** (re-patching an already patched file makes no changes and produces an empty action log); only the 3 target DLL-name slots plus the CheckSum field change (per-offset diff test); longer names (`EXPLORERFRAME.DLL` 17+1 bytes, `SHLWAPI.DLL` 11+1 bytes) are zero-padded to the original length, so **file size is unchanged**; DLL-name comparison is **case-insensitive** (like the Windows loader); the *bound import* directory is cleared (its names are in a separate table, so clearing the directory is the documented safe approach); the **CheckSum** field is recalculated with the standard MapFileAndCheckSum-family algorithm (test verifies that the stored checksum matches the recalculation); non-PE/non-AMD64 input is rejected.
+
+How to test it on the machine:
 
 ```bat
 python tools\patch_imports.py explorer-pristine.exe out1.exe
 python tools\patch_imports.py explorer-pristine.exe out2.exe
-fc /b out1.exe out2.exe          :: identici = deterministico
-python tools\patch_imports.py out1.exe out1b.exe   :: "nothing to do" = idempotente
+fc /b out1.exe out2.exe          :: identical = deterministic
+python tools\patch_imports.py out1.exe out1b.exe   :: "nothing to do" = idempotent
 Win7ExplorerRestorer --selftest-importpatch explorer-pristine.exe
-   :: (da implementare sul ramo: confronta byte-per-byte col risultato Python)
+   :: (to be implemented on the branch: compare byte-for-byte with Python output)
 ```
 
-Nota onestà: il porting C++ è **revisionato a vista ma non compilato**
-(non c'è toolchain Windows nel sandbox); la logica è identica al riferimento
-Python testato 🧪. Da fare una cross-build di prova alla PR successiva.
+Honest note: the C++ port was **reviewed by inspection but not compiled** (the sandbox has no Windows toolchain); its logic matches the tested Python reference 🧪. A trial cross-build is needed in a later PR.
 
-⚠️ ipotesi da confermare col `--dump-headers` di cui sopra: il `SHLWAPI` del
-binario Win7 SP1 ha **anche import per ordinale** (il wrapper infatti
-esporta per ordinale, ✅ visibile in `forwards.h` `FORWARDO(SHLWAPI,…)`);
-la patch tocca solo il *nome della DLL* nei descrittori, non i thunk: gli
-import per ordinale funzionano invariati verso `wrp64.dll` finché il
-wrapper esporta gli stessi ordinali — ✅ coerente col progetto esistente.
+⚠️ Hypothesis to confirm with the `--dump-headers` command above: the Win7 SP1 binary's `SHLWAPI` also has **ordinal imports** (the wrapper exports by ordinal, ✅ visible in `forwards.h` as `FORWARDO(SHLWAPI,…)`). The patch changes only the DLL name in the descriptors, not the thunks; ordinal imports continue to work through `wrp64.dll` as long as the wrapper exports the same ordinals—✅ consistent with the existing project.
 
-## 3. Come caricano OGGI le risorse explorer.exe.mui / shell32.dll.mui
+## 3. How explorer.exe.mui / shell32.dll.mui resources are loaded today
 
-✅ **VERIFICATO NEL SORGENTE**:
+✅ **VERIFIED IN SOURCE**:
 
-1. **shell32.dll.mui** — caricato **dal wrapper**, non dal gestore MUI di
-   Windows. `StartMenuPin.cpp:14-46` (`Shell32_LoadString`): il wrapper
-   aggancia, nella IAT di shell32.dll, l'import `LoadStringW` (via
-   `api-ms-win-core-libraryloader-l1-2-0.dll`,
-   `StartMenuPin.cpp:241`, `h_shell32`); per i soli ID
-   `0x1505, 0x1506, 0x1508, 0x1509` (5381/5382/5384/5385) con
-   `hInstance == shell32` carica
-   `<dir exe>\<lingua preferita utente>\shell32.dll.mui` con
-   `LoadLibraryEx(…, LOAD_LIBRARY_AS_DATAFILE)` e se la stringa non si
-   trova fa fallback a `LoadStringW(g_hInstance,…)` = **risorse di
-   wrp64.dll stesso**. `wrapper.rc` contiene già le 4 stringhe inglesi.
-   Contesto d'uso: testi "pin/unpin" del menu Start (serve perché su Win ≥ 8
-   gli ID cambiarono; cf. anche README, nota Windows 8.1 "Customize Start
-   Menu"). Quindi: **tipologie davvero usate da Windows 7 Explorer Restorer solo queste 4
-   stringhe** — niente menu/dialog di shell32.
-2. **explorer.exe.mui** — caricato dal **gestore MUI del kernel**: il
-   Win7 `explorer.exe` è un PE language-neutral con risorsa `RCDATA "MUI"`;
-   i suoi `LoadString/LoadMenu/LoadDialog/LoadAccelerators` passano dal
-   resource loader che cerca `<dir exe>\<lingua>\explorer.exe.mui`. ✅ coerente
-   col layout del README (cartella `en-US` accanto a `explorer.exe`) e con
-   l'uso di `GetUserPreferredUILanguages` nel wrapper per costruire i path.
-   Il parsing MUI con validazione incrociata dei checksum (LN↔mui) è il
-   motivo per cui l'opzione (a) costerebbe una reimplementazione alla
-   muirct: scartata come strada principale (vedi sotto). — Dichiarato come
-   conoscenza di dominio, 🌐 non ri-testata qui.
+1. **shell32.dll.mui** — loaded **by the wrapper**, not by the Windows MUI loader. `StartMenuPin.cpp:14-46` (`Shell32_LoadString`): the wrapper hooks the `LoadStringW` import in shell32.dll's IAT (through `api-ms-win-core-libraryloader-l1-2-0.dll`, `StartMenuPin.cpp:241`, `h_shell32`); for IDs `0x1505, 0x1506, 0x1508, 0x1509` only (5381/5382/5384/5385), when `hInstance == shell32`, it loads `<exe dir>\<user preferred language>\shell32.dll.mui` with `LoadLibraryEx(..., LOAD_LIBRARY_AS_DATAFILE)`. If the string is not found, it falls back to `LoadStringW(g_hInstance, ...)`, i.e. **resources in `wrp64.dll` itself**. `wrapper.rc` already contains the four English strings. Context: Start menu "pin/unpin" labels (needed because IDs changed in Windows ≥8; see the README's Windows 8.1 "Customize Start Menu" note too). Therefore, **Windows 7 Explorer Restorer actually uses only these four string types**—no shell32 menus or dialogs.
+2. **explorer.exe.mui** — loaded by the **kernel MUI loader**. Win7 `explorer.exe` is a language-neutral PE with an `RCDATA "MUI"` resource; its `LoadString`/`LoadMenu`/`LoadDialog`/`LoadAccelerators` calls go through the resource loader, which searches for `<exe dir>\<language>\explorer.exe.mui`. ✅ This matches the README layout (an `en-US` folder next to `explorer.exe`) and the wrapper's use of `GetUserPreferredUILanguages` to build paths. Parsing MUI with cross-validation of checksums (LN↔MUI) is why option (a) would require a `muirct`-like reimplementation; it was rejected as the primary path (see below). This is domain knowledge, 🌐 not re-tested here.
 
-### Scelta: opzione (b) ibrida ✅ motivata — **SUPERATA da v0.0.3**
+### Choice: justified hybrid option (b) ✅ — **SUPERSEDED by v0.0.3**
 
-> ⚠️ **Aggiornamento 2026-09-28 (v0.0.3)** — la strategia qui sotto
-> (iniezione in-place + `.mui` di riferimento utente) è FALLITA ai test reali
-> ed è stata sostituita. Root cause provata nel CI: `UpdateResource` nel
-> binario LN marcato MU è rifiutato con `ERROR_NOT_SUPPORTED (50)`; la
-> cancellazione del marcatore `MUI` con `ERROR_INVALID_PARAMETER (87)`. La
-> v0.0.3 fa la **riscrittura atomica completa della tabella risorse**
-> (`BeginUpdateResource(TRUE)` dopo enumerazione di tutte le risorse) con
-> **payload generati dal progetto** (`tools/build_resources.py` da
-> `localization/catalog` + `localization/templates`): nessun `.mui` serve più
-> in nessun punto della pipeline. `--allow-partial-localization` rimosso.
-> Vedi `installer/Win7ExplorerRestorer/README.md` e `localizer.h`.
+> ⚠️ **Update 2026-09-28 (v0.0.3)** — the strategy below (in-place injection + user-provided reference `.mui`) FAILED in real tests and was replaced. Root cause was proven in CI: `UpdateResource` rejects an LN binary marked MU with `ERROR_NOT_SUPPORTED (50)`; deleting the `MUI` marker fails with `ERROR_INVALID_PARAMETER (87)`. v0.0.3 performs a **complete atomic rewrite of the resource table** (`BeginUpdateResource(TRUE)` after enumerating every resource) using **payloads generated by the project** (`tools/build_resources.py` from `localization/catalog` + `localization/templates`): no `.mui` file is needed anywhere in the pipeline. `--allow-partial-localization` was removed. See `installer/Win7ExplorerRestorer/README.md` and `localizer.h`.
 
-- **explorer.exe (copia privata)**: neutralizzazione della risorsa
-  `MUI` → `CUI` (stesso trucco della tua mod B) e **iniezione** nel binario
-  — *v0.0.3: la fase è diventata riscrittura atomica completa della tabella
-  risorse da payload generati dal progetto (vedi banner sopra e
-  `localization/ROOT_CAUSE_v0.0.3.md`); i dettagli qui sotto sono storici.*
-  delle STRINGTABLE per lingue del catalogo (`localizer.cpp`,
-  `Begin/Update/EndUpdateResource`). **Cancelletto di sicurezza**: la
-  neutralizzazione è rifiutata finché non esiste
-  `localization/constraints/explorer.exe.constraints.json` (altrimenti la
-  shell resterebbe mezza localizzata) — `--allow-partial-localization`
-  per test espliciti.
-- **shell32**: **zero file generati**: `tools/embed_catalog.py` produce
-  `explorerwrapper/Win7ExplorerRestorer_languages.rc` (aggiunto al vcxproj) con le
-  STRINGTABLE in tutte le lingue del catalogo; il fallback già esistente in
-  `StartMenuPin.cpp` le serve automaticamente nella lingua UI.
-  `Windows 7 Explorer Restorer` può anche generare un `shell32.dll.mui` ridotto
-  (PE solo risorse) — il wrapper lo caricherebbe come datafile senza
-  validazione incrociata (🌐: nessun checksum MUI coinvolto su quel path) —
-  lasciato come miglioria futura non necessaria.
-- Nessun hook `LoadString` aggiuntivo per explorer: a MUI neutralizzata e
-  stringhe iniettate, i `LoadString` leggono direttamente dal binario.
+- **explorer.exe (private copy)**: neutralize the `MUI` resource → `CUI` (same trick as your mod B) and **inject** into the binary—*in v0.0.3 this became a complete atomic rewrite of the resource table using project-generated payloads (see the banner above and `localization/ROOT_CAUSE_v0.0.3.md`); the details below are historical.* Inject the catalog's STRINGTABLE resources (`localizer.cpp`, `Begin/Update/EndUpdateResource`). **Safety gate**: neutralization is rejected unless `localization/constraints/explorer.exe.constraints.json` exists (otherwise the shell would be only partially localized); use `--allow-partial-localization` only for explicit tests.
+- **shell32**: **no generated files**. `tools/embed_catalog.py` generates `explorerwrapper/Win7ExplorerRestorer_languages.rc` (added to the vcxproj) with STRINGTABLE resources in all catalog languages; the existing fallback in `StartMenuPin.cpp` serves them automatically in the UI language. `Windows 7 Explorer Restorer` can also generate a reduced `shell32.dll.mui` (resource-only PE); the wrapper would load it as a data file without cross-validation (🌐: no MUI checksum is involved on that path). This was left as a future, unnecessary improvement.
+- No additional `LoadString` hook for Explorer: after MUI is neutralized and strings are injected, `LoadString` reads directly from the binary.
 
-### ID davvero necessari
+### IDs actually needed
 
-- ✅ shell32.dll.mui: **5381 5382 5384 5385** (verificati in sorgente).
-- ⚠️ explorer.exe.mui: insieme completo NON inventabile — va estratto dal
-  file di riferimento con `tools/analyze_mui.py`. Comandi:
+- ✅ shell32.dll.mui: **5381 5382 5384 5385** (verified in source).
+- ⚠️ The complete set for explorer.exe.mui cannot be guessed; it must be extracted from the reference file using `tools/analyze_mui.py`. Commands:
 
 ```bat
 python tools\analyze_mui.py explorer.exe.mui --constraints localization\constraints\explorer.exe.constraints.json
-python tools\analyze_mui.py explorer.exe.mui --with-strings > %TEMP%\ref-strings.json   :: NON committare
+python tools\analyze_mui.py explorer.exe.mui --with-strings > %TEMP%\ref-strings.json   :: DO NOT commit
 ```
 
-  Il primo (solo struttura: ID, lunghezze, acceleratori, segnaposto,
-  geometria menu/dialog) si committa; il secondo (testo di riferimento) no.
+  The first command (structure only: IDs, lengths, accelerators, placeholders, menu/dialog geometry) is committed; the second (reference text) is not.
 
-## 4. Contenuto linguistico & copyright
+## 4. Language content and copyright
 
-Regole implementate e 🧪 testate:
+Rules implemented and 🧪 tested:
 
-- i testi nel repo sono **riformulazioni originali** in 10 lingue
-  (`localization/catalog/*.json`), nessun testo Microsoft riportato; la
-  struttura (ID, tipi, segnaposto, lettere acceleratore, lunghezze di
-  riferimento) è esterna al copyright e proviene dall'analizzatore.
-- `tools/verify_catalog.py` (CI-ready, esce 1 al primo errore): segnaposto
-  per numero/ordine/tipo (`%s`, `%d`, `%1!s!`, `%%`, `%I64u`, `%ls`, `%1`…);
-  **un solo `&` per stringa**; **unicità acceleratori** per contesto
-  coesistente (menu/dialog); budget di lunghezza (max 2× o +8 caratteri
-  rispetto al riferimento, con override solo commentato);
-  **inglese obbligatorio e completo come fallback**.
-- Catalogo attuale: le 4 stringhe shell32 × 10 lingue (en, it, de, fr, es,
-  pt-BR, pl, ru, ja, zh-CN) — verifiche strutturali 0 errori.
-- **Nessun binario Microsoft nel repo**; il file mediaexplorer.exe.mui di
-  riferimento (mediafire) **non viene scaricato/committato**; solo la sua
-  *struttura* confluisce nei constraints JSON.
+- Repository text consists of **original rewordings** in 10 languages (`localization/catalog/*.json`); no Microsoft text is reproduced. The structure (IDs, types, placeholders, accelerator letters, reference lengths) is outside copyright and comes from the analyzer.
+- `tools/verify_catalog.py` (CI-ready; exits 1 on the first error) checks placeholders by number/order/type (`%s`, `%d`, `%1!s!`, `%%`, `%I64u`, `%ls`, `%1`, etc.); **one `&` per string**; **unique accelerators** in coexisting contexts (menus/dialogs); length budget (max 2× or +8 characters versus the reference, with commented overrides only); and **complete English fallback coverage**.
+- Current catalog: the 4 shell32 strings × 10 languages (en, it, de, fr, es, pt-BR, pl, ru, ja, zh-CN)—structural checks report 0 errors.
+- **No Microsoft binaries in the repository**. The reference `mediaexplorer.exe.mui` file (MediaFire) is **not downloaded or committed**; only its *structure* is included in the constraints JSON.
 
-**Lingue da far revisionare prima a un madrelingua (priorità):**
-1. **ja** e **zh-CN** (registro e scelta degli acceleratori `(&X)` nei menu);
-2. **ru** (uso delle «» e registro);
-3. **de / fr / es** (coerenza tono-imperativo);
-4. pt-BR, pl secondarie; en/it già riviste in questa sede.
+**Languages to have reviewed by a native speaker first (priority order):**
+1. **ja** and **zh-CN** (register and accelerator choices `(&X)` in menus);
+2. **ru** (use of «» and register);
+3. **de / fr / es** (consistent imperative tone);
+4. pt-BR and pl are lower priority; en/it have already been reviewed here.
 
-Sul punto "se una scelta comporta incorporare testi Microsoft": con questa
-architettura **non serve**. L'unico testo Microsoft presente nel repo è
-quello già ereditato dall'upstream in `wrapper.rc` (le 4 stringhe inglesi):
-sterilizzarlo non è nella mia scope senza una tua decisione — se vuoi,
-sostituisco anche quelle con le riformulazioni del nostro catalogo (2 righe
-di RC) — dimmelo tu.
+Regarding the question "what if a choice requires including Microsoft text?": with this architecture, **it is not needed**. The only Microsoft text currently in the repository is inherited from upstream in `wrapper.rc` (the four English strings). Removing it is outside my scope without your decision—if you want, I can replace those with our catalog rewordings too (two RC lines); let me know.
 
-## 5. Robustezza
+## 5. Robustness
 
-| Requisito | Dove | Stato |
-| --- | --- | --- |
-| Mai bloccare logon/shell | timeout WinInet per fase + deadline 120 s + cancellazione su CTRL_LOGOFF/SHUTDOWN; nessuna attesa utente | ✅ implementato (non compilabile qui) |
-| Rete assente / riuso offline | cache `.pris` riverificata con hash a ogni run; `--offline` forza | ✅ implementato |
-| Niente MAX_PATH | prefisso `\\?\` su path lunghi (`OpenForReadShared`) | ✅ implementato |
-| Log leggibili | `log\Win7ExplorerRestorerSetup.log` UTF-16 BOM + stdout | ✅ implementato |
-| Non toccare file di sistema | tutto sotto `--app-dir`; nessun accesso a `%SystemRoot%` | ✅ per costruzione |
-| Nessun binario MS nel repo | solo struttura JSON + testo originale | ✅ |
-| Test target | Windows 10/11: da eseguire (⚠️ checklist sotto) | 🧪 suite logica OK qui |
+| Requirement | Where | Status |
+|---|---|---|
+| Never block logon/shell startup | WinInet per-phase timeout + 120-second deadline + cancellation on CTRL_LOGOFF/SHUTDOWN; no user wait | ✅ implemented (cannot be compiled here) |
+| No network / offline reuse | `.pris` cache re-verified by hash on every run; `--offline` forces offline mode | ✅ implemented |
+| No MAX_PATH limitation | `\\?\` prefix for long paths (`OpenForReadShared`) | ✅ implemented |
+| Readable logs | `log\Win7ExplorerRestorerSetup.log` with UTF-16 BOM + stdout | ✅ implemented |
+| Do not touch system files | everything under `--app-dir`; no access to `%SystemRoot%` | ✅ by construction |
+| No Microsoft binaries in repository | JSON structure + original text only | ✅ |
+| Target testing | Windows 10/11: still to run (⚠️ checklist below) | 🧪 logic suite passes here |
 
-### Checklist di test su macchina reale (Win10 e Win11)
+### Real-machine test checklist (Win10 and Win11)
 
-1. `certutil`/`--dump-headers` confermano le 3 costanti → se no, stop.
-2. Run a rete: scarica → hash OK → patch → `install.json` con entrambi gli
-   hash → log senza errori.
-3. Run `--offline` a rete spenta: riusa cache in <1 s.
-4. Cancellazione durante download → abort immediato, nessun file cache.
-5. `fc /b` tra due run → byte-identici (fino a install.json, che contiene
-   hash stabili).
-6. Shell: pin/unpin nel menu Start nella lingua UI; fallback en per lingue
-   assenti; verifica UI dei testi troppo lunghi (warning del verifier).
+1. `certutil`/`--dump-headers` confirm the three constants; if not, stop.
+2. Online run: download → hash OK → patch → `install.json` contains both hashes → log has no errors.
+3. Run with `--offline` and network disabled: reuses the cache in under 1 second.
+4. Cancel during download → abort immediately, no cache file remains.
+5. Compare two runs with `fc /b` → byte-identical (through `install.json`, which contains stable hashes).
+6. Shell: pin/unpin in the Start menu using the UI language; English fallback for missing languages; check for overly long UI strings (verifier warnings).
 
-## 6. Stato dell'arte delle verifiche (riepilogo onesto)
+## 6. Verification status (honest summary)
 
-- 🧪 Fatto qui: patch deterministica+idempotente; analizzatore risorse su
-  fixture; verificatore catalogo (inclusi casi negativi); generazione
-  header/RC deterministica (due run consecutivi byte-identici);
-  non raggiungibili dal sandbox: msdl.microsoft.com, mediafire.
-- ✅ Confermato dall'utente (2026-09-28, Win10 21H2 LTSC 19044): URL,
-  dimensione 2.872.320 byte, SHA-256, TimeDateStamp, SizeOfImage.
-- 🔄 Nel CI (`selfcontained-ci.yml`): ricontrollo identity sul file reale,
-  patch Python↔C++ byte-per-byte, import risultanti verso wrp64.dll; build
-  MSVC di wrp64.dll e Win7ExplorerRestorer.exe; test Python.
-- ⚠️ Ancora aperti: elenco ID `explorer.exe.mui` (stringhe/menu/dialog/
-  acceleratori) — in arrivo dall'utente; test comportamentali Win10/11 su
-  macchina reale; integrazione shell (fuori scope per questa tappa).
+- 🧪 Done here: deterministic and idempotent patching; resource analyzer on fixtures; catalog verifier (including negative cases); deterministic header/RC generation (two consecutive runs byte-identical). Not reachable from the sandbox: `msdl.microsoft.com`, MediaFire.
+- ✅ Confirmed by the user (2026-09-28, Win10 21H2 LTSC 19044): URL, size 2,872,320 bytes, SHA-256, TimeDateStamp, SizeOfImage.
+- 🔄 In CI (`selfcontained-ci.yml`): identity re-check on the actual file, Python↔C++ patch comparison byte-for-byte, resulting imports point to `wrp64.dll`; MSVC builds of `wrp64.dll` and `Win7ExplorerRestorer.exe`; Python tests.
+- ⚠️ Still open: list of `explorer.exe.mui` IDs (strings/menus/dialogs/accelerators)—awaiting the user's file; behavioral tests on a real Win10/11 machine; shell integration (out of scope for this stage).

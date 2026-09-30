@@ -51,7 +51,7 @@ class Windows11ShellCompatibilityTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         mod_url = "https://windhawk.net/mods/win7-classic-autoplay-restorer"
         self.assertIn("`AutoPlayDeviceNotifications`", docs)
-        self.assertIn("best effort", docs)
+        self.assertIn("best-effort", docs)
         self.assertIn("Windows 7 Classic AutoPlay Dialog Restorer", troubleshooting)
         self.assertIn(mod_url, docs)
         self.assertIn(mod_url, troubleshooting)
@@ -63,10 +63,10 @@ class Windows11ShellCompatibilityTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("not working on Windows 11", readme)
         self.assertIn("experimental compatibility path", readme)
-        self.assertIn("non funziona ancora su Windows 11", docs)
-        self.assertIn("sperimentali", docs)
-        self.assertIn("non funziona", troubleshooting)
-        self.assertIn("risolvono ancora il problema", troubleshooting)
+        self.assertIn("still does not work on Windows 11", docs)
+        self.assertIn("experimental", docs)
+        self.assertIn("pinning from the Windows 7 taskbar **does not work**", troubleshooting)
+        self.assertIn("do not solve the problem yet", troubleshooting)
 
     def test_com_and_window_calls_have_seh_guards(self):
         self.assertIn("SafePinnedCall", self.pinned)
