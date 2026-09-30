@@ -1599,6 +1599,7 @@ void InstallShellFixes(HMODULE hSelf)
 	SafeInvoke(L"FixHelpAndSupportName", FixHelpAndSupportName);
 	SafeInvoke(L"RegisterConnectTo", RegisterConnectTo);
 	SafeInvoke(L"EnsureAutoPlayDefaults", EnsureAutoPlayDefaults);
+	SafeInvoke(L"StartAutoPlayDeviceMonitor", StartAutoPlayDeviceMonitor);
 	SafeInvoke(L"EnsureTransparencyEffects", EnsureTransparencyEffects);
 	LogLine(L"[Win7ExplorerRestorer] shell fixes done");
 }

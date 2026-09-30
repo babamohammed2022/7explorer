@@ -70,7 +70,7 @@ Some Windows functionality was tightly coupled to Windows 7 system components an
 Known limitations may include:
 
 * UWP/modern Windows applications
-* Autoplay integration
+* AutoPlay device-arrival notifications are **best effort**: the shell asks Windows to invoke the volume's registered `autoplay` verb. This depends on system policy, registered handlers, and the Windows build; the native AutoPlay prompt is not guaranteed.
 * Some modern notification and system-tray functionality
 * Modern Windows shell integrations
 * Features depending on Windows 7 system DLLs or services

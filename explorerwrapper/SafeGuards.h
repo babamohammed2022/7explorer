@@ -40,6 +40,8 @@ public:
 	T* Get() const { return m_p; }
 	T* operator->() const { return m_p; }
 	explicit operator bool() const { return m_p != nullptr; }
+	// Transfer the owned reference to a caller without releasing it.
+	T* Detach() { T* p = m_p; m_p = nullptr; return p; }
 	void Reset() { if (m_p) { T* p = m_p; m_p = nullptr; p->Release(); } }
 private:
 	T* m_p;

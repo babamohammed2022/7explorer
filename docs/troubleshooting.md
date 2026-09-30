@@ -17,6 +17,25 @@ Allega **questi log** quando segnali un problema.
 
 ## Problemi noti e soluzioni
 
+### AutoPlay non appare quando colleghi un volume
+
+La shell privata ascolta gli eventi di arrivo dei volumi (unità rimovibili,
+dischi USB esposti come unità fisse e CD/DVD), poi chiede a Windows di
+eseguire il verbo `autoplay` registrato per la lettera dell'unità. È un
+supporto **best effort**, non una garanzia della finestra AutoPlay nativa:
+Windows può non esporre il verbo o sopprimerlo in base alla build, alle
+impostazioni AutoPlay, ai criteri di sistema o agli handler installati. I
+dispositivi MTP che non espongono un volume non rientrano nel caso base.
+
+Controlla prima **Impostazioni → Bluetooth e dispositivi → AutoPlay** e i
+criteri AutoPlay dell'utente/sistema. Il listener si disattiva con
+`AutoPlayDeviceNotifications=0` sotto
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`;
+`FixAutoPlay=0` disattiva invece solo la riparazione dei criteri per-utente.
+Per la diagnosi cerca `AutoPlay monitor` in
+`%TEMP%\7explorer-shellfix.log` o acquisisci `OutputDebugString` con
+DebugView.
+
 ### Icona di rete assente al primo avvio
 
 **Comportamento**: alla prima esecuzione della shell Win7 l'icona di rete

@@ -27,6 +27,7 @@ public:
 class CAutoPlayWrapper: public IAutoPlayUI
 {
 public:
+	// Takes ownership of the reference returned by CoCreateInstance.
 	CAutoPlayWrapper(IAutoPlayUI *autoui);
 	~CAutoPlayWrapper();
 
@@ -49,7 +50,7 @@ public:
 	STDMETHODIMP SetChkDskCompleted(void);
 private:
 	IAutoPlayUI *m_autoui;
-	long m_cRef;
+	volatile LONG m_cRef;
 };
 
 HRESULT WINAPI Shell32_CoCreateInstance(
@@ -63,3 +64,7 @@ HRESULT WINAPI Shell32_CoCreateInstance(
 // Repairs per-user AutoPlay policies that fully disable AutoPlay (HKCU-only,
 // missing values untouched). Opt-out: Advanced\FixAutoPlay = 0. See AutoPlay.cpp.
 void EnsureAutoPlayDefaults();
+
+// Starts a hidden, STA device-notification window. On volume arrival it asks
+// the system shell to invoke the drive's registered "autoplay" verb (best effort).
+void StartAutoPlayDeviceMonitor();
