@@ -2450,67 +2450,6 @@ static void InstallTheme(HWND hwnd) {
 }
 
 
-// ---------------------------------------------------------- start orb ----
-// Lets the user pick a custom Start button ("orb") image (.bmp or .png)
-// and stores the path in HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\OrbFile.
-// Uses RAII for registry keys and comprehensive try/catch with smart fallback.
-static void InstallStartOrb(HWND hwnd) {
-    try {
-        WCHAR src[MAX_PATH * 2] = { 0 };
-        OPENFILENAMEW ofn;
-        ZeroMemory(&ofn, sizeof(ofn));
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = hwnd;
-        ofn.lpstrFile = src;
-        ofn.nMaxFile = (DWORD)_countof(src);
-        ofn.lpstrFilter = TR(TR_ORB_FILTER);
-        ofn.lpstrTitle = TR(TR_ORB_TITLE);
-        ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_PATHMUSTEXIST;
-        if (!GetOpenFileNameW(&ofn))
-            return;
-
-        // Smart fallback / validation: must be a local file with .bmp or .png extension
-        if (src[0] == L'\\' && src[1] == L'\\') {
-            MessageBoxW(hwnd, L"UNC / network paths are not allowed for Start orb.", L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
-            return;
-        }
-
-        const WCHAR* ext = wcsrchr(src, L'.');
-        if (!ext || (_wcsicmp(ext, L".bmp") != 0 && _wcsicmp(ext, L".png") != 0)) {
-            MessageBoxW(hwnd, L"Please select a valid .bmp or .png image.", L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
-            return;
-        }
-
-        // RAII registry write
-        RegKeyGuard reg;
-        const WCHAR* kAdvKey = L"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
-        LSTATUS st = RegCreateKeyExW(HKEY_CURRENT_USER, kAdvKey, 0, NULL, 0,
-                                     KEY_SET_VALUE | KEY_QUERY_VALUE, NULL, reg.Put(), NULL);
-        if (st != ERROR_SUCCESS) {
-            WCHAR msg[1400];
-            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_ERR_FMT), (unsigned long)st, src);
-            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
-            return;
-        }
-
-        DWORD cbData = (DWORD)((wcslen(src) + 1) * sizeof(WCHAR));
-        st = RegSetValueExW(reg.h, L"OrbFile", 0, REG_SZ, (const BYTE*)src, cbData);
-        if (st == ERROR_SUCCESS) {
-            WCHAR msg[1400];
-            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_OK_FMT), src);
-            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONINFORMATION);
-        } else {
-            WCHAR msg[1400];
-            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_ERR_FMT), (unsigned long)st, src);
-            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
-        }
-    } catch (...) {
-        // Smart fallback: handle any unexpected C++ exception gracefully
-        MessageBoxW(hwnd, L"An unexpected error occurred while configuring the Start orb.",
-                    L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
-    }
-}
-
 // ------------------------------------------------------------- browse ---
 
 static void BrowseForWin7ExplorerRestorer(HWND hwnd) {
@@ -2721,6 +2660,68 @@ static void ShellLangSave(int sel) {
         SwLog(L"shell-lang: save failed (kept for this session only)");
     }
 }
+
+// ---------------------------------------------------------- start orb ----
+// Lets the user pick a custom Start button ("orb") image (.bmp or .png)
+// and stores the path in HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\OrbFile.
+// Uses RAII for registry keys and comprehensive try/catch with smart fallback.
+static void InstallStartOrb(HWND hwnd) {
+    try {
+        WCHAR src[MAX_PATH * 2] = { 0 };
+        OPENFILENAMEW ofn;
+        ZeroMemory(&ofn, sizeof(ofn));
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = hwnd;
+        ofn.lpstrFile = src;
+        ofn.nMaxFile = (DWORD)_countof(src);
+        ofn.lpstrFilter = TR(TR_ORB_FILTER);
+        ofn.lpstrTitle = TR(TR_ORB_TITLE);
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_PATHMUSTEXIST;
+        if (!GetOpenFileNameW(&ofn))
+            return;
+
+        // Smart fallback / validation: must be a local file with .bmp or .png extension
+        if (src[0] == L'\\' && src[1] == L'\\') {
+            MessageBoxW(hwnd, L"UNC / network paths are not allowed for Start orb.", L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        const WCHAR* ext = wcsrchr(src, L'.');
+        if (!ext || (_wcsicmp(ext, L".bmp") != 0 && _wcsicmp(ext, L".png") != 0)) {
+            MessageBoxW(hwnd, L"Please select a valid .bmp or .png image.", L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        // RAII registry write
+        RegKeyGuard reg;
+        const WCHAR* kAdvKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+        LSTATUS st = RegCreateKeyExW(HKEY_CURRENT_USER, kAdvKey, 0, NULL, 0,
+                                     KEY_SET_VALUE | KEY_QUERY_VALUE, NULL, reg.Put(), NULL);
+        if (st != ERROR_SUCCESS) {
+            WCHAR msg[1400];
+            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_ERR_FMT), (unsigned long)st, src);
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        DWORD cbData = (DWORD)((wcslen(src) + 1) * sizeof(WCHAR));
+        st = RegSetValueExW(reg.h, L"OrbFile", 0, REG_SZ, (const BYTE*)src, cbData);
+        if (st == ERROR_SUCCESS) {
+            WCHAR msg[1400];
+            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_OK_FMT), src);
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONINFORMATION);
+        } else {
+            WCHAR msg[1400];
+            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_ERR_FMT), (unsigned long)st, src);
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+        }
+    } catch (...) {
+        // Smart fallback: handle any unexpected C++ exception gracefully
+        MessageBoxW(hwnd, L"An unexpected error occurred while configuring the Start orb.",
+                    L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+    }
+}
+
 
 // ---- installer child process --------------------------------------------
 // Runs <switcher-dir>\Win7ExplorerRestorer.exe hidden and polls it with a
