@@ -40,6 +40,10 @@ class StartOrbStaticTests(unittest.TestCase):
         self.assertIn("ORB_STATE_PRESSED", startorb)
         self.assertIn("CalculateOrbMetrics", startorb)
         self.assertIn("EnsureThreeStateOrb", startorb)
+        self.assertIn("GetOrbTargetDimensions", startorb)
+        self.assertIn("ScaleOrbBitmapWithWic", startorb)
+        self.assertIn("IWICBitmapScaler", startorb)
+        self.assertIn("WICBitmapInterpolationModeFant", startorb)
 
     def test_dllmain_calls_win7explorerrestorer_namespace(self):
         dllmain = (ROOT / "explorerwrapper" / "dllmain.cpp").read_text(encoding="latin-1")

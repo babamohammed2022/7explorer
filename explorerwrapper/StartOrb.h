@@ -460,7 +460,176 @@ inline HBITMAP EnsureThreeStateOrb(HBITMAP hSrcBmp)
 	return (HBITMAP)autoDst.Release();
 }
 
-inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad)
+// Standard Windows 7 Start button resource dimensions per DPI / alignment:
+// 100% DPI (6801 Bottom, 6805 Left/Right, 6809 Top): 54x162 (or 52x162)
+// 125% DPI (6802 Bottom, 6806 Left/Right, 6810 Top): 66x198
+// 150% DPI (6803 Bottom, 6807 Left/Right, 6811 Top): 81x243
+// 190% DPI (6804 Bottom, 6808 Left/Right, 6812 Top): 106x318
+inline bool GetOrbTargetDimensions(LPCWSTR resName, UINT* outWidth, UINT* outHeight)
+{
+	if (!outWidth || !outHeight)
+		return false;
+
+	*outWidth = 0;
+	*outHeight = 0;
+
+	UINT resId = 0;
+	if (IS_INTRESOURCE(resName))
+	{
+		resId = (UINT)(UINT_PTR)resName;
+	}
+	else if (resName)
+	{
+		// String resource name e.g. L"6801"
+		resId = (UINT)StrToIntW(resName);
+	}
+
+	switch (resId)
+	{
+	case 6801: case 6805: case 6809:
+		*outWidth = 54;
+		*outHeight = 162;
+		return true;
+	case 6802: case 6806: case 6810:
+		*outWidth = 66;
+		*outHeight = 198;
+		return true;
+	case 6803: case 6807: case 6811:
+		*outWidth = 81;
+		*outHeight = 243;
+		return true;
+	case 6804: case 6808: case 6812:
+		*outWidth = 106;
+		*outHeight = 318;
+		return true;
+	default:
+		// Default to standard 100% DPI metrics
+		*outWidth = 54;
+		*outHeight = 162;
+		return false;
+	}
+}
+
+// Rescales a 32-bit premultiplied ARGB bitmap using WIC Fant interpolation (high-quality downscaling/upscaling)
+inline HBITMAP ScaleOrbBitmapWithWic(HBITMAP hSrcBmp, UINT targetWidth, UINT targetHeight)
+{
+	if (!hSrcBmp || targetWidth == 0 || targetHeight == 0)
+		return hSrcBmp;
+
+	BITMAP bm;
+	ZeroMemory(&bm, sizeof(bm));
+	if (GetObjectW(hSrcBmp, sizeof(bm), &bm) != (int)sizeof(bm))
+		return hSrcBmp;
+
+	if ((UINT)bm.bmWidth == targetWidth && (UINT)bm.bmHeight == targetHeight)
+		return hSrcBmp;
+
+	ScopedCoInit coInit;
+	if (!coInit.Succeeded())
+		return hSrcBmp;
+
+	IWICImagingFactory* pFactory = nullptr;
+	HRESULT hr = CoCreateInstance(
+		CLSID_WICImagingFactory,
+		nullptr,
+		CLSCTX_INPROC_SERVER,
+		IID_PPV_ARGS(&pFactory)
+	);
+	if (FAILED(hr) || !pFactory)
+		return hSrcBmp;
+
+	IWICBitmap* pWicBitmap = nullptr;
+	hr = pFactory->CreateBitmapFromHBITMAP(hSrcBmp, nullptr, WICBitmapUsePremultipliedAlpha, &pWicBitmap);
+	if (FAILED(hr) || !pWicBitmap)
+	{
+		pFactory->Release();
+		return hSrcBmp;
+	}
+
+	IWICBitmapScaler* pScaler = nullptr;
+	hr = pFactory->CreateBitmapScaler(&pScaler);
+	if (FAILED(hr) || !pScaler)
+	{
+		pWicBitmap->Release();
+		pFactory->Release();
+		return hSrcBmp;
+	}
+
+	hr = pScaler->Initialize(pWicBitmap, targetWidth, targetHeight, WICBitmapInterpolationModeFant);
+	if (FAILED(hr))
+	{
+		pScaler->Release();
+		pWicBitmap->Release();
+		pFactory->Release();
+		return hSrcBmp;
+	}
+
+	IWICFormatConverter* pConverter = nullptr;
+	hr = pFactory->CreateFormatConverter(&pConverter);
+	if (FAILED(hr) || !pConverter)
+	{
+		pScaler->Release();
+		pWicBitmap->Release();
+		pFactory->Release();
+		return hSrcBmp;
+	}
+
+	hr = pConverter->Initialize(
+		pScaler,
+		GUID_WICPixelFormat32bppPBGRA,
+		WICBitmapDitherTypeNone,
+		nullptr,
+		0.0,
+		WICBitmapPaletteTypeCustom
+	);
+
+	pScaler->Release();
+	pWicBitmap->Release();
+	pFactory->Release();
+
+	if (FAILED(hr))
+	{
+		pConverter->Release();
+		return hSrcBmp;
+	}
+
+	BITMAPINFO bi;
+	ZeroMemory(&bi, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = targetWidth;
+	bi.bmiHeader.biHeight = -(LONG)targetHeight; // Top-down DIB
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void* pBits = nullptr;
+	HDC hdc = GetDC(nullptr);
+	HBITMAP hDstBitmap = CreateDIBSection(hdc, &bi, DIB_RGB_COLORS, &pBits, nullptr, 0);
+	ReleaseDC(nullptr, hdc);
+
+	if (!hDstBitmap || !pBits)
+	{
+		pConverter->Release();
+		if (hDstBitmap) DeleteObject(hDstBitmap);
+		return hSrcBmp;
+	}
+
+	const UINT stride = targetWidth * 4;
+	const UINT bufferSize = stride * targetHeight;
+	hr = pConverter->CopyPixels(nullptr, stride, bufferSize, static_cast<BYTE*>(pBits));
+	pConverter->Release();
+
+	if (FAILED(hr))
+	{
+		DeleteObject(hDstBitmap);
+		return hSrcBmp;
+	}
+
+	DeleteObject(hSrcBmp);
+	return hDstBitmap;
+}
+
+inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad, UINT targetWidth = 0, UINT targetHeight = 0)
 {
 	HBITMAP hBmp = nullptr;
 	if (OrbIsPng(path))
@@ -469,7 +638,13 @@ inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad)
 		hBmp = LoadOrbBitmapFromFile(path, fuLoad);
 
 	if (hBmp)
+	{
 		hBmp = EnsureThreeStateOrb(hBmp);
+		if (hBmp && targetWidth > 0 && targetHeight > 0)
+		{
+			hBmp = ScaleOrbBitmapWithWic(hBmp, targetWidth, targetHeight);
+		}
+	}
 
 	return hBmp;
 }
@@ -478,6 +653,7 @@ inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad)
 // SafeInvokeCtx, which owns no C++ objects with destructors (rule C2712).
 struct OrbRequest {
 	UINT fuLoad;
+	LPCWSTR resName;
 	void (*getPresetFileName)(LPWSTR);
 	HBITMAP result;
 };
@@ -486,7 +662,24 @@ inline void OrbWork(OrbRequest* r)
 {
 	WCHAR path[MAX_PATH];
 	if (ResolveOrbPath(path, r->getPresetFileName))
-		r->result = LoadOrbImageFromFile(path, r->fuLoad);
+	{
+		UINT targetWidth = 0;
+		UINT targetHeight = 0;
+		if (r->resName)
+		{
+			GetOrbTargetDimensions(r->resName, &targetWidth, &targetHeight);
+		}
+		else if (r->getPresetFileName)
+		{
+			WCHAR presetName[MAX_PATH];
+			presetName[0] = L'\0';
+			r->getPresetFileName(presetName);
+			if (presetName[0])
+				GetOrbTargetDimensions(presetName, &targetWidth, &targetHeight);
+		}
+
+		r->result = LoadOrbImageFromFile(path, r->fuLoad, targetWidth, targetHeight);
+	}
 }
 
 } // namespace Win7ExplorerRestorer

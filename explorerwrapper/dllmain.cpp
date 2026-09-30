@@ -240,6 +240,7 @@ HANDLE __stdcall LoadImageW_CallHook(HINSTANCE hInst, LPCWSTR name, UINT type, i
 	{
 		Win7ExplorerRestorer::OrbRequest req;
 		req.fuLoad = fuLoad;
+		req.resName = name;
 		req.getPresetFileName = GetOrbDPIAndPos;
 		req.result = nullptr;
 		if (Win7ExplorerRestorer::SafeInvokeCtx(L"LoadImageW_CallHook", Win7ExplorerRestorer::OrbWork, &req) && req.result)
