@@ -103,6 +103,7 @@ Opzioni ereditate da explorer7, lette da
 |---|---|---|---|
 | `Theme` | SZ | `aero` | Nome del tema in `<exedir>\theme\` (relativo; es. `aero` → `theme\aero.msstyles`, `Aero\aero` → `theme\Aero\aero.msstyles`). |
 | `OrbDirectory` | SZ | *(interno)* | Directory delle immagini orb in `<exedir>\orbs\` (solo `.bmp`, vedi il README). |
+| `OrbFile` | SZ | *(nessuno)* | Immagine personalizzata del pulsante Start: file `.bmp` o `.png` (con canale alfa) locale (percorso assoluto o relativo a `<exedir>`). Struttura a 3 stati Open-Shell/Win7: idle (0), hover (1), premuto (2), con normalizzazione automatica dei frame singoli. Ha la precedenza su `OrbDirectory`. Se manca, non è valido (UNC, estensione non supportata, dimensioni >1024 px o file >4 MB) o il caricamento fallisce, si usa il preset e poi l'immagine integrata. Ispirato a Open-Shell (MIT). |
 | `DisableComposition` | DWORD | 0 | 1 = la shell si comporta come se DWM non fosse attivo. |
 | `ClassicTheme` | DWORD | 0 | 1 = tema Windows Classico. |
 | `ColorizationOptions` | DWORD | 1 | Comportamento colorizzazione shell (1–4, compatibilità variabile). |
