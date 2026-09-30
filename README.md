@@ -70,7 +70,8 @@ Some Windows functionality was tightly coupled to Windows 7 system components an
 Known limitations may include:
 
 * UWP/modern Windows applications
-* AutoPlay device-arrival notifications are **best effort**: the shell asks Windows to invoke the volume's registered `autoplay` verb. This depends on system policy, registered handlers, and the Windows build; the native AutoPlay prompt is not guaranteed.
+* Taskbar pinning from the Windows 7 shell is **not working on Windows 11** in the tested build. The code contains an experimental compatibility path, but testing confirmed it does not yet solve the problem; treat pinning as unsupported for now.
+* AutoPlay device-arrival notifications are **partially addressed on a best-effort basis**: the shell asks Windows to invoke the volume's registered `autoplay` verb. This depends on system policy, registered handlers, and the Windows build; the classic AutoPlay prompt is not guaranteed. For the classic Windows 7 dialog, the project recommends the separate Windhawk mod [Windows 7 Classic AutoPlay Dialog Restorer](https://windhawk.net/mods/win7-classic-autoplay-restorer); it is not bundled with this project.
 * Some modern notification and system-tray functionality
 * Modern Windows shell integrations
 * Features depending on Windows 7 system DLLs or services

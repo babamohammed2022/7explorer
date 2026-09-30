@@ -36,6 +36,23 @@ Per la diagnosi cerca `AutoPlay monitor` in
 `%TEMP%\7explorer-shellfix.log` o acquisisci `OutputDebugString` con
 DebugView.
 
+Per ripristinare il dialogo classico Windows 7, si raccomanda il mod
+Windhawk separato [Windows 7 Classic AutoPlay Dialog Restorer](https://windhawk.net/mods/win7-classic-autoplay-restorer)
+(`win7-classic-autoplay-restorer`). Installalo tramite Windhawk; non è
+incluso in questo progetto.
+
+### Il pinning alla taskbar non funziona su Windows 11
+
+Il test della release
+[`v0.1.0-alpha-test.1`](https://github.com/babamohammed2022/Windows7ExplorerRestorer/releases/tag/v0.1.0-alpha-test.1)
+ha confermato che il pinning dalla taskbar Windows 7 **non funziona**.
+Nel codice sono presenti tentativi di compatibilità con le interfacce native
+e un percorso interno Win32 della taskbar, ma sono sperimentali e non
+risolvono ancora il problema. `UseTaskbarPinning=1` abilita questi tentativi,
+non garantisce il pinning; `UseTaskbarPinning=0` disabilita i pin e non è una
+soluzione alternativa. Al momento questa funzione va considerata non
+supportata su Windows 11.
+
 ### Icona di rete assente al primo avvio
 
 **Comportamento**: alla prima esecuzione della shell Win7 l'icona di rete
