@@ -54,21 +54,33 @@ private:
 // RAII owner for device contexts (compatible DCs and window DCs).
 class ScopedDC {
 public:
-	explicit ScopedDC(HDC hdc = nullptr, HWND hwnd = nullptr) : m_hdc(hdc), m_hwnd(hwnd), m_isCompatible(false) {}
-	static ScopedDC CreateCompatible(HDC hdcRef = nullptr) {
-		ScopedDC s(CreateCompatibleDC(hdcRef));
-		s.m_isCompatible = true;
-		return s;
+	explicit ScopedDC(HDC hdc = nullptr, HWND hwnd = nullptr, bool isCompatible = false)
+		: m_hdc(hdc), m_hwnd(hwnd), m_isCompatible(isCompatible) {}
+	ScopedDC(ScopedDC&& other) noexcept
+		: m_hdc(other.m_hdc), m_hwnd(other.m_hwnd), m_isCompatible(other.m_isCompatible) {
+		other.m_hdc = nullptr;
+	}
+	ScopedDC& operator=(ScopedDC&& other) noexcept {
+		if (this != &other) {
+			Reset();
+			m_hdc = other.m_hdc;
+			m_hwnd = other.m_hwnd;
+			m_isCompatible = other.m_isCompatible;
+			other.m_hdc = nullptr;
+		}
+		return *this;
 	}
 	~ScopedDC() { Reset(); }
 	HDC Get() const { return m_hdc; }
-	void Reset(HDC hdc = nullptr) {
+	void Reset(HDC hdc = nullptr, HWND hwnd = nullptr, bool isCompatible = false) {
 		if (m_hdc) {
 			if (m_isCompatible) DeleteDC(m_hdc);
 			else ReleaseDC(m_hwnd, m_hdc);
 			m_hdc = nullptr;
 		}
 		m_hdc = hdc;
+		m_hwnd = hwnd;
+		m_isCompatible = isCompatible;
 	}
 private:
 	HDC m_hdc;
@@ -391,19 +403,17 @@ inline HBITMAP EnsureThreeStateOrb(HBITMAP hSrcBmp)
 	if (metrics.isThreeState && bm.bmHeight >= bm.bmWidth * 3)
 		return hSrcBmp;
 
-	// Normalize into 3-state vertical strip: Frame 0 (Normal), Frame 1 (Hot), Frame 2 (Pressed)
-	HDC hdcScreen = GetDC(nullptr);
-	if (!hdcScreen) return hSrcBmp;
+	// Normalize into 3-state vertical strip using RAII ScopedDC and ScopedGdiObject:
+	// Frame 0: Idle/Normal (ORB_STATE_NORMAL)
+	// Frame 1: Hover/Hot   (ORB_STATE_HOT)
+	// Frame 2: Pressed     (ORB_STATE_PRESSED)
+	ScopedDC hdcScreen(GetDC(nullptr), nullptr, false);
+	if (!hdcScreen.Get()) return hSrcBmp;
 
-	HDC hdcSrc = CreateCompatibleDC(hdcScreen);
-	HDC hdcDst = CreateCompatibleDC(hdcScreen);
-	if (!hdcSrc || !hdcDst)
-	{
-		if (hdcSrc) DeleteDC(hdcSrc);
-		if (hdcDst) DeleteDC(hdcDst);
-		ReleaseDC(nullptr, hdcScreen);
+	ScopedDC hdcSrc(CreateCompatibleDC(hdcScreen.Get()), nullptr, true);
+	ScopedDC hdcDst(CreateCompatibleDC(hdcScreen.Get()), nullptr, true);
+	if (!hdcSrc.Get() || !hdcDst.Get())
 		return hSrcBmp;
-	}
 
 	BITMAPINFO bi;
 	ZeroMemory(&bi, sizeof(bi));
@@ -415,25 +425,22 @@ inline HBITMAP EnsureThreeStateOrb(HBITMAP hSrcBmp)
 	bi.bmiHeader.biCompression = BI_RGB;
 
 	void* pDstBits = nullptr;
-	HBITMAP hDstBmp = CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &pDstBits, nullptr, 0);
+	HBITMAP hDstBmp = CreateDIBSection(hdcScreen.Get(), &bi, DIB_RGB_COLORS, &pDstBits, nullptr, 0);
 	if (!hDstBmp)
-	{
-		DeleteDC(hdcSrc);
-		DeleteDC(hdcDst);
-		ReleaseDC(nullptr, hdcScreen);
 		return hSrcBmp;
-	}
 
-	HGDIOBJ oldSrc = SelectObject(hdcSrc, hSrcBmp);
-	HGDIOBJ oldDst = SelectObject(hdcDst, hDstBmp);
+	ScopedGdiObject autoDst(hDstBmp);
+
+	HGDIOBJ oldSrc = SelectObject(hdcSrc.Get(), hSrcBmp);
+	HGDIOBJ oldDst = SelectObject(hdcDst.Get(), hDstBmp);
 
 	if (!metrics.isThreeState)
 	{
 		// Single frame -> replicate to Normal (frame 0), Hot (frame 1), Pressed (frame 2)
 		for (int state = 0; state < ORB_STATE_COUNT; ++state)
 		{
-			BitBlt(hdcDst, 0, state * metrics.frameHeight, metrics.frameWidth, metrics.frameHeight,
-			       hdcSrc, 0, 0, SRCCOPY);
+			BitBlt(hdcDst.Get(), 0, state * metrics.frameHeight, metrics.frameWidth, metrics.frameHeight,
+			       hdcSrc.Get(), 0, 0, SRCCOPY);
 		}
 	}
 	else
@@ -441,23 +448,18 @@ inline HBITMAP EnsureThreeStateOrb(HBITMAP hSrcBmp)
 		// Horizontal 3-frame strip -> copy each horizontal frame to vertical slot
 		for (int state = 0; state < ORB_STATE_COUNT; ++state)
 		{
-			BitBlt(hdcDst, 0, state * metrics.frameHeight, metrics.frameWidth, metrics.frameHeight,
-			       hdcSrc, state * metrics.frameWidth, 0, SRCCOPY);
+			BitBlt(hdcDst.Get(), 0, state * metrics.frameHeight, metrics.frameWidth, metrics.frameHeight,
+			       hdcSrc.Get(), state * metrics.frameWidth, 0, SRCCOPY);
 		}
 	}
 
-	SelectObject(hdcSrc, oldSrc);
-	SelectObject(hdcDst, oldDst);
-	DeleteDC(hdcSrc);
-	DeleteDC(hdcDst);
-	ReleaseDC(nullptr, hdcScreen);
+	SelectObject(hdcSrc.Get(), oldSrc);
+	SelectObject(hdcDst.Get(), oldDst);
 
 	DeleteObject(hSrcBmp);
-	return hDstBmp;
+	return (HBITMAP)autoDst.Release();
 }
 
-// High-level loader dispatching between WIC (for PNG) and standard GDI LoadImageW (for BMP),
-// with Open-Shell style 3-state frame normalization (Normal, Hot, Pressed).
 inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad)
 {
 	HBITMAP hBmp = nullptr;
