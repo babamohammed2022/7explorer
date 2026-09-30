@@ -18,9 +18,9 @@ The project runs a private copy of the original Windows 7 SP1 `explorer.exe` tog
 | Windows 8.1 | Under evaluation, not supported as of now|
 | Other versions | Untested |
 
-> Ports to older systems (such as Windows Vista, Windows XP and other) are outside the scope of this project; separate implementations are welcome.
+> **Unsupported platforms:** Windows Vista, Windows XP and earlier versions are not supported. The Windows 7 shell depends on APIs and system components that are missing on those systems, and backporting to them is outside the scope of this project, although forks that add such support are welcome. Linux and macOS are not supported either, since the project runs the Windows 7 shell on top of Windows and is not a theme or desktop environment.
 
-It is intended to work on both Windows 10 and Windows 11, although not every feature of the original Windows 7 shell can be guaranteed on every version.
+It is intended to function on both Windows 10 and Windows 11, although not every feature of the original Windows 7 shell can be guaranteed on every version.
 
 ## Emergency Shell Switcher
 
