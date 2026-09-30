@@ -238,11 +238,11 @@ HANDLE __stdcall LoadImageW_CallHook(HINSTANCE hInst, LPCWSTR name, UINT type, i
 	// the original LoadImageW, so explorer always gets a valid Start button.
 	if (type == IMAGE_BITMAP)
 	{
-		ex7::OrbRequest req;
+		Win7ExplorerRestorer::OrbRequest req;
 		req.fuLoad = fuLoad;
 		req.getPresetFileName = GetOrbDPIAndPos;
 		req.result = nullptr;
-		if (ex7::SafeInvokeCtx(L"LoadImageW_CallHook", ex7::OrbWork, &req) && req.result)
+		if (Win7ExplorerRestorer::SafeInvokeCtx(L"LoadImageW_CallHook", Win7ExplorerRestorer::OrbWork, &req) && req.result)
 			return req.result;
 	}
 	return LoadImageW(hInst, name, type, cx, cy, fuLoad);

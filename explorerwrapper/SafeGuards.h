@@ -98,6 +98,22 @@ inline bool SafeInvokeCtx(const wchar_t* where, void (*fn)(Ctx*), Ctx* ctx)
 	__except (SehFilter(where, GetExceptionInformation())) { return false; }
 }
 
+class ScopedCoInit {
+public:
+	explicit ScopedCoInit(DWORD dwCoInit = COINIT_APARTMENTTHREADED)
+		: m_hr(CoInitializeEx(nullptr, dwCoInit)) {}
+	~ScopedCoInit() {
+		if (SUCCEEDED(m_hr)) {
+			CoUninitialize();
+		}
+	}
+	bool Succeeded() const { return SUCCEEDED(m_hr) || m_hr == RPC_E_CHANGED_MODE; }
+	HRESULT Result() const { return m_hr; }
+private:
+	HRESULT m_hr;
+	ScopedCoInit(const ScopedCoInit&) = delete;
+	ScopedCoInit& operator=(const ScopedCoInit&) = delete;
+};
+
 } // namespace Win7ExplorerRestorer
 
-namespace ex7 = Win7ExplorerRestorer;

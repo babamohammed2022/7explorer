@@ -1,33 +1,42 @@
 #pragma once
-// 7explorer fork: Start button ("orb") image selection.
+// 7explorer fork: Start button ("orb") image selection (BMP and PNG).
 //
 // Lets the user pick the taskbar Start button image from:
-//   1) OrbFile      - a custom .bmp (absolute path, or relative to explorer.exe's directory)
+//   1) OrbFile      - a custom .bmp or .png (absolute path, or relative to explorer.exe's directory)
 //   2) OrbDirectory - a preset folder under <exedir>\orbs\<name>\ (upstream behaviour)
 //   3) built-in     - the image embedded in explorer.exe (always the final fallback)
 //
 // Credits / inspiration: Open-Shell (https://github.com/Open-Shell/Open-Shell-Menu,
 // MIT License, (c) the Open-Shell and Classic Shell authors) popularised replacing
-// the Start button with a user-supplied image and a bundled set of presets. No
-// Open-Shell source is copied here; only the idea. Keep this notice if you reuse
+// the Start button with a user-supplied image (supporting 32-bit PNG with alpha
+// transparency) and a bundled set of presets. No Open-Shell source is copied here;
+// only the idea and behavioral compatibility. Keep this notice if you reuse
 // the approach. The preset directory mechanism comes from explorer7 upstream.
 //
 // Safety model (same rules as SafeGuards.h):
-//   - RAII for the GDI bitmap so no path leaks it on early return.
+//   - RAII for GDI bitmap, COM interfaces (ComPtr) and CoInitialize (ScopedCoInit).
 //   - Everything that touches user-controlled input runs under SEH via
-//     ex7::SafeInvokeCtx; any failure falls back to the original LoadImageW.
-//   - The bitmap is validated (type/size) before it is handed to explorer.
+//     Win7ExplorerRestorer::SafeInvokeCtx; any failure falls back to the original LoadImageW.
+//   - Functions executed under SEH use plain structs and own no C++ objects with
+//     destructors (compiler rule C2712).
+//   - Bitmaps are validated (type/size/bounds) before they are handed to explorer.
 #include "common.h"
 #include "dbgprint.h"
 #include "SafeGuards.h"
 #include "RegistryManager.h"
+#include <wincodec.h>
 #include <strsafe.h>
 #include <shlwapi.h>
 
-namespace ex7 {
+#pragma comment(lib, "windowscodecs.lib")
+#pragma comment(lib, "ole32.lib")
+
+namespace Win7ExplorerRestorer {
 
 // Upper bound for a sane Start button strip; rejects corrupt/hostile files.
 static const LONG kMaxOrbDim = 1024;
+// Maximum allowed custom file size (4 MB) to prevent pathological memory usage.
+static const DWORD kMaxOrbFileSize = 4 * 1024 * 1024;
 
 // RAII owner for an HGDIOBJ (HBITMAP). Release() hands ownership to the caller.
 class ScopedGdiObject {
@@ -57,17 +66,34 @@ inline bool ReadOrbRegString(const WCHAR* name, WCHAR* buf, DWORD cch)
 
 inline bool OrbIsRegularFile(const WCHAR* path)
 {
-	DWORD a = GetFileAttributesW(path);
-	return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+	WIN32_FILE_ATTRIBUTE_DATA fad;
+	if (!GetFileAttributesExW(path, GetFileExInfoStandard, &fad))
+		return false;
+	if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		return false;
+	if (fad.nFileSizeHigh > 0 || fad.nFileSizeLow > kMaxOrbFileSize)
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] Orb file '%s' exceeds size limit", path);
+		return false;
+	}
+	return true;
 }
 
-// Only local, .bmp paths are accepted: a UNC/network path could stall explorer's
-// start-up, and the loader below only understands bitmaps.
+// Accepts only local .bmp and .png files. UNC and network paths could stall explorer's
+// start-up and are rejected.
 inline bool OrbPathAllowed(const WCHAR* path)
 {
 	if (!path || !*path) return false;
-	if (path[0] == L'\\' && path[1] == L'\\') return false; // UNC and \\?\ forms
-	return lstrcmpiW(PathFindExtensionW(path), L".bmp") == 0;
+	if (path[0] == L'\\' && path[1] == L'\\' ) return false; // UNC and \\?\ forms
+	const WCHAR* ext = PathFindExtensionW(path);
+	if (!ext) return false;
+	return (lstrcmpiW(ext, L".bmp") == 0 || lstrcmpiW(ext, L".png") == 0);
+}
+
+inline bool OrbIsPng(const WCHAR* path)
+{
+	const WCHAR* ext = PathFindExtensionW(path);
+	return ext && lstrcmpiW(ext, L".png") == 0;
 }
 
 inline bool OrbIsAbsolute(const WCHAR* p)
@@ -85,9 +111,8 @@ inline bool OrbPresetNameSafe(const WCHAR* s)
 	return StrStrW(s, L"..") == nullptr;
 }
 
-// Picks the bitmap file to try. Returns false when nothing is configured or the
-// configured files do not exist (caller then uses the built-in image).
-// getPresetFileName is only invoked if the preset path is actually needed.
+// Picks the bitmap/image file to try. Returns false when nothing is configured or
+// configured files do not exist (caller then uses built-in image).
 inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileName)(LPWSTR))
 {
 	WCHAR exeDir[MAX_PATH];
@@ -95,7 +120,7 @@ inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileNam
 	if (n == 0 || n >= MAX_PATH) return false;
 	if (!PathRemoveFileSpecW(exeDir)) return false;
 
-	// 1) Custom file
+	// 1) Custom file (BMP or PNG)
 	WCHAR custom[MAX_PATH];
 	if (ReadOrbRegString(L"OrbFile", custom, MAX_PATH))
 	{
@@ -111,7 +136,7 @@ inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileNam
 			StringCchCopyW(out, MAX_PATH, full);
 			return true;
 		}
-		dbgprintf(L"[ex7] OrbFile '%s' not usable, trying preset", custom);
+		dbgprintf(L"[Win7ExplorerRestorer] OrbFile '%s' not usable, trying preset", custom);
 	}
 
 	// 2) Preset directory
@@ -120,7 +145,7 @@ inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileNam
 	{
 		if (!OrbPresetNameSafe(preset))
 		{
-			dbgprintf(L"[ex7] OrbDirectory '%s' rejected", preset);
+			dbgprintf(L"[Win7ExplorerRestorer] OrbDirectory '%s' rejected", preset);
 			return false;
 		}
 		WCHAR file[MAX_PATH];
@@ -129,11 +154,17 @@ inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileNam
 		file[MAX_PATH - 1] = L'\0';
 		if (!file[0]) return false;
 
+		// Check .bmp first, then .png for presets
 		WCHAR full[MAX_PATH * 3];
-		if (FAILED(StringCchPrintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.bmp", exeDir, preset, file)))
-			return false;
-		if (lstrlenW(full) >= MAX_PATH) return false;
-		if (OrbIsRegularFile(full))
+		if (SUCCEEDED(StringCchPrintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.bmp", exeDir, preset, file)) &&
+			lstrlenW(full) < MAX_PATH && OrbIsRegularFile(full))
+		{
+			StringCchCopyW(out, MAX_PATH, full);
+			return true;
+		}
+
+		if (SUCCEEDED(StringCchPrintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.png", exeDir, preset, file)) &&
+			lstrlenW(full) < MAX_PATH && OrbIsRegularFile(full))
 		{
 			StringCchCopyW(out, MAX_PATH, full);
 			return true;
@@ -142,7 +173,7 @@ inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileNam
 	return false;
 }
 
-// Loads and validates the bitmap. Ownership of the HBITMAP goes to the caller.
+// Loads and validates a standard BMP file using Win32 GDI.
 inline HBITMAP LoadOrbBitmapFromFile(const WCHAR* path, UINT fuLoad)
 {
 	ScopedGdiObject bmp(LoadImageW(nullptr, path, IMAGE_BITMAP, 0, 0, fuLoad | LR_LOADFROMFILE));
@@ -153,14 +184,126 @@ inline HBITMAP LoadOrbBitmapFromFile(const WCHAR* path, UINT fuLoad)
 	if (GetObjectW(bmp.Get(), sizeof(bm), &bm) != (int)sizeof(bm)) return nullptr;
 	if (bm.bmWidth < 1 || bm.bmHeight < 1 || bm.bmWidth > kMaxOrbDim || bm.bmHeight > kMaxOrbDim)
 	{
-		dbgprintf(L"[ex7] orb bitmap %ldx%ld rejected", bm.bmWidth, bm.bmHeight);
+		dbgprintf(L"[Win7ExplorerRestorer] orb bitmap %ldx%ld rejected", bm.bmWidth, bm.bmHeight);
 		return nullptr;
 	}
 	return (HBITMAP)bmp.Release();
 }
 
+// Decodes a PNG (or image file) with WIC, converting to 32bpp premultiplied BGRA (PBGRA)
+// and returning a 32-bit top-down DIB section matching Windows shell requirements.
+inline HBITMAP LoadOrbPngWithWic(const WCHAR* path)
+{
+	ScopedCoInit coInit(COINIT_APARTMENTTHREADED);
+	if (!coInit.Succeeded())
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] CoInitializeEx failed: 0x%08X", coInit.Result());
+		return nullptr;
+	}
+
+	ComPtr<IWICImagingFactory> factory;
+	HRESULT hr = CoCreateInstance(
+		CLSID_WICImagingFactory,
+		nullptr,
+		CLSCTX_INPROC_SERVER,
+		IID_PPV_ARGS(factory.Put()));
+	if (FAILED(hr) || !factory.Get())
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] WIC factory creation failed: 0x%08X", hr);
+		return nullptr;
+	}
+
+	ComPtr<IWICBitmapDecoder> decoder;
+	hr = factory->CreateDecoderFromFilename(
+		path,
+		nullptr,
+		GENERIC_READ,
+		WICDecodeMetadataCacheOnDemand,
+		decoder.Put());
+	if (FAILED(hr) || !decoder.Get())
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] CreateDecoderFromFilename failed: 0x%08X", hr);
+		return nullptr;
+	}
+
+	ComPtr<IWICBitmapFrameDecode> frame;
+	hr = decoder->GetFrame(0, frame.Put());
+	if (FAILED(hr) || !frame.Get())
+		return nullptr;
+
+	UINT width = 0, height = 0;
+	hr = frame->GetSize(&width, &height);
+	if (FAILED(hr) || width < 1 || height < 1 || width > (UINT)kMaxOrbDim || height > (UINT)kMaxOrbDim)
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] invalid image size %ux%u", width, height);
+		return nullptr;
+	}
+
+	// Overflow guard for width * 4 * height
+	if (width > (MAXDWORD / 4) || (width * 4) > (MAXDWORD / height))
+		return nullptr;
+
+	ComPtr<IWICFormatConverter> converter;
+	hr = factory->CreateFormatConverter(converter.Put());
+	if (FAILED(hr) || !converter.Get())
+		return nullptr;
+
+	hr = converter->Initialize(
+		frame.Get(),
+		GUID_WICPixelFormat32bppPBGRA,
+		WICBitmapDitherTypeNone,
+		nullptr,
+		0.0,
+		WICBitmapPaletteTypeCustom);
+	if (FAILED(hr))
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] WIC format conversion to 32bppPBGRA failed: 0x%08X", hr);
+		return nullptr;
+	}
+
+	BITMAPINFO bi;
+	ZeroMemory(&bi, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = (LONG)width;
+	bi.bmiHeader.biHeight = -((LONG)height); // negative for top-down DIB
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void* pBits = nullptr;
+	HDC hdc = GetDC(nullptr);
+	HBITMAP hBitmap = CreateDIBSection(hdc, &bi, DIB_RGB_COLORS, &pBits, nullptr, 0);
+	ReleaseDC(nullptr, hdc);
+
+	if (!hBitmap || !pBits)
+	{
+		if (hBitmap) DeleteObject(hBitmap);
+		return nullptr;
+	}
+
+	const UINT stride = width * 4;
+	const UINT bufferSize = stride * height;
+	hr = converter->CopyPixels(nullptr, stride, bufferSize, static_cast<BYTE*>(pBits));
+	if (FAILED(hr))
+	{
+		dbgprintf(L"[Win7ExplorerRestorer] WIC CopyPixels failed: 0x%08X", hr);
+		DeleteObject(hBitmap);
+		return nullptr;
+	}
+
+	return hBitmap;
+}
+
+// High-level loader dispatching between WIC (for PNG) and standard GDI LoadImageW (for BMP).
+inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad)
+{
+	if (OrbIsPng(path))
+		return LoadOrbPngWithWic(path);
+	return LoadOrbBitmapFromFile(path, fuLoad);
+}
+
 // SEH-guarded unit of work. Plain struct + plain function: the __try lives in
-// SafeInvokeCtx, which owns no C++ objects (rule C2712).
+// SafeInvokeCtx, which owns no C++ objects with destructors (rule C2712).
 struct OrbRequest {
 	UINT fuLoad;
 	void (*getPresetFileName)(LPWSTR);
@@ -171,7 +314,7 @@ inline void OrbWork(OrbRequest* r)
 {
 	WCHAR path[MAX_PATH];
 	if (ResolveOrbPath(path, r->getPresetFileName))
-		r->result = LoadOrbBitmapFromFile(path, r->fuLoad);
+		r->result = LoadOrbImageFromFile(path, r->fuLoad);
 }
 
-} // namespace ex7
+} // namespace Win7ExplorerRestorer
