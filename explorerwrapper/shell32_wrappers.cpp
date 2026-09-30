@@ -338,9 +338,14 @@ HRESULT WINAPI Shell32_CoCreateInstance(
 	}
 
 	
-	if (result == S_OK && rclsid == CLSID_AutoPlayUI)
+	if (SUCCEEDED(result) && *ppv && rclsid == CLSID_AutoPlayUI &&
+		riid == IID_AutoPlayUI)
 	{
-		*ppv = new CAutoPlayWrapper((IAutoPlayUI*)*ppv);
+		// The adapter implements IAutoPlayUI only; leave other requested IIDs
+		// untouched rather than treating an arbitrary COM interface as it.
+		CAutoPlayWrapper* wrapper = new CAutoPlayWrapper(
+			static_cast<IAutoPlayUI*>(*ppv));
+		*ppv = static_cast<IAutoPlayUI*>(wrapper);
 	}
 
 	return result;

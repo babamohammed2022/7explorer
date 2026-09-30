@@ -1,134 +1,92 @@
-# Troubleshooting e problemi noti
+# Troubleshooting and known issues
 
-## Dove stanno i log
+## Log locations
 
-| log | chi lo scrive | contenuto |
+| Log | Written by | Contents |
 |---|---|---|
-| `%TEMP%\7explorer-shellfix.log` | `wrp64.dll` (la shell) | avvio della shell, hook installati, tray, rete, jump list, guardia anti-iniezione. Cap 256 KB con rotazione. Disattivabile con `ShellFixLog=0`. |
-| `%TEMP%\7explorer-switcher.log` | `shell-switcher.exe` | switch runtime, avvio automatico al logon (registro, link, task), recovery. Indispensabile per diagnosticare il logon. |
-| `%LocalAppData%\7explorer\theme.log` | tema (ThemeManager) | caricamento/estrazione del tema, fallback. |
-| `<cartella bundle>\log\Win7ExplorerRestorerSetup.log` | `Win7ExplorerRestorer.exe` | download, verifica hash, patch, risorse. |
+| `%TEMP%\7explorer-shellfix.log` | `wrp64.dll` (the shell) | Shell startup, installed hooks, notification area, network, jump lists, and injection guard. 256 KB limit with rotation. Disable with `ShellFixLog=0`. |
+| `%TEMP%\7explorer-switcher.log` | `shell-switcher.exe` | Runtime shell switches, automatic logon startup (registry, shortcut, task), and recovery. Essential for diagnosing logon issues. |
+| `%LocalAppData%\7explorer\theme.log` | Theme manager (`ThemeManager`) | Theme loading/extraction and fallback. |
+| `<bundle folder>\log\Win7ExplorerRestorerSetup.log` | `Win7ExplorerRestorer.exe` | Downloads, hash checks, patching, and resources. |
 
-In più, tutto viene inviato a `OutputDebugString`: con
-[DebugView](https://learn.microsoft.com/sysinternals/downloads/debugview)
-si vede in tempo reale (filtra per `[Win7ExplorerRestorer]`).
+Everything is also sent to `OutputDebugString`. Use [DebugView](https://learn.microsoft.com/sysinternals/downloads/debugview) to view it in real time (filter for `[Win7ExplorerRestorer]`).
 
-Allega **questi log** quando segnali un problema.
+Attach **these logs** when reporting an issue.
 
-## Problemi noti e soluzioni
+## Known issues and workarounds
 
-### Icona di rete assente al primo avvio
+### AutoPlay does not appear when you connect a volume
 
-**Comportamento**: alla prima esecuzione della shell Win7 l'icona di rete
-non compare; compare dal secondo avvio.
+The private shell listens for volume-arrival events (removable drives, USB disks exposed as fixed drives, and CD/DVDs), then asks Windows to invoke the `autoplay` verb registered for the drive letter. This is **best-effort** support, not a guarantee that the native AutoPlay window will appear: Windows may not expose the verb or may suppress it based on the build, AutoPlay settings, system policies, or installed handlers. MTP devices that do not expose a volume are outside the basic supported case.
 
-**Perché**: il componente che la abilita (`pnidui.dll` 22621 + `.mui`)
-viene scaricato **in background** durante il primo avvio (URL e SHA-256
-fissati nel codice, vedi [installazione.md](installazione.md)); solo
-dopo un download verificato l'icona può essere creata. Nel log
-(`%TEMP%\7explorer-shellfix.log`): `cache ...: incomplete (icon from the
-next start after a successful download)`.
+First check **Settings → Bluetooth & devices → AutoPlay** and the user/system AutoPlay policies. Disable the listener with `AutoPlayDeviceNotifications=0` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`; `FixAutoPlay=0` disables only the per-user policy repair. For diagnosis, search for `AutoPlay monitor` in `%TEMP%\7explorer-shellfix.log` or capture `OutputDebugString` with DebugView.
 
-**Soluzione**: nessuna, è by-design — riavvia la shell una seconda volta
-(`Ctrl+Alt+Shift+S` → Cambia). Se dopo il secondo avvio manca ancora,
-controlla nel log le righe `[Win7ExplorerRestorer][net]` (download fallito? hash?) e che
-`%LocalAppData%\7explorer\pnidui-F717CABC20B000\pnidui.dll` esista.
+To restore the classic Windows 7 dialog, the separate Windhawk mod [Windows 7 Classic AutoPlay Dialog Restorer](https://windhawk.net/mods/win7-classic-autoplay-restorer) (`win7-classic-autoplay-restorer`) is recommended. Install it through Windhawk; it is not included with this project.
 
-### Tema "embedded" diverso dall'Aero originale
+### Taskbar pinning does not work on Windows 11
 
-**Comportamento**: con il tema embedded la taskbar ha i colori/le metriche
-Win7-like ma non è il facsimile grafico completo.
+Testing of release [`v0.1.0-alpha-test.1`](https://github.com/babamohammed2022/Windows7ExplorerRestorer/releases/tag/v0.1.0-alpha-test.1) confirmed that pinning from the Windows 7 taskbar **does not work**. The code contains compatibility attempts using native interfaces and an internal Win32 taskbar path, but these are experimental and do not solve the problem yet. `UseTaskbarPinning=1` enables the attempts; it does not guarantee pinning. `UseTaskbarPinning=0` disables pins and is not a workaround. For now, consider this feature unsupported on Windows 11.
 
-**Perché**: il tema embedded è **v0: solo colori e metriche, nessun
-atlante grafico** — dichiarato dal generatore stesso
-(`tools/theme/build_theme.py`: *"v0 scope: structural probe themes
-(colors only, no atlases)"*). Il facsimile completo è lavoro in corso.
+### Network icon missing on first startup
 
-**Soluzione**: usa il **tuo** file `.msstyles` di Windows 7:
+**What happens**: the network icon does not appear the first time the Win7 shell runs; it appears after the second startup.
 
-1. pulsante **Tema…** nello switcher: seleziona il tuo `aero.msstyles`
-   (e gli eventuali `en-US\`/`it-IT\aero.msstyles.mui` accanto); viene
-   copiato in `<cartella explorer.exe>\theme\`;
-2. oppure copia manualmente il file in `<cartella explorer.exe>\theme\`
-   come `aero.msstyles`;
-3. configura `config.ini` se vuoi un nome/modo specifico
-   ([config.ini.example](config.ini.example), [opzioni.md](opzioni.md)).
+**Why**: the component that enables it (`pnidui.dll` 22621 + `.mui`) is downloaded **in the background** during the first startup (the URL and SHA-256 are pinned in the source; see [installazione.md](installazione.md)). The icon can be created only after a successful download. The log may contain `cache ...: incomplete (icon from the next start after a successful download)` in `%TEMP%\7explorer-shellfix.log`.
 
-Il file resta **tuo**: viene solo copiato in locale, mai inviato da
-nessuna parte. Cambia shell per applicarlo. Diagnostica in
-`%LocalAppData%\7explorer\theme.log`.
+**What to do**: nothing; this is expected. Restart the shell a second time (`Ctrl+Alt+Shift+S` → **Switch**). If the icon is still missing after the second startup, check the `[Win7ExplorerRestorer][net]` entries in the log (download failure? hash mismatch?) and verify that `%LocalAppData%\7explorer\pnidui-F717CABC20B000\pnidui.dll` exists.
 
-### Pagina "Icone area di notifica" vuota su 24H2
+### Embedded theme differs from the original Aero theme
 
-**Comportamento**: "Personalizza" / "Icone area di notifica" apre la
-pagina di sistema che su 24H2 esiste ancora ma appare **vuota**.
+**What happens**: with the embedded theme, the taskbar has Win7-like colors and metrics, but is not a complete visual replica.
 
-**Perché** *(ipotesi, non accertata)*: la pagina
-`::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}` esiste ancora su 24H2/25H2
-(verificato in test31: il CLSID è registrato e la finestra si apre), ma il
-suo contenuto su 24H2 non viene popolato — probabilmente dipende da
-componenti di Impostazioni moderni agganciati alla shell Win11. Si tratta
-di un'ipotesi sul *perché* della pagina vuota, non di un fatto verificato:
-il fatto verificato è che la pagina si apre e resta vuota.
+**Why**: the embedded theme is **v0: colors and metrics only, with no graphics atlas**, as stated by its generator (`tools/theme/build_theme.py`: *"v0 scope: structural probe themes (colors only, no atlases)"*). A complete replica is still in progress.
 
-**Soluzione**: usa la **finestra integrata** del progetto, che riproduce
-la pagina (elenco icone, comportamento per icona, "mostra sempre tutte"):
+**What to do**: use **your own** Windows 7 `.msstyles` file:
+
+1. In the switcher, click **Theme…** and select your `aero.msstyles` (and any `en-US\`/`it-IT\aero.msstyles.mui` files alongside it); the files are copied to `<explorer.exe folder>\theme\`.
+2. Or copy the file manually to `<explorer.exe folder>\theme\` as `aero.msstyles`.
+3. Configure `config.ini` if you want a specific theme name or mode ([config.ini.example](config.ini.example), [opzioni.md](opzioni.md)).
+
+The file remains **yours**: it is copied locally and never sent anywhere. Switch shells to apply it. Diagnostics are in `%LocalAppData%\7explorer\theme.log`.
+
+### Notification Area Icons page is blank on 24H2
+
+**What happens**: **Customize** / **Notification Area Icons** opens the system page, which still exists on 24H2 but appears **blank**.
+
+**Why** *(hypothesis, not confirmed)*: the page `::{05D7B0F4-2121-4EFF-BF6B-ED3F69B894D9}` still exists on 24H2/25H2 (verified in test31: the CLSID is registered and the window opens), but its contents are not populated on 24H2—possibly because it depends on modern Settings components attached to the Windows 11 shell. This explanation is a hypothesis, not a verified fact. The verified fact is that the page opens and remains blank.
+
+**Workaround**: use the project's **built-in window**, which recreates the page (icon list, per-icon behavior, and **Always show all icons**):
 
 ```
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v NotifyIconsUseSettings /t REG_DWORD /d 3 /f
 ```
 
-poi riavvia la shell. Con `NotifyIconsUseSettings=0` (default) la scelta è
-automatica. Tutti i valori possibili in [opzioni.md](opzioni.md).
+Then restart the shell. With `NotifyIconsUseSettings=0` (the default), the choice is automatic. See [opzioni.md](opzioni.md) for all available values.
 
-### Jump list delle app UWP / Impostazioni
+### UWP app / Settings jump lists
 
-**Stato onesto (test36)**:
+**Current behavior (test36)**:
 
-- **Impostazioni non ha jump list per design**: nel codice il resolver non
-  viene nemmeno interrogato per `ms-settings` (non è un bug).
-- **Altre app UWP** (Store): il resolver Win8+ non trova un file `.lnk`
-  per gli AUMID, quindi il progetto fornisce in fallback l'elemento
-  `shell:AppsFolder\<AUMID>` (lo stesso che usa la taskbar moderna).
-  Attivo di default (`UwpJumpLists=1`).
-- **Se una jump list UWP non appare**: cerca `[Win7ExplorerRestorer][jumplist]` in
-  `%TEMP%\7explorer-shellfix.log` — ogni risoluzione logga il risultato
-  del resolver e del fallback (`resolver 0x…, AppsFolder fallback 0x…`).
-  Se il fallback è `0x…` ≠ 0, l'app non espone un elemento AppsFolder
-  utilizzabile: segnala l'AUMID esatto (dal log) in una issue.
+- **Settings has no jump list by design**: the resolver is not queried for `ms-settings` (this is not a bug).
+- **Other UWP (Store) apps**: the Win8+ resolver cannot find an `.lnk` for their AUMIDs, so the project supplies `shell:AppsFolder\<AUMID>` as a fallback item (the same item used by the modern taskbar). Enabled by default (`UwpJumpLists=1`).
+- **If a UWP jump list does not appear**: search for `[Win7ExplorerRestorer][jumplist]` in `%TEMP%\7explorer-shellfix.log`. Each resolution logs the resolver and fallback results (`resolver 0x…, AppsFolder fallback 0x…`). If the fallback is `0x…` ≠ 0, the app does not expose a usable AppsFolder item; report the exact AUMID from the log in an issue.
 
-### "Nessuna shell" (schermo nero / solo sfondo)
+### "No shell" (black screen / wallpaper only)
 
-Se dopo uno switch non c'è nessuna barra:
+If no taskbar appears after switching:
 
-1. **`Ctrl+Alt+Shift+S`** → apre lo switcher → seleziona una shell →
-   **Cambia** (funziona anche senza shell: l'istanza resident è
-   indipendente da explorer);
-2. altrimenti `Ctrl+Shift+Esc` → Gestione attività → **Esegui nuova
-   attività** → `explorer.exe` → OK (riparte la shell nativa di Windows);
-3. con l'avvio automatico al logon attivo, il **task di recovery**
-   interviene da solo ~30 s dopo il logon
-   ([avvio-al-login.md](avvio-al-login.md#recovery-se-la-shell-privata-non-parte)).
+1. Press **`Ctrl+Alt+Shift+S`** → open the switcher → select a shell → **Switch** (works even without a shell; the resident instance runs independently of Explorer).
+2. Otherwise, press `Ctrl+Shift+Esc` → Task Manager → **Run new task** → enter `explorer.exe` → OK (restarts the native Windows shell).
+3. If automatic logon startup is enabled, the **recovery task** runs by itself about 30 seconds after logon ([avvio-al-login.md](avvio-al-login.md#recovery-if-the-private-shell-does-not-start)).
 
-### L'avvio automatico al logon non funziona
+### Automatic logon startup does not work
 
-Vedi [avvio-al-login.md](avvio-al-login.md). Primo strumento: il log
-`%TEMP%\7explorer-switcher.log`, che registra ogni fase (valore Shell
-scritto/ripristinato, link, task di recovery, switch verificati,
-`--recover-login`).
+See [avvio-al-login.md](avvio-al-login.md). The first diagnostic tool is `%TEMP%\7explorer-switcher.log`, which records every stage (the `Shell` value written/restored, shortcut, recovery task, verified switches, and `--recover-login`).
 
-### Menu/aprire file con caratteri errati (lingua)
+### Incorrect characters in menus or file names (language)
 
-La shell privata usa en-US (fallback) o it-IT a seconda della lingua del
-sistema. Lo switcher permette di forzare la lingua UI per gli avvii da
-esso gestiti (combo "Lingua UI di Windows 7 Explorer Restorer"); per l'avvio da logon vale
-la variabile d'ambiente `WIN7EXPLORERRESTORER_UI_LANG` utente (vedi
-[avvio-al-login.md](avvio-al-login.md#dettagli-tecnici-e-limiti-noti)).
+The private shell uses en-US (fallback) or it-IT, depending on the system language. The switcher can force the UI language for launches it manages (the **Windows 7 Explorer Restorer UI language** drop-down). For logon startup, use the per-user `WIN7EXPLORERRESTORER_UI_LANG` environment variable (see [avvio-al-login.md](avvio-al-login.md#technical-details-and-known-limitations)).
 
-### Mod Windhawk che non si carica
+### Windhawk mod does not load
 
-La shell privata ha una **guardia anti-iniezione**: i mod che hanno
-crashato l'avvio finiscono in quarantena (`InjectionQuarantine`) e i mod
-non fidati possono essere bloccati in safe mode o con policy ≥2. Nel log:
-`[Win7ExplorerRestorer] injection guard: ...`. Policy, allow-list e quarantena sono
-documentati in [opzioni.md](opzioni.md#guardia-anti-iniezione-windhawk).
+The private shell has an **injection guard**: mods that crashed during startup are quarantined (`InjectionQuarantine`), and untrusted mods may be blocked in safe mode or with policy ≥2. Check the log for `[Win7ExplorerRestorer] injection guard: ...`. Policies, the allow-list, and the quarantine are documented in [opzioni.md](opzioni.md#windhawk-injection-guard).

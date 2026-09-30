@@ -16,7 +16,7 @@ class StartOrbStaticTests(unittest.TestCase):
 
     def test_readme_contains_orb_section(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("Personalizzazione pulsante Start (orb)", readme)
+        self.assertIn("Start Button (Orb) Customization", readme)
         self.assertIn("OrbFile", readme)
         self.assertIn("OrbDirectory", readme)
         self.assertIn("Open-Shell", readme)

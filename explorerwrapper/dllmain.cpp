@@ -649,6 +649,118 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	return TRUE;
 }
 
+// Win11 24H2+ moved parts of the Win32 taskbar pinning path into
+// twinui.pcshell.dll. HookAPIs resolves this internal factory only when its
+// signature is present; retain the public COM path as the fallback.
+static HRESULT SafeCallTaskbandPinFactory(CTaskbandPin_W32PTP** taskbandPin)
+{
+	__try {
+		return CTaskbandPin_CreateInstance(taskbandPin);
+	}
+	__except (Win7ExplorerRestorer::SehFilter(L"CTaskbandPin_CreateInstance", GetExceptionInformation())) {
+		return E_UNEXPECTED;
+	}
+}
+
+static HRESULT SafeQueryPinnedList3(IUnknown* unknown, void** ppv)
+{
+	if (!unknown || !ppv) return E_POINTER;
+	*ppv = nullptr;
+	__try {
+		return unknown->QueryInterface(IID_IPinnedList3, ppv);
+	}
+	__except (Win7ExplorerRestorer::SehFilter(L"CTaskbandPin::QueryInterface", GetExceptionInformation())) {
+		return E_UNEXPECTED;
+	}
+}
+
+static void SafeReleasePinnedUnknown(IUnknown* unknown)
+{
+	if (!unknown) return;
+	__try {
+		unknown->Release();
+	}
+	__except (Win7ExplorerRestorer::SehFilter(L"CTaskbandPin::Release", GetExceptionInformation())) {
+	}
+}
+
+static HRESULT TryCreateWin11TaskbarPinList(void** ppv)
+{
+	if (!ppv) return E_POINTER;
+	*ppv = nullptr;
+	if (!CTaskbandPin_CreateInstance) return REGDB_E_CLASSNOTREG;
+
+	CTaskbandPin_W32PTP* taskbandPin = nullptr;
+	HRESULT hr = SafeCallTaskbandPinFactory(&taskbandPin);
+	IUnknown* unknown = reinterpret_cast<IUnknown*>(taskbandPin);
+	if (FAILED(hr) || !unknown) {
+		if (unknown) SafeReleasePinnedUnknown(unknown);
+		return FAILED(hr) ? hr : E_NOINTERFACE;
+	}
+
+	hr = SafeQueryPinnedList3(unknown, ppv);
+	SafeReleasePinnedUnknown(unknown);
+	if (FAILED(hr) || !*ppv) {
+		if (*ppv) {
+			SafeReleasePinnedUnknown(reinterpret_cast<IUnknown*>(*ppv));
+			*ppv = nullptr;
+		}
+		return FAILED(hr) ? hr : E_NOINTERFACE;
+	}
+	return hr;
+}
+
+static HRESULT CreatePinnedListCompatibilityObject(REFCLSID rclsid,
+	LPUNKNOWN pUnkOuter, DWORD dwClsContext, void** ppv)
+{
+	if (!ppv) return E_POINTER;
+	*ppv = nullptr;
+
+	const int build = (int)g_osVersion.BuildNumber();
+	const bool isTaskbarList = (rclsid == CLSID_TaskbarPin);
+	bool isLegacyInterface = false;
+	Win7ExplorerRestorer::ComPtr<IUnknown> native;
+
+	HRESULT hr = REGDB_E_CLASSNOTREG;
+
+	// On 24H2+ prefer the taskbar's own factory and IPinnedList3 even if the
+	// compatibility CLSID still exposes IPinnedList2. The older interface can
+	// activate successfully while missing the current Win32 taskbar pin path.
+	if (isTaskbarList && !pUnkOuter && build >= 26100 && CTaskbandPin_CreateInstance) {
+		hr = TryCreateWin11TaskbarPinList(native.PutVoid());
+		if (FAILED(hr) || !native) native.Reset();
+	}
+
+	if (!native) {
+		// Keep the native Win7/Win8 interface on older builds when available.
+		hr = CoCreateInstance(rclsid, pUnkOuter, dwClsContext,
+			IID_IPinnedList2, native.PutVoid());
+		if (SUCCEEDED(hr) && native) {
+			isLegacyInterface = true;
+		}
+		else {
+			native.Reset();
+			IID nativeIid = IID_IPinnedList25;
+			if (build >= 17763)
+				nativeIid = IID_IPinnedList3;
+			else if (build >= 14393)
+				nativeIid = IID_IFlexibleTaskbarPinnedList;
+
+			hr = CoCreateInstance(rclsid, pUnkOuter, dwClsContext,
+				nativeIid, native.PutVoid());
+		}
+	}
+
+	if (FAILED(hr) || !native)
+		return FAILED(hr) ? hr : E_NOINTERFACE;
+
+	CPinnedListWrapper* wrapper = new CPinnedListWrapper(
+		native.Get(), build, isTaskbarList, isLegacyInterface);
+	native.Detach(); // the adapter now owns the single native reference
+	*ppv = static_cast<IPinnedList2*>(wrapper);
+	return S_OK;
+}
+
 extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	__in   REFCLSID rclsid,
 	__in   LPUNKNOWN pUnkOuter,
@@ -657,6 +769,17 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 	__out  LPVOID* ppv
 )
 {
+	if (!ppv) return E_POINTER;
+
+	// The adapter implements the Win7 IPinnedList2 ABI. Do not return it for
+	// unrelated IIDs; callers asking for a newer interface must receive the
+	// native interface (or its native failure).
+	if ((rclsid == CLSID_StartMenuPin || rclsid == CLSID_TaskbarPin) &&
+		riid == IID_IPinnedList2) {
+		return CreatePinnedListCompatibilityObject(rclsid, pUnkOuter,
+			dwClsContext, ppv);
+	}
+
 	HRESULT result;
 	// 7explorer fork: Windows 8.1 SysTray (battery flyout) from the verified
 	// local cache, see LegacyBatteryFlyout.cpp. Falls back to the system object.
@@ -751,44 +874,6 @@ extern "C" HRESULT WINAPI Explorer_CoCreateInstance(
 				dbgprintf(L"Explorer_CoCreateInstance: Cache7 using IStartMenuItemsCache8/10 is OK!!\n");
 		}
 	}
-	if ((rclsid == CLSID_StartMenuPin || rclsid == CLSID_TaskbarPin) /* && riid == IID_IPinnedList2*/ && result != S_OK)
-	{
-		int build = g_osVersion.BuildNumber();
-		IID id = IID_IPinnedList25;
-
-		if (build >= 14393 && build < 17763)
-		{
-			id = IID_IFlexibleTaskbarPinnedList;
-		}
-		else if (build >= 17763)
-		{
-			id = IID_IPinnedList3;
-		}
-
-		//if (rclsid == CLSID_TaskbarPin && CTaskbandPin_CreateInstance && build >= 26100) // Windows 11...
-		//{
-		//	CTaskbandPin_W32PTP* pTaskbandPin;
-		//	result = CTaskbandPin_CreateInstance(&pTaskbandPin);
-		//	dbgprintf(L"CTaskbandPin_CreateInstance result: %p", result);
-		//	if (SUCCEEDED(result))
-		//	{
-		//		result = ((IUnknown*)pTaskbandPin)->QueryInterface(id, ppv);
-		//		dbgprintf(L"CTaskbandPin_CreateInstance result 2: %p", result);
-		//		((IUnknown*)pTaskbandPin)->Release();
-		//	}
-		//}
-		//else
-		{
-			result = CoCreateInstance(rclsid, pUnkOuter, dwClsContext, id, ppv);
-		}
-
-		if (SUCCEEDED(result))
-		{
-			*ppv = new CPinnedListWrapper((IUnknown*)*ppv, build);
-		}
-
-	}
-
 	if (riid == IID_AutoDestList && result != S_OK)
 	{
 		dbgprintf(L"USE 10 AUTODESTLIST!!!!\n");

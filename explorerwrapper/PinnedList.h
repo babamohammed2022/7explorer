@@ -157,7 +157,8 @@ IPinManagerInterop2 : IPinManagerInterop
 class CPinnedListWrapper : public IPinnedList2
 {
 public:
-	CPinnedListWrapper(IUnknown*, int);
+	// Takes ownership of the reference returned by CoCreateInstance/QueryInterface.
+	CPinnedListWrapper(IUnknown*, int, bool isTaskbarList, bool isLegacyInterface);
 	~CPinnedListWrapper();
 
 	//IUnknown
@@ -178,10 +179,11 @@ public:
 	STDMETHODIMP ItemChangeNotify(PCIDLIST_ABSOLUTE, PCIDLIST_ABSOLUTE);
 	STDMETHODIMP UpdateForRemovedItemsAsNecessary(VOID);
 private:
-	IFlexibleTaskbarPinnedList* m_flexList = 0;
-	IPinnedList3* m_pinnedList3 = 0;
-	IPinnedList25* m_pinnedList25 = 0;
-	IPinManagerInterop* m_pinManager;
-
-	int m_build = 0;
+	IUnknown* m_native;
+	IPinnedList2* m_pinnedList2;
+	IFlexibleTaskbarPinnedList* m_flexList;
+	IPinnedList3* m_pinnedList3;
+	IPinnedList25* m_pinnedList25;
+	volatile LONG m_cRef;
+	bool m_isTaskbarList;
 };
