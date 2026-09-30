@@ -51,6 +51,84 @@ private:
 	ScopedGdiObject& operator=(const ScopedGdiObject&) = delete;
 };
 
+// RAII owner for device contexts (compatible DCs and window DCs).
+class ScopedDC {
+public:
+	explicit ScopedDC(HDC hdc = nullptr, HWND hwnd = nullptr) : m_hdc(hdc), m_hwnd(hwnd), m_isCompatible(false) {}
+	static ScopedDC CreateCompatible(HDC hdcRef = nullptr) {
+		ScopedDC s(CreateCompatibleDC(hdcRef));
+		s.m_isCompatible = true;
+		return s;
+	}
+	~ScopedDC() { Reset(); }
+	HDC Get() const { return m_hdc; }
+	void Reset(HDC hdc = nullptr) {
+		if (m_hdc) {
+			if (m_isCompatible) DeleteDC(m_hdc);
+			else ReleaseDC(m_hwnd, m_hdc);
+			m_hdc = nullptr;
+		}
+		m_hdc = hdc;
+	}
+private:
+	HDC m_hdc;
+	HWND m_hwnd;
+	bool m_isCompatible;
+	ScopedDC(const ScopedDC&) = delete;
+	ScopedDC& operator=(const ScopedDC&) = delete;
+};
+
+// Structure representing the 3 standard button states (idle/normal, hover/hot, pressed)
+// inspired by Open-Shell / Classic Shell start button architecture.
+enum StartOrbState {
+	ORB_STATE_NORMAL  = 0, // Idle / normal state
+	ORB_STATE_HOT     = 1, // Hover / mouse over state
+	ORB_STATE_PRESSED = 2, // Pressed / Start menu open state
+	ORB_STATE_COUNT   = 3
+};
+
+struct StartOrbMetrics {
+	LONG frameWidth;
+	LONG frameHeight;
+	LONG totalHeight;
+	bool isThreeState;
+};
+
+// Calculates frame metrics for the start orb strip (idle, hover, pressed).
+// In Open-Shell / Windows 7 Explorer, orbs are structured vertically with 3 frames:
+// Frame 0: Idle/Normal, Frame 1: Hover/Hot, Frame 2: Pressed.
+inline bool CalculateOrbMetrics(LONG width, LONG height, StartOrbMetrics* outMetrics)
+{
+	if (!outMetrics || width < 1 || height < 1)
+		return false;
+
+	if (height >= width * 3)
+	{
+		// 3-state vertical strip (Normal, Hot, Pressed)
+		outMetrics->frameWidth = width;
+		outMetrics->frameHeight = height / 3;
+		outMetrics->totalHeight = height;
+		outMetrics->isThreeState = true;
+	}
+	else if (width >= height * 3)
+	{
+		// Horizontal 3-state strip
+		outMetrics->frameWidth = width / 3;
+		outMetrics->frameHeight = height;
+		outMetrics->totalHeight = height * 3;
+		outMetrics->isThreeState = true;
+	}
+	else
+	{
+		// Single frame: replicate into 3 states (Normal = Hot = Pressed)
+		outMetrics->frameWidth = width;
+		outMetrics->frameHeight = height;
+		outMetrics->totalHeight = height * 3;
+		outMetrics->isThreeState = false;
+	}
+	return true;
+}
+
 // Reads a REG_SZ value from Explorer\Advanced (HKCU, then HKLM). Always
 // NUL-terminated on success; returns false if missing, empty or not REG_SZ.
 inline bool ReadOrbRegString(const WCHAR* name, WCHAR* buf, DWORD cch)
@@ -293,12 +371,105 @@ inline HBITMAP LoadOrbPngWithWic(const WCHAR* path)
 	return hBitmap;
 }
 
-// High-level loader dispatching between WIC (for PNG) and standard GDI LoadImageW (for BMP).
+// Ensures that the loaded bitmap conforms to the Open-Shell 3-state vertical strip
+// (ORB_STATE_NORMAL, ORB_STATE_HOT, ORB_STATE_PRESSED).
+// If the image is a single frame or horizontal strip, it normalizes it into a vertical 3-state bitmap.
+inline HBITMAP EnsureThreeStateOrb(HBITMAP hSrcBmp)
+{
+	if (!hSrcBmp) return nullptr;
+
+	BITMAP bm;
+	ZeroMemory(&bm, sizeof(bm));
+	if (GetObjectW(hSrcBmp, sizeof(bm), &bm) != (int)sizeof(bm))
+		return hSrcBmp;
+
+	StartOrbMetrics metrics;
+	if (!CalculateOrbMetrics(bm.bmWidth, bm.bmHeight, &metrics))
+		return hSrcBmp;
+
+	// If it is already a 3-state vertical strip, return as-is
+	if (metrics.isThreeState && bm.bmHeight >= bm.bmWidth * 3)
+		return hSrcBmp;
+
+	// Normalize into 3-state vertical strip: Frame 0 (Normal), Frame 1 (Hot), Frame 2 (Pressed)
+	HDC hdcScreen = GetDC(nullptr);
+	if (!hdcScreen) return hSrcBmp;
+
+	HDC hdcSrc = CreateCompatibleDC(hdcScreen);
+	HDC hdcDst = CreateCompatibleDC(hdcScreen);
+	if (!hdcSrc || !hdcDst)
+	{
+		if (hdcSrc) DeleteDC(hdcSrc);
+		if (hdcDst) DeleteDC(hdcDst);
+		ReleaseDC(nullptr, hdcScreen);
+		return hSrcBmp;
+	}
+
+	BITMAPINFO bi;
+	ZeroMemory(&bi, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = metrics.frameWidth;
+	bi.bmiHeader.biHeight = -metrics.totalHeight; // Top-down DIB
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void* pDstBits = nullptr;
+	HBITMAP hDstBmp = CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &pDstBits, nullptr, 0);
+	if (!hDstBmp)
+	{
+		DeleteDC(hdcSrc);
+		DeleteDC(hdcDst);
+		ReleaseDC(nullptr, hdcScreen);
+		return hSrcBmp;
+	}
+
+	HGDIOBJ oldSrc = SelectObject(hdcSrc, hSrcBmp);
+	HGDIOBJ oldDst = SelectObject(hdcDst, hDstBmp);
+
+	if (!metrics.isThreeState)
+	{
+		// Single frame -> replicate to Normal (frame 0), Hot (frame 1), Pressed (frame 2)
+		for (int state = 0; state < ORB_STATE_COUNT; ++state)
+		{
+			BitBlt(hdcDst, 0, state * metrics.frameHeight, metrics.frameWidth, metrics.frameHeight,
+			       hdcSrc, 0, 0, SRCCOPY);
+		}
+	}
+	else
+	{
+		// Horizontal 3-frame strip -> copy each horizontal frame to vertical slot
+		for (int state = 0; state < ORB_STATE_COUNT; ++state)
+		{
+			BitBlt(hdcDst, 0, state * metrics.frameHeight, metrics.frameWidth, metrics.frameHeight,
+			       hdcSrc, state * metrics.frameWidth, 0, SRCCOPY);
+		}
+	}
+
+	SelectObject(hdcSrc, oldSrc);
+	SelectObject(hdcDst, oldDst);
+	DeleteDC(hdcSrc);
+	DeleteDC(hdcDst);
+	ReleaseDC(nullptr, hdcScreen);
+
+	DeleteObject(hSrcBmp);
+	return hDstBmp;
+}
+
+// High-level loader dispatching between WIC (for PNG) and standard GDI LoadImageW (for BMP),
+// with Open-Shell style 3-state frame normalization (Normal, Hot, Pressed).
 inline HBITMAP LoadOrbImageFromFile(const WCHAR* path, UINT fuLoad)
 {
+	HBITMAP hBmp = nullptr;
 	if (OrbIsPng(path))
-		return LoadOrbPngWithWic(path);
-	return LoadOrbBitmapFromFile(path, fuLoad);
+		hBmp = LoadOrbPngWithWic(path);
+	else
+		hBmp = LoadOrbBitmapFromFile(path, fuLoad);
+
+	if (hBmp)
+		hBmp = EnsureThreeStateOrb(hBmp);
+
+	return hBmp;
 }
 
 // SEH-guarded unit of work. Plain struct + plain function: the __try lives in
