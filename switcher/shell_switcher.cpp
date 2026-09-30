@@ -2662,6 +2662,9 @@ static void ShellLangSave(int sel) {
 }
 
 // ---------------------------------------------------------- start orb ----
+// Start button ("orb") customization feature.
+// NOTA: Questa funzionalità nella UI è attualmente incompleta e verrà completata
+// e abilitata in futuro. Il pulsante è temporaneamente nascosto dall'interfaccia.
 // Lets the user pick a custom Start button ("orb") image (.bmp or .png)
 // and stores the path in HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\OrbFile.
 // Uses RAII for registry keys and comprehensive try/catch with smart fallback.
@@ -3188,9 +3191,11 @@ static void BuildMainPanel(HWND hwnd) {
         SendMessageW(cbo, CB_SETCURSEL, ShellLangLoad(), 0);
     }
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_THEME), BS_PUSHBUTTON | tab,
-              Dpx(256), Dpx(217), Dpx(100), Dpx(24), IDC_BTN_THEME);
-    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_ORB), BS_PUSHBUTTON | tab,
-              Dpx(360), Dpx(217), Dpx(104), Dpx(24), IDC_BTN_ORB);
+              Dpx(318), Dpx(217), Dpx(146), Dpx(24), IDC_BTN_THEME);
+    // NOTA: La personalizzazione dell'orb dal pannello switcher è attualmente incompleta
+    // e verrà completata e integrata nella UI in futuro. Il relativo pulsante è quindi temporaneamente nascosto.
+    // MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_ORB), BS_PUSHBUTTON | tab,
+    //           Dpx(360), Dpx(217), Dpx(104), Dpx(24), IDC_BTN_ORB);
     g_panelDst = NULL;
     g_panelCnt = NULL;
 }
