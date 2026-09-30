@@ -99,3 +99,5 @@ inline bool SafeInvokeCtx(const wchar_t* where, void (*fn)(Ctx*), Ctx* ctx)
 }
 
 } // namespace Win7ExplorerRestorer
+
+namespace ex7 = Win7ExplorerRestorer;

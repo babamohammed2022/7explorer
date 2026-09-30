@@ -40,6 +40,7 @@
 #include "MinhookImports.h"
 #include "TypeDefinitions.h"
 #include "SafeGuards.h"
+#include "StartOrb.h"
 #include "ShellFixes.h"
 #include "LegacyBatteryFlyout.h"
 
@@ -232,36 +233,19 @@ void GetOrbDPIAndPos(LPWSTR fName)
 
 HANDLE __stdcall LoadImageW_CallHook(HINSTANCE hInst, LPCWSTR name, UINT type, int cx, int cy, UINT fuLoad)
 {
-	dbgprintf(L"LoadImageW_CallHook has been called!");
-
-	WCHAR szExeDir[MAX_PATH];
-	GetModuleFileNameW(NULL, szExeDir, MAX_PATH);
-	WCHAR* backslash = StrRChrW(szExeDir, NULL, L'\\');
-	if (*backslash == L'\\')
-		*backslash = L'\0';
-
-	WCHAR szOrbDir[MAX_PATH];
-	LSTATUS res = g_registry.QueryValue(L"OrbDirectory", (LPBYTE)szOrbDir, sizeof(szOrbDir));
-
-	if (!*szOrbDir || ERROR_SUCCESS != res)
-		return LoadImageW(hInst, name, type, cx, cy, fuLoad);
-
-	WCHAR szOrbFile[MAX_PATH];
-	GetOrbDPIAndPos(szOrbFile);
-
-	WCHAR szOrbPath[MAX_PATH * 3];
-	wsprintfW(
-		szOrbPath,
-		L"%s\\orbs\\%s\\%s.bmp",
-		szExeDir,
-		szOrbDir,
-		szOrbFile
-	);
-
-	if (FileExists(szOrbPath) == FALSE)
-		return LoadImageW(hInst, name, type, cx, cy, fuLoad);
-	else
-		return LoadImageW(NULL, szOrbPath, IMAGE_BITMAP, 0, 0, fuLoad | LR_LOADFROMFILE);
+	// 7explorer fork: Start button image = OrbFile > OrbDirectory > built-in.
+	// See StartOrb.h. Any failure (missing/invalid file, SEH) falls through to
+	// the original LoadImageW, so explorer always gets a valid Start button.
+	if (type == IMAGE_BITMAP)
+	{
+		ex7::OrbRequest req;
+		req.fuLoad = fuLoad;
+		req.getPresetFileName = GetOrbDPIAndPos;
+		req.result = nullptr;
+		if (ex7::SafeInvokeCtx(L"LoadImageW_CallHook", ex7::OrbWork, &req) && req.result)
+			return req.result;
+	}
+	return LoadImageW(hInst, name, type, cx, cy, fuLoad);
 }
 
 void HookLoadImageForSizeAndFont()

@@ -15,6 +15,18 @@ Windows 7 Explorer Restorer has been tested on:
 
 It is intended to work on both Windows 10 and Windows 11, although not every feature of the original Windows 7 shell can be guaranteed on every version.
 
+## Personalizzazione pulsante Start (orb)
+
+Windows 7 Explorer Restorer permette di personalizzare l'immagine del pulsante Start (orb) della taskbar tramite il registro di sistema (`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`, con fallback su `HKLM`):
+
+1. **`OrbFile`** (REG_SZ): percorso di un file `.bmp` personalizzato locale (assoluto, ad esempio `C:\orbs\start.bmp`, oppure relativo alla cartella di `explorer.exe`).
+2. **`OrbDirectory`** (REG_SZ): nome di una cartella di preset in `<exedir>\orbs\<nome>\` contenente bitmap dedicate per DPI e posizione della taskbar (`6801.bmp` .. `6812.bmp`).
+3. **Immagine integrata**: fallback finale incorporato in `explorer.exe`, utilizzato se `OrbFile` o `OrbDirectory` non sono configurati, non esistono o contengono file non validi.
+
+L'ordine di precedenza applicato è **`OrbFile` > `OrbDirectory` > immagine integrata**. In caso di errore durante la lettura o il caricamento della bitmap, il wrapper ricorre in modo sicuro al livello successivo senza causare blocchi o crash all'avvio di Explorer.
+
+*Ispirato a Open-Shell (MIT), che ha reso popolare la sostituzione del pulsante Start con immagini scelte dall'utente. Nessun codice di Open-Shell è incluso.*
+
 ## Emergency Shell Switcher
 
 Since Explorer is responsible for the Windows shell, an incompatible configuration could potentially leave the desktop without a normal shell.

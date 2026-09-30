@@ -209,6 +209,7 @@
     <ClInclude Include="ImmersiveFactory.h" />
     <ClInclude Include="ImmersiveShell.h" />
     <ClInclude Include="SafeGuards.h" />
+    <ClInclude Include="StartOrb.h" />
     <ClInclude Include="ShellFixes.h" />
     <ClInclude Include="LegacyBatteryFlyout.h" />
     <ClInclude Include="NetworkIcon.h" />
