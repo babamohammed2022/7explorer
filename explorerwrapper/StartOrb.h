@@ -25,7 +25,6 @@
 #include "SafeGuards.h"
 #include "RegistryManager.h"
 #include <wincodec.h>
-#include <strsafe.h>
 #include <shlwapi.h>
 
 #pragma comment(lib, "windowscodecs.lib")
@@ -156,14 +155,14 @@ inline bool ResolveOrbPath(WCHAR* out /* >= MAX_PATH */, void (*getPresetFileNam
 
 		// Check .bmp first, then .png for presets
 		WCHAR full[MAX_PATH * 3];
-		if (SUCCEEDED(StringCchPrintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.bmp", exeDir, preset, file)) &&
+		if ((wnsprintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.bmp", exeDir, preset, file) > 0)&&
 			lstrlenW(full) < MAX_PATH && OrbIsRegularFile(full))
 		{
 			StringCchCopyW(out, MAX_PATH, full);
 			return true;
 		}
 
-		if (SUCCEEDED(StringCchPrintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.png", exeDir, preset, file)) &&
+		if ((wnsprintfW(full, ARRAYSIZE(full), L"%s\\orbs\\%s\\%s.png", exeDir, preset, file) > 0)&&
 			lstrlenW(full) < MAX_PATH && OrbIsRegularFile(full))
 		{
 			StringCchCopyW(out, MAX_PATH, full);
