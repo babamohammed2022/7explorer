@@ -42,5 +42,11 @@ class StartOrbStaticTests(unittest.TestCase):
         self.assertIn("Win7ExplorerRestorer::SafeInvokeCtx", dllmain)
         self.assertNotIn("ex7::SafeInvokeCtx", dllmain)
 
+    def test_switcher_contains_start_orb_button(self):
+        switcher = (ROOT / "switcher" / "shell_switcher.cpp").read_text(encoding="utf-8")
+        self.assertIn("IDC_BTN_ORB", switcher)
+        self.assertIn("InstallStartOrb", switcher)
+        self.assertIn("OrbFile", switcher)
+
 if __name__ == "__main__":
     unittest.main()

@@ -126,6 +126,8 @@ typedef enum {
     // Shell-language combo entries, appended (test40).
     TR_CBO_DE, TR_CBO_ES, TR_CBO_FR, TR_CBO_JA,
     TR_CBO_PL, TR_CBO_PTBR, TR_CBO_RU, TR_CBO_ZHCN,
+    // Start button / orb customization
+    TR_BTN_ORB, TR_ORB_TITLE, TR_ORB_FILTER, TR_ORB_OK_FMT, TR_ORB_ERR_FMT,
     TR_COUNT
 } TRID;
 static const WCHAR* TR_EN[] = {
@@ -224,6 +226,11 @@ static const WCHAR* TR_EN[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Start button\u2026",
+    L"Select Start button image (.bmp, .png)",
+    L"Start button images (*.bmp;*.png)\0*.bmp;*.png\0All files\0*.*\0",
+    L"Start button image set to:\r\n%s\r\n\r\nSwitch shell or restart Explorer to apply it.",
+    L"Could not set Start button image (error %lu):\r\n%s"
 };
 static const WCHAR* TR_IT[] = {
     L"Scambia al volo la shell Explorer attiva. Nessun logout richiesto.",
@@ -322,6 +329,11 @@ static const WCHAR* TR_IT[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Pulsante Start\u2026",
+    L"Seleziona immagine del pulsante Start (.bmp, .png)",
+    L"Immagini pulsante Start (*.bmp;*.png)\0*.bmp;*.png\0Tutti i file\0*.*\0",
+    L"Immagine del pulsante Start impostata su:\r\n%s\r\n\r\nCambia shell o riavvia Explorer per applicarla.",
+    L"Impossibile impostare l'immagine del pulsante Start (errore %lu):\r\n%s"
 };
 static const WCHAR* TR_DE[] = {
     L"Wechselt die laufende Explorer-Shell zur Laufzeit. Keine Abmeldung n\u00f6tig.",
@@ -438,6 +450,11 @@ static const WCHAR* TR_DE[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Start-Button\u2026",
+    L"Start-Button-Bild ausw\u00e4hlen (.bmp, .png)",
+    L"Start-Button-Bilder (*.bmp;*.png)\0*.bmp;*.png\0Alle Dateien\0*.*\0",
+    L"Start-Button-Bild festgelegt auf:\r\n%s\r\n\r\nShell wechseln oder Explorer neu starten, um es zu \u00fcbernehmen.",
+    L"Start-Button-Bild konnte nicht festgelegt werden (Fehler %lu):\r\n%s"
 };
 static const WCHAR* TR_ES[] = {
     L"Cambia la shell de Explorer en ejecuci\u00f3n al momento. No hace falta cerrar "
@@ -549,6 +566,11 @@ static const WCHAR* TR_ES[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Bot\u00f3n Inicio\u2026",
+    L"Seleccionar imagen del bot\u00f3n Inicio (.bmp, .png)",
+    L"Im\u00e1genes del bot\u00f3n Inicio (*.bmp;*.png)\0*.bmp;*.png\0Todos los archivos\0*.*\0",
+    L"Imagen del bot\u00f3n Inicio establecida en:\r\n%s\r\n\r\nCambia de shell o reinicia Explorer para aplicarla.",
+    L"No se pudo establecer la imagen del bot\u00f3n Inicio (error %lu):\r\n%s"
 };
 static const WCHAR* TR_FR[] = {
     L"Bascule \u00e0 chaud la shell Explorer active. Aucune d\u00e9connexion requise.",
@@ -663,6 +685,11 @@ static const WCHAR* TR_FR[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Bouton D\u00e9marrer\u2026",
+    L"S\u00e9lectionner l'image du bouton D\u00e9marrer (.bmp, .png)",
+    L"Images du bouton D\u00e9marrer (*.bmp;*.png)\0*.bmp;*.png\0Tous les fichiers\0*.*\0",
+    L"Image du bouton D\u00e9marrer d\u00e9finie sur :\r\n%s\r\n\r\nBasculez de shell ou red\u00e9marrez Explorer pour l'appliquer.",
+    L"Impossible de d\u00e9finir l'image du bouton D\u00e9marrer (erreur %lu) :\r\n%s"
 };
 static const WCHAR* TR_JA[] = {
     L"\u5b9f\u884c\u4e2d\u306e Explorer \u30b7\u30a7\u30eb\u3092\u5373\u6642\u306b\u5207\u308a\u66ff\u3048\u307e\u3059\u3002\u30ed\u30b0\u30aa\u30d5\u306f\u4e0d\u8981\u3067\u3059\u3002",
@@ -754,6 +781,11 @@ static const WCHAR* TR_JA[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"スタート ボタン\u2026",
+    L"スタート ボタン画像を選択 (.bmp, .png)",
+    L"スタート ボタン画像 (*.bmp;*.png)\0*.bmp;*.png\0すべてのファイル\0*.*\0",
+    L"スタート ボタン画像を設定しました:\r\n%s\r\n\r\nシェルを切り替えるかエクスプローラーを再起動して適用してください。",
+    L"スタート ボタン画像を設定できませんでした (エラー %lu):\r\n%s"
 };
 static const WCHAR* TR_PL[] = {
     L"Prze\u0142\u0105cza dzia\u0142aj\u0105c\u0105 pow\u0142ok\u0119 Eksploratora w locie. Wylogowanie nie jest "
@@ -870,6 +902,11 @@ static const WCHAR* TR_PL[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Przycisk Start\u2026",
+    L"Wybierz obraz przycisku Start (.bmp, .png)",
+    L"Obrazy przycisku Start (*.bmp;*.png)\0*.bmp;*.png\0Wszystkie pliki\0*.*\0",
+    L"Obraz przycisku Start ustawiony na:\r\n%s\r\n\r\nPrze\u0142\u0105cz pow\u0142ok\u0119 lub uruchom ponownie Eksplorator, aby zastosowa\u0107.",
+    L"Nie mo\u017cna ustawi\u0107 obrazu przycisku Start (b\u0142\u0105d %lu):\r\n%s"
 };
 static const WCHAR* TR_PTBR[] = {
     L"Alterna a shell do Explorer em execu\u00e7\u00e3o imediatamente. N\u00e3o \u00e9 preciso sair.",
@@ -979,6 +1016,11 @@ static const WCHAR* TR_PTBR[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Bot\u00e3o Iniciar\u2026",
+    L"Selecionar imagem do bot\u00e3o Iniciar (.bmp, .png)",
+    L"Imagens do bot\u00e3o Iniciar (*.bmp;*.png)\0*.bmp;*.png\0Todos os arquivos\0*.*\0",
+    L"Imagem do bot\u00e3o Iniciar definida para:\r\n%s\r\n\r\nAlterne o shell ou reinicie o Explorer para aplicar.",
+    L"N\u00e3o foi poss\u00edvel definir a imagem do bot\u00e3o Iniciar (erro %lu):\r\n%s"
 };
 static const WCHAR* TR_RU[] = {
     L"\u041f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0435\u0442 \u0440\u0430\u0431\u043e\u0442\u0430\u044e\u0449\u0443\u044e \u043e\u0431\u043e\u043b\u043e\u0447\u043a\u0443 Explorer \u043d\u0430 \u043b\u0435\u0442\u0443. \u0412\u044b\u0445\u043e\u0434 \u0438\u0437 \u0441\u0438\u0441\u0442\u0435\u043c\u044b \u043d\u0435 "
@@ -1090,6 +1132,11 @@ static const WCHAR* TR_RU[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"Кнопка Пуск\u2026",
+    L"Выбрать изображение кнопки Пуск (.bmp, .png)",
+    L"Изображения кнопки Пуск (*.bmp;*.png)\0*.bmp;*.png\0Все файлы\0*.*\0",
+    L"Изображение кнопки Пуск установлено на:\r\n%s\r\n\r\nПереключите оболочку или перезапустите Проводник для применения.",
+    L"Не удалось установить изображение кнопки Пуск (ошибка %lu):\r\n%s"
 };
 static const WCHAR* TR_ZHCN[] = {
     L"\u5373\u65f6\u5207\u6362\u6b63\u5728\u8fd0\u884c\u7684 Explorer \u5916\u58f3\u3002\u65e0\u9700\u6ce8\u9500\u3002",
@@ -1176,6 +1223,11 @@ static const WCHAR* TR_ZHCN[] = {
     L"Portugu\u00eas (BR)",
     L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
     L"\u4e2d\u6587(\u7b80\u4f53)",
+    L"开始按钮\u2026",
+    L"选择开始按钮图像 (.bmp, .png)",
+    L"开始按钮图像 (*.bmp;*.png)\0*.bmp;*.png\0所有文件\0*.*\0",
+    L"开始按钮图像已设置为:\r\n%s\r\n\r\n请切换外壳或重启资源管理器以应用。",
+    L"无法设置开始按钮图像 (错误 %lu):\r\n%s"
 };
 static const WCHAR** TR_TABLES[UI_LANG_COUNT] = {
     TR_EN, TR_IT, TR_DE, TR_ES, TR_FR, TR_JA, TR_PL, TR_PTBR, TR_RU, TR_ZHCN
@@ -1280,6 +1332,7 @@ private:
 #define IDC_CHK_LOGIN     204
 #define IDC_CBO_SHLANG    205
 #define IDC_BTN_THEME     206
+#define IDC_BTN_ORB       210
 #define IDC_ST_NATPATH    301
 #define IDC_ST_WIN7EXPLORERRESTORERPATH    302
 #define IDC_ST_CURRENT    303
@@ -2396,6 +2449,68 @@ static void InstallTheme(HWND hwnd) {
                 MB_OK | (ok ? MB_ICONINFORMATION : MB_ICONERROR));
 }
 
+
+// ---------------------------------------------------------- start orb ----
+// Lets the user pick a custom Start button ("orb") image (.bmp or .png)
+// and stores the path in HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\OrbFile.
+// Uses RAII for registry keys and comprehensive try/catch with smart fallback.
+static void InstallStartOrb(HWND hwnd) {
+    try {
+        WCHAR src[MAX_PATH * 2] = { 0 };
+        OPENFILENAMEW ofn;
+        ZeroMemory(&ofn, sizeof(ofn));
+        ofn.lStructSize = sizeof(ofn);
+        ofn.hwndOwner = hwnd;
+        ofn.lpstrFile = src;
+        ofn.nMaxFile = (DWORD)_countof(src);
+        ofn.lpstrFilter = TR(TR_ORB_FILTER);
+        ofn.lpstrTitle = TR(TR_ORB_TITLE);
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_PATHMUSTEXIST;
+        if (!GetOpenFileNameW(&ofn))
+            return;
+
+        // Smart fallback / validation: must be a local file with .bmp or .png extension
+        if (src[0] == L'\\' && src[1] == L'\\') {
+            MessageBoxW(hwnd, L"UNC / network paths are not allowed for Start orb.", L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        const WCHAR* ext = wcsrchr(src, L'.');
+        if (!ext || (_wcsicmp(ext, L".bmp") != 0 && _wcsicmp(ext, L".png") != 0)) {
+            MessageBoxW(hwnd, L"Please select a valid .bmp or .png image.", L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        // RAII registry write
+        RegKeyGuard reg;
+        const WCHAR* kAdvKey = L"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+        LSTATUS st = RegCreateKeyExW(HKEY_CURRENT_USER, kAdvKey, 0, NULL, 0,
+                                     KEY_SET_VALUE | KEY_QUERY_VALUE, NULL, reg.Put(), NULL);
+        if (st != ERROR_SUCCESS) {
+            WCHAR msg[1400];
+            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_ERR_FMT), (unsigned long)st, src);
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        DWORD cbData = (DWORD)((wcslen(src) + 1) * sizeof(WCHAR));
+        st = RegSetValueExW(reg.h, L"OrbFile", 0, REG_SZ, (const BYTE*)src, cbData);
+        if (st == ERROR_SUCCESS) {
+            WCHAR msg[1400];
+            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_OK_FMT), src);
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONINFORMATION);
+        } else {
+            WCHAR msg[1400];
+            _snwprintf_s(msg, _countof(msg), _TRUNCATE, TR(TR_ORB_ERR_FMT), (unsigned long)st, src);
+            MessageBoxW(hwnd, msg, L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+        }
+    } catch (...) {
+        // Smart fallback: handle any unexpected C++ exception gracefully
+        MessageBoxW(hwnd, L"An unexpected error occurred while configuring the Start orb.",
+                    L"7explorer Shell Switcher", MB_OK | MB_ICONERROR);
+    }
+}
+
 // ------------------------------------------------------------- browse ---
 
 static void BrowseForWin7ExplorerRestorer(HWND hwnd) {
@@ -2506,7 +2621,7 @@ static void DestroyUiFonts(void) {
 // ---- view state + control panels ----------------------------------------
 static HWND g_setupCtrls[8];
 static int g_nSetup = 0;
-static HWND g_mainCtrls[20];
+static HWND g_mainCtrls[24];
 static int g_nMain = 0;
 static HWND* g_panelDst = NULL;  // append target for MakeChild (or NULL)
 static int* g_panelCnt = NULL;
@@ -3072,7 +3187,9 @@ static void BuildMainPanel(HWND hwnd) {
         SendMessageW(cbo, CB_SETCURSEL, ShellLangLoad(), 0);
     }
     MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_THEME), BS_PUSHBUTTON | tab,
-              Dpx(318), Dpx(217), Dpx(146), Dpx(24), IDC_BTN_THEME);
+              Dpx(256), Dpx(217), Dpx(100), Dpx(24), IDC_BTN_THEME);
+    MakeChild(hwnd, WC_BUTTONW, TR(TR_BTN_ORB), BS_PUSHBUTTON | tab,
+              Dpx(360), Dpx(217), Dpx(104), Dpx(24), IDC_BTN_ORB);
     g_panelDst = NULL;
     g_panelCnt = NULL;
 }
@@ -3207,6 +3324,11 @@ static LRESULT CALLBACK WndProcBody(HWND hwnd, UINT msg, WPARAM wParam,
         case IDC_BTN_THEME:
             if (HIWORD(wParam) == BN_CLICKED)
                 InstallTheme(hwnd);
+            return 0;
+
+        case IDC_BTN_ORB:
+            if (HIWORD(wParam) == BN_CLICKED)
+                InstallStartOrb(hwnd);
             return 0;
 
         case IDC_CBO_SHLANG:
