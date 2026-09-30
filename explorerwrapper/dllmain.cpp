@@ -43,7 +43,6 @@
 #include "StartOrb.h"
 #include "ShellFixes.h"
 #include "LegacyBatteryFlyout.h"
-#include <new>
 
 LRESULT CALLBACK NewTrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -755,11 +754,8 @@ static HRESULT CreatePinnedListCompatibilityObject(REFCLSID rclsid,
 	if (FAILED(hr) || !native)
 		return FAILED(hr) ? hr : E_NOINTERFACE;
 
-	CPinnedListWrapper* wrapper = new (std::nothrow) CPinnedListWrapper(
+	CPinnedListWrapper* wrapper = new CPinnedListWrapper(
 		native.Get(), build, isTaskbarList, isLegacyInterface);
-	if (!wrapper)
-		return E_OUTOFMEMORY; // native's reference is released by ComPtr
-
 	native.Detach(); // the adapter now owns the single native reference
 	*ppv = static_cast<IPinnedList2*>(wrapper);
 	return S_OK;

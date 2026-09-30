@@ -7,7 +7,6 @@
 #include "MinHook.h"
 #include "KnownFolders.h"
 #include "RegistryManager.h"
-#include <new>
 
 typedef PVOID (WINAPI *ResolveDelayLoadedAPIAPI)(PVOID ParentModuleBase, PVOID DelayloadDescriptor, PVOID FailureDllHook, PVOID FailureSystemHook,PIMAGE_THUNK_DATA ThunkAddress,ULONG Flags);
 static ResolveDelayLoadedAPIAPI ResolveDelayLoadedAPI;
@@ -344,10 +343,9 @@ HRESULT WINAPI Shell32_CoCreateInstance(
 	{
 		// The adapter implements IAutoPlayUI only; leave other requested IIDs
 		// untouched rather than treating an arbitrary COM interface as it.
-		CAutoPlayWrapper* wrapper = new (std::nothrow)
-			CAutoPlayWrapper(static_cast<IAutoPlayUI*>(*ppv));
-		if (wrapper)
-			*ppv = static_cast<IAutoPlayUI*>(wrapper);
+		CAutoPlayWrapper* wrapper = new CAutoPlayWrapper(
+			static_cast<IAutoPlayUI*>(*ppv));
+		*ppv = static_cast<IAutoPlayUI*>(wrapper);
 	}
 
 	return result;
