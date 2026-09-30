@@ -21,6 +21,18 @@ static HRESULT SafePinnedCall(const wchar_t* where, Interface* object,
 	}
 }
 
+static HRESULT SafePinnedQueryInterface(IUnknown* object, REFIID riid, void** ppv)
+{
+	if (!object || !ppv) return E_POINTER;
+	*ppv = nullptr;
+	__try {
+		return object->QueryInterface(riid, ppv);
+	}
+	__except (Win7ExplorerRestorer::SehFilter(L"PinnedList::QueryInterface", GetExceptionInformation())) {
+		return E_UNEXPECTED;
+	}
+}
+
 static ULONG SafePinnedRelease(IUnknown* object, const wchar_t* where)
 {
 	if (!object) return 0;
@@ -114,8 +126,7 @@ HRESULT __stdcall CPinnedListWrapper::QueryInterface(REFIID riid, void** ppvObje
 		AddRef();
 		return S_OK;
 	}
-	return SafePinnedCall(L"PinnedList::QueryInterface", m_native,
-		&IUnknown::QueryInterface, riid, ppvObject);
+	return SafePinnedQueryInterface(m_native, riid, ppvObject);
 }
 
 ULONG __stdcall CPinnedListWrapper::AddRef(void)

@@ -54,6 +54,18 @@ static HRESULT SafeAutoPlayCall(const wchar_t* where, Interface* object,
 	}
 }
 
+static HRESULT SafeAutoPlayQueryInterface(IAutoPlayUI* object, REFIID riid, void** ppv)
+{
+	if (!object || !ppv) return E_POINTER;
+	*ppv = nullptr;
+	__try {
+		return object->QueryInterface(riid, ppv);
+	}
+	__except (Win7ExplorerRestorer::SehFilter(L"AutoPlay::QueryInterface", GetExceptionInformation())) {
+		return E_UNEXPECTED;
+	}
+}
+
 static ULONG SafeAutoPlayRelease(IUnknown* object)
 {
 	if (!object) return 0;
@@ -385,8 +397,7 @@ HRESULT STDMETHODCALLTYPE CAutoPlayWrapper::QueryInterface(REFIID riid, void** p
 		AddRef();
 		return S_OK;
 	}
-	return SafeAutoPlayCall(L"CAutoPlayWrapper::QueryInterface", m_autoui,
-		&IAutoPlayUI::QueryInterface, riid, ppvObject);
+	return SafeAutoPlayQueryInterface(m_autoui, riid, ppvObject);
 }
 
 ULONG STDMETHODCALLTYPE CAutoPlayWrapper::AddRef(void)
