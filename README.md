@@ -16,6 +16,7 @@ The project runs a private copy of the original Windows 7 SP1 `explorer.exe` tog
 | Windows 11 24H2 | Tested |
 | Windows 10 1809 | Testing planned |
 | Windows 8.1 | Under evaluation, not supported as of now|
+| Windows 8 Build 8102 | Semi-functional |
 | Other versions | Untested |
 
 > **Unsupported platforms:** Windows Vista, Windows XP and earlier versions are not supported. The Windows 7 shell depends on APIs and system components that are missing on those systems, and backporting to them is outside the scope of this project, although forks that add such support are welcome. Linux and macOS are not supported either, since the project runs the Windows 7 shell on top of Windows and is not a theme or desktop environment.
@@ -245,6 +246,7 @@ https://web.archive.org/web/20260929093957/https://github.com/world-windows-fede
 ## Credits
 
 * **World Windows Federation / Explorer7** — original project and foundation
+* **AdministratoX** - Testing on Windows 8 Build 8102
 * **Anixx** — technical inspiration and research related to downloading and handling Windows resources
 * **Aubymori** — Aero/tray-related fixes and technical references
 * **m417z** — Taskbar context-menu inspiration
